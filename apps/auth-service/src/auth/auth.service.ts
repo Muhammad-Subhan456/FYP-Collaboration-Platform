@@ -3,10 +3,14 @@ import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+  private readonly prisma: PrismaService,
+  private readonly jwtService: JwtService,
+) {}
 
   async register(registerDto: RegisterDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -38,4 +42,40 @@ export class AuthService {
       userId: user.id,
     };
   }
+
+  async login(email: string, password: string) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+
+  if (!user || !user.passwordHash) {
+    throw new BadRequestException(
+      'Invalid credentials',
+    );
+  }
+
+  const passwordMatches = await bcrypt.compare(
+    password,
+    user.passwordHash,
+  );
+
+  if (!passwordMatches) {
+    throw new BadRequestException(
+      'Invalid credentials',
+    );
+  }
+
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  };
+
+  return {
+    accessToken:
+      await this.jwtService.signAsync(payload),
+  };
+}
 }
