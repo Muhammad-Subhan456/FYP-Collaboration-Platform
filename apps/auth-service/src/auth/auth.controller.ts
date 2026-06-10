@@ -9,6 +9,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Get, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Roles } from './decorators/roles.decorator';
+import { RolesGuard } from './guards/roles.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -37,6 +39,36 @@ async login(
 @Get('profile')
 getProfile(@Req() req: any) {
   return req.user;
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('STUDENT')
+@Get('student')
+studentRoute() {
+  return {
+    message:
+      'Welcome Student',
+  };
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SUPERVISOR')
+@Get('supervisor')
+supervisorRoute() {
+  return {
+    message:
+      'Welcome Supervisor',
+  };
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+@Get('admin')
+adminRoute() {
+  return {
+    message:
+      'Welcome Admin',
+  };
 }
 
 }

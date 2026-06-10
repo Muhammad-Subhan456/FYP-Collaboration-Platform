@@ -5,11 +5,12 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { jwtConstants } from './constants/jwt.constants';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: jwtConstants.secret,
+      secret: process.env.JWT_SECRET,
       signOptions: {
         expiresIn: '15m',
       },
@@ -19,6 +20,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   providers: [
   AuthService,
   JwtStrategy,
+  RolesGuard,
 ],
 })
 export class AuthModule {}
