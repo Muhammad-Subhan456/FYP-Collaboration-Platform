@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Team {
+  id            String   @id @default(uuid())
+  name          String
+  domain        String
+  description   String?
+  maxMembers    Int
+  leaderId      String
+  isOpen        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  members       TeamMember[]
+  joinRequests  JoinRequest[]
+}
+
+model TeamMember {
+  id            String   @id @default(uuid())
+  teamId        String
+  authUserId    String   @unique
+  joinedAt      DateTime @default(now())
+
+  team          Team @relation(fields: [teamId], references: [id])
+}
+
+model JoinRequest {
+  id            String   @id @default(uuid())
+  teamId        String
+  authUserId    String
+  status        JoinRequestStatus @default(PENDING)
+  createdAt     DateTime @default(now())
+
+  team          Team @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, authUserId])
+}
