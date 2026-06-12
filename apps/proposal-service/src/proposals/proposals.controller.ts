@@ -120,4 +120,26 @@ inviteProposal(
   );
 }
 
+@UseGuards(JwtAuthGuard)
+@Post('invitations/:invitationId/accept')
+acceptInvitation(
+  @Param('invitationId')
+  invitationId: string,
+) {
+  return this.proposalsService.acceptInvitation(
+    invitationId,
+  );
+}
+
+@UseGuards(JwtAuthGuard)
+@Post('invitations/:invitationId/reject')
+rejectInvitation(
+  @Param('invitationId')
+  invitationId: string,
+) {
+  return this.proposalsService.rejectInvitation(
+    invitationId,
+  );
+}
+
 }

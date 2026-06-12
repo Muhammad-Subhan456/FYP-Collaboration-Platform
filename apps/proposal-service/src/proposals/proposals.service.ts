@@ -310,4 +310,114 @@ async getMyInvitations(
   });
 }
 
+async acceptInvitation(
+  invitationId: string,
+) {
+  const invitation =
+  await this.prisma.supervisorInvitation.findUnique({
+    where: {
+      id: invitationId,
+    },
+  });
+
+if (!invitation) {
+  throw new BadRequestException(
+    'Invitation not found',
+  );
+}
+const proposal =
+  await this.prisma.proposal.findUnique({
+    where: {
+      id: invitation.proposalId,
+    },
+  });
+
+if (!proposal) {
+  throw new BadRequestException(
+    'Proposal not found',
+  );
+}
+if (
+  proposal.status ===
+  'SUPERVISOR_ASSIGNED'
+) {
+  throw new BadRequestException(
+    'Supervisor already assigned',
+  );
+}
+await this.prisma.proposal.update({
+  where: {
+    id: proposal.id,
+  },
+  data: {
+    assignedSupervisorId:
+      invitation.supervisorId,
+    status:
+      'SUPERVISOR_ASSIGNED',
+  },
+});
+await this.prisma.supervisorInvitation.update({
+  where: {
+    id: invitation.id,
+  },
+  data: {
+    status: 'ACCEPTED',
+  },
+});
+await this.prisma.supervisorInvitation.updateMany({
+  where: {
+    proposalId: proposal.id,
+    id: {
+      not: invitation.id,
+    },
+  },
+  data: {
+    status: 'CANCELLED',
+  },
+});
+await this.prisma.supervisorRequest.updateMany({
+  where: {
+    proposalId: proposal.id,
+  },
+  data: {
+    status: 'CANCELLED',
+  },
+});
+return {
+  message:
+    'Supervisor assigned successfully',
+};
+}
+
+async rejectInvitation(
+  invitationId: string,
+) {
+  const invitation =
+    await this.prisma.supervisorInvitation.findUnique({
+      where: {
+        id: invitationId,
+      },
+    });
+
+  if (!invitation) {
+    throw new BadRequestException(
+      'Invitation not found',
+    );
+  }
+
+  await this.prisma.supervisorInvitation.update({
+    where: {
+      id: invitationId,
+    },
+    data: {
+      status: 'REJECTED',
+    },
+  });
+
+  return {
+    message:
+      'Invitation rejected successfully',
+  };
+}
+
 }
