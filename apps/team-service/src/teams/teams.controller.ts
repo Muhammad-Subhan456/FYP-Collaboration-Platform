@@ -104,6 +104,13 @@ rejectRequest(
   );
 }
 
-
+@Get(':teamId/members')
+getTeamMembers(
+  @Param('teamId') teamId: string,
+) {
+  return this.teamsService.getTeamMembers(
+    teamId,
+  );
+}
 
 }

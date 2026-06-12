@@ -54,8 +54,11 @@ export class TeamsService {
     return team;
   }
 
-  async getAllTeams() {
+async getAllTeams() {
   return this.prisma.team.findMany({
+    where: {
+      isOpen: true,
+    },
     orderBy: {
       createdAt: 'desc',
     },
@@ -69,10 +72,10 @@ async searchByDomain(domain: string) {
         contains: domain,
         mode: 'insensitive',
       },
+      isOpen: true,
     },
   });
 }
-
 async requestToJoin(
   teamId: string,
   authUserId: string,
@@ -213,6 +216,25 @@ await this.prisma.teamMember.create({
     authUserId: request.authUserId,
   },
 });
+
+const memberCount =
+  await this.prisma.teamMember.count({
+    where: {
+      teamId: team.id,
+    },
+  });
+
+if (memberCount >= team.maxMembers) {
+  await this.prisma.team.update({
+    where: {
+      id: team.id,
+    },
+    data: {
+      isOpen: false,
+    },
+  });
+}
+
 await this.prisma.joinRequest.update({
   where: {
     id: request.id,
@@ -295,6 +317,26 @@ async getMyTeam(authUserId: string) {
   return this.prisma.team.findUnique({
     where: {
       id: membership.teamId,
+    },
+  });
+}
+
+async getTeamMembers(teamId: string) {
+  const team = await this.prisma.team.findUnique({
+    where: {
+      id: teamId,
+    },
+  });
+
+  if (!team) {
+    throw new BadRequestException(
+      'Team not found',
+    );
+  }
+
+  return this.prisma.teamMember.findMany({
+    where: {
+      teamId,
     },
   });
 }
