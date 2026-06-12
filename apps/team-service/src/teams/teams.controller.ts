@@ -55,6 +55,16 @@ getMyTeam(@Req() req: any) {
 }
 
 @UseGuards(JwtAuthGuard)
+@Get('my-team/members')
+getMyTeamMembers(
+  @Req() req: any,
+) {
+  return this.teamsService.getMyTeamMembers(
+    req.user.userId,
+  );
+}
+
+@UseGuards(JwtAuthGuard)
 @Post(':teamId/join')
 requestToJoin(
   @Param('teamId') teamId: string,

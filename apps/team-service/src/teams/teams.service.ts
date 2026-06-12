@@ -341,4 +341,27 @@ async getTeamMembers(teamId: string) {
   });
 }
 
+async getMyTeamMembers(
+  authUserId: string,
+) {
+  const membership =
+    await this.prisma.teamMember.findFirst({
+      where: {
+        authUserId,
+      },
+    });
+
+  if (!membership) {
+    throw new BadRequestException(
+      'User does not belong to any team',
+    );
+  }
+
+  return this.prisma.teamMember.findMany({
+    where: {
+      teamId: membership.teamId,
+    },
+  });
+}
+
 }
