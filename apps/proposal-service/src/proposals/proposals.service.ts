@@ -299,4 +299,15 @@ async inviteProposal(
   });
 }
 
+async getMyInvitations(
+  proposalId: string,
+) {
+  return this.prisma.supervisorInvitation.findMany({
+    where: {
+      proposalId,
+      status: 'PENDING',
+    },
+  });
+}
+
 }

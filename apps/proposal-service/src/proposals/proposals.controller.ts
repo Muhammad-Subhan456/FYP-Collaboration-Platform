@@ -66,6 +66,16 @@ getSupervisorRequests(
     supervisorId,
   );
 }
+@UseGuards(JwtAuthGuard)
+@Get('my-invitations')
+getMyInvitations(
+  @Query('proposalId')
+  proposalId: string,
+) {
+  return this.proposalsService.getMyInvitations(
+    proposalId,
+  );
+}
 
 @UseGuards(JwtAuthGuard)
 @Post('requests/:requestId/accept')
