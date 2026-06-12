@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProposalStatus {
+  DRAFT
+  PENDING_SUPERVISOR
+  SUPERVISOR_ASSIGNED
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Proposal {
+  id                    String @id @default(uuid())
+
+  teamId                String @unique
+
+  title                 String
+
+  domain                String
+
+  abstract              String
+
+  status                ProposalStatus @default(DRAFT)
+
+  assignedSupervisorId  String?
+
+  createdAt             DateTime @default(now())
+
+  supervisorRequests    SupervisorRequest[]
+
+  supervisorInvitations SupervisorInvitation[]
+}
+
+model SupervisorRequest {
+  id            String @id @default(uuid())
+
+  proposalId    String
+
+  supervisorId  String
+
+  status        RequestStatus @default(PENDING)
+
+  createdAt     DateTime @default(now())
+
+  proposal      Proposal @relation(fields: [proposalId], references: [id])
+
+  @@unique([proposalId, supervisorId])
+}
+
+model SupervisorInvitation {
+  id            String @id @default(uuid())
+
+  proposalId    String
+
+  supervisorId  String
+
+  status        RequestStatus @default(PENDING)
+
+  createdAt     DateTime @default(now())
+
+  proposal      Proposal @relation(fields: [proposalId], references: [id])
+
+  @@unique([proposalId, supervisorId])
+}
