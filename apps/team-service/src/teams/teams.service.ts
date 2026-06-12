@@ -226,6 +226,77 @@ return {
     'Request approved successfully',
 };
 
-
 }
+
+async rejectRequest(
+  requestId: string,
+  leaderId: string,
+) {
+  const request =
+    await this.prisma.joinRequest.findUnique({
+      where: {
+        id: requestId,
+      },
+    });
+
+  if (!request) {
+    throw new BadRequestException(
+      'Request not found',
+    );
+  }
+
+  const team =
+    await this.prisma.team.findUnique({
+      where: {
+        id: request.teamId,
+      },
+    });
+
+  if (!team) {
+    throw new BadRequestException(
+      'Team not found',
+    );
+  }
+
+  if (team.leaderId !== leaderId) {
+    throw new ForbiddenException(
+      'Not your team',
+    );
+  }
+
+  await this.prisma.joinRequest.update({
+    where: {
+      id: requestId,
+    },
+    data: {
+      status: 'REJECTED',
+    },
+  });
+
+  return {
+    message: 'Request rejected successfully',
+  };
+}
+
+async getMyTeam(authUserId: string) {
+  const membership =
+    await this.prisma.teamMember.findFirst({
+      where: {
+        authUserId,
+      },
+    });
+
+  if (!membership) {
+    throw new BadRequestException(
+      'User does not belong to any team',
+    );
+  }
+
+  return this.prisma.team.findUnique({
+    where: {
+      id: membership.teamId,
+    },
+  });
+}
+
 }

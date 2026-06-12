@@ -47,6 +47,14 @@ searchTeams(
 }
 
 @UseGuards(JwtAuthGuard)
+@Get('my-team')
+getMyTeam(@Req() req: any) {
+  return this.teamsService.getMyTeam(
+    req.user.userId,
+  );
+}
+
+@UseGuards(JwtAuthGuard)
 @Post(':teamId/join')
 requestToJoin(
   @Param('teamId') teamId: string,
@@ -81,5 +89,21 @@ approveRequest(
     req.user.userId,
   );
 }
+
+@UseGuards(JwtAuthGuard)
+@Post('requests/:requestId/reject')
+rejectRequest(
+  @Param('requestId')
+  requestId: string,
+
+  @Req() req: any,
+) {
+  return this.teamsService.rejectRequest(
+    requestId,
+    req.user.userId,
+  );
+}
+
+
 
 }
