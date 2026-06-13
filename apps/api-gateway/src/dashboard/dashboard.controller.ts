@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 import {
   Controller,
   Get,
@@ -8,9 +6,13 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GatewayHttpService } from '../common/gateway-http.service';
 
 @Controller('dashboard')
 export class DashboardController {
+  constructor(
+    private readonly gatewayHttpService: GatewayHttpService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -18,63 +20,36 @@ export class DashboardController {
     @Headers('authorization')
     authorization: string,
   ) {
-
-    const profileResponse =
-      await axios.get(
+    // Run independent calls in parallel
+    const [profile, team] = await Promise.all([
+      this.gatewayHttpService.get(
         `${process.env.USER_SERVICE_URL}/profiles/me`,
-        {
-          headers: {
-            Authorization:
-              authorization,
-          },
-        },
-      );
+        authorization,
+      ),
 
-    const teamResponse =
-      await axios.get(
+      this.gatewayHttpService.get(
         `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
-        {
-          headers: {
-            Authorization:
-              authorization,
-          },
-        },
-      );
-
-    const team =
-      teamResponse.data;
+        authorization,
+      ),
+    ]);
 
     let proposal = null;
 
     try {
-      const proposalResponse =
-        await axios.get(
-          `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal`,
-          {
-            params: {
-              teamId: team.id,
-            },
-
-            headers: {
-              Authorization:
-                authorization,
-            },
-          },
-        );
-
-      proposal =
-        proposalResponse.data;
-
+      proposal = await this.gatewayHttpService.get(
+        `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal`,
+        authorization,
+        {
+          teamId: team.id,
+        },
+      );
     } catch {
       proposal = null;
     }
 
     return {
-      profile:
-        profileResponse.data,
-
+      profile,
       team,
-
       proposal,
     };
   }
