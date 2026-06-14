@@ -6,6 +6,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
+import axios from 'axios';
 
 @Injectable()
 export class TeamsService {
@@ -243,6 +244,30 @@ await this.prisma.joinRequest.update({
     status: 'APPROVED',
   },
 });
+
+// Create notification
+try {
+  
+  await axios.post(
+    `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+    {
+      authUserId: request.authUserId,
+      title: 'Join Request Approved',
+      message: `You have been accepted into team ${team.name}`,
+    },
+  );
+} catch (error) {
+  console.error(
+    'Failed to create notification',
+  );
+  
+}
+
+
+return {
+  message:
+    'Request approved successfully',
+};
 return {
   message:
     'Request approved successfully',
@@ -286,14 +311,36 @@ async rejectRequest(
     );
   }
 
-  await this.prisma.joinRequest.update({
-    where: {
-      id: requestId,
+await this.prisma.joinRequest.update({
+  where: {
+    id: requestId,
+  },
+  data: {
+    status: 'REJECTED',
+  },
+});
+
+// Create notification
+try {
+  await axios.post(
+    `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+    {
+      authUserId: request.authUserId,
+      title: 'Join Request Rejected',
+      message: `Your request to join team ${team.name} was rejected`,
     },
-    data: {
-      status: 'REJECTED',
-    },
-  });
+  );
+  
+} catch (error) {
+  console.error(
+    'Failed to create notification',
+  );
+}
+
+
+return {
+  message: 'Request rejected successfully',
+};
 
   return {
     message: 'Request rejected successfully',
