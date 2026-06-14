@@ -9,7 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { ProposalsService } from './proposals.service';
-import { Get, Query } from '@nestjs/common';
+import {Req, Get, Query } from '@nestjs/common';
 import { Param } from '@nestjs/common';
 import { RequestSupervisorDto } from './dto/request-supervisor.dto';
 import { InviteProposalDto } from './dto/invite-proposal.dto';
@@ -20,16 +20,17 @@ export class ProposalsController {
     private readonly proposalsService: ProposalsService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
-  @Post()
-  createProposal(
-    @Body()
-    createProposalDto: CreateProposalDto,
-  ) {
-    return this.proposalsService.createProposal(
-      createProposalDto,
-    );
-  }
+@UseGuards(JwtAuthGuard)
+@Post()
+createProposal(
+  @Req() req: any,
+  @Body() dto: CreateProposalDto,
+) {
+  return this.proposalsService.createProposal(
+    req.user.userId,
+    dto,
+  );
+}
 
   @UseGuards(JwtAuthGuard)
 @Get('my-proposal')

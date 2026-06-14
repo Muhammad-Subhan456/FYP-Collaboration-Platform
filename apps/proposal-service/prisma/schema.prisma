@@ -27,10 +27,10 @@ model Proposal {
 
   teamId                String @unique
 
+  teamLeaderAuthUserId  String?
+
   title                 String
-
   domain                String
-
   abstract              String
 
   status                ProposalStatus @default(DRAFT)
@@ -40,7 +40,6 @@ model Proposal {
   createdAt             DateTime @default(now())
 
   supervisorRequests    SupervisorRequest[]
-
   supervisorInvitations SupervisorInvitation[]
 }
 

@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateProposalDto } from './dto/create-proposal.dto';
+import axios from 'axios';
 
 @Injectable()
 export class ProposalsService {
@@ -14,8 +15,9 @@ export class ProposalsService {
   ) {}
 
   async createProposal(
-    createProposalDto: CreateProposalDto,
-  ) {
+  authUserId: string,
+  createProposalDto: CreateProposalDto,
+) {
     const existingProposal =
       await this.prisma.proposal.findUnique({
         where: {
@@ -30,14 +32,18 @@ export class ProposalsService {
     }
 
     return this.prisma.proposal.create({
-      data: {
-        teamId: createProposalDto.teamId,
-        title: createProposalDto.title,
-        domain: createProposalDto.domain,
-        abstract: createProposalDto.abstract,
-        status: 'DRAFT',
-      },
-    });
+  data: {
+    teamId: createProposalDto.teamId,
+
+    teamLeaderAuthUserId: authUserId,
+
+    title: createProposalDto.title,
+    domain: createProposalDto.domain,
+    abstract: createProposalDto.abstract,
+
+    status: 'DRAFT',
+  },
+});
   }
 
   async getMyProposal(teamId: string) {
@@ -198,6 +204,30 @@ await this.prisma.supervisorRequest.updateMany({
     status: 'CANCELLED',
   },
 });
+
+// Create notification
+if (proposal.teamLeaderAuthUserId) {
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      {
+        authUserId:
+          proposal.teamLeaderAuthUserId,
+
+        title:
+          'Supervisor Request Accepted',
+
+        message:
+          'A supervisor has accepted your proposal request.',
+      },
+    );
+  } catch (error) {
+    console.error(
+      'Failed to create notification',
+    );
+  }
+}
+
 return {
   message:
     'Supervisor assigned successfully',
@@ -229,6 +259,37 @@ async rejectRequest(
       status: 'REJECTED',
     },
   });
+
+  const proposal =
+  await this.prisma.proposal.findUnique({
+    where: {
+      id: request.proposalId,
+    },
+  });
+
+if (
+  proposal?.teamLeaderAuthUserId
+) {
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      {
+        authUserId:
+          proposal.teamLeaderAuthUserId,
+
+        title:
+          'Supervisor Request Rejected',
+
+        message:
+          'A supervisor has rejected your proposal request.',
+      },
+    );
+  } catch (error) {
+    console.error(
+      'Failed to create notification',
+    );
+  }
+}
 
   return {
     message:
