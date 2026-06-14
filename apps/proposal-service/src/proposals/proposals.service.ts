@@ -425,6 +425,7 @@ await this.prisma.supervisorInvitation.update({
     status: 'ACCEPTED',
   },
 });
+
 await this.prisma.supervisorInvitation.updateMany({
   where: {
     proposalId: proposal.id,
@@ -444,6 +445,27 @@ await this.prisma.supervisorRequest.updateMany({
     status: 'CANCELLED',
   },
 });
+
+try {
+  await axios.post(
+    `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+    {
+      authUserId:
+        invitation.supervisorId,
+
+      title:
+        'Invitation Accepted',
+
+      message:
+        'A team has accepted your invitation.',
+    },
+  );
+} catch (error) {
+  console.error(
+    'Failed to create notification',
+  );
+}
+
 return {
   message:
     'Supervisor assigned successfully',
@@ -467,18 +489,38 @@ async rejectInvitation(
   }
 
   await this.prisma.supervisorInvitation.update({
-    where: {
-      id: invitationId,
-    },
-    data: {
-      status: 'REJECTED',
-    },
-  });
+  where: {
+    id: invitationId,
+  },
+  data: {
+    status: 'REJECTED',
+  },
+});
 
-  return {
-    message:
-      'Invitation rejected successfully',
-  };
+try {
+  await axios.post(
+    `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+    {
+      authUserId:
+        invitation.supervisorId,
+
+      title:
+        'Invitation Rejected',
+
+      message:
+        'A team has rejected your invitation.',
+    },
+  );
+} catch (error) {
+  console.error(
+    'Failed to create notification',
+  );
+}
+
+return {
+  message:
+    'Invitation rejected successfully',
+};
 }
 
 }
