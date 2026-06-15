@@ -7,6 +7,9 @@ import {
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GatewayHttpService } from '../common/gateway-http.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -54,7 +57,11 @@ export class DashboardController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles('COORDINATOR')
 @Get('coordinator')
 async getCoordinatorDashboard(
   @Headers('authorization')
