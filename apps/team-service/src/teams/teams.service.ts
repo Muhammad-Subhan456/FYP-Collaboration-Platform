@@ -411,4 +411,12 @@ async getMyTeamMembers(
   });
 }
 
+async getAllTeamsForCoordinator() {
+  return this.prisma.team.findMany({
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
 }

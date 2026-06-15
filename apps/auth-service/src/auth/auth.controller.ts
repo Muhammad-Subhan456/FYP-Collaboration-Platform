@@ -71,4 +71,9 @@ adminRoute() {
   };
 }
 
+@Get('stats')
+getUserStats() {
+  return this.authService.getUserStats();
+}
+
 }

@@ -78,4 +78,34 @@ export class AuthService {
       await this.jwtService.signAsync(payload),
   };
 }
+
+async getUserStats() {
+  const totalStudents =
+    await this.prisma.user.count({
+      where: {
+        role: 'STUDENT',
+      },
+    });
+
+  const totalSupervisors =
+    await this.prisma.user.count({
+      where: {
+        role: 'SUPERVISOR',
+      },
+    });
+
+  const totalCoordinators =
+    await this.prisma.user.count({
+      where: {
+        role: 'COORDINATOR',
+      },
+    });
+
+  return {
+    totalStudents,
+    totalSupervisors,
+    totalCoordinators,
+  };
+}
+
 }

@@ -8,6 +8,7 @@ import {
 export enum UserRole {
   STUDENT = 'STUDENT',
   SUPERVISOR = 'SUPERVISOR',
+  COORDINATOR = 'COORDINATOR',
 }
 
 export class RegisterDto {

@@ -143,4 +143,17 @@ rejectInvitation(
   );
 }
 
+@Get('all')
+getAllProposalsForCoordinator() {
+  return this.proposalsService
+    .getAllProposalsForCoordinator();
+}
+
+@Get('stats')
+getProposalStats() {
+  return this.proposalsService
+    .getProposalStats();
+}
+
+
 }

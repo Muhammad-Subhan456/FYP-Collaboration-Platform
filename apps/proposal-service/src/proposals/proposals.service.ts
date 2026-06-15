@@ -523,4 +523,37 @@ return {
 };
 }
 
+async getAllProposalsForCoordinator() {
+  return this.prisma.proposal.findMany({
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+async getProposalStats() {
+  const totalProposals =
+    await this.prisma.proposal.count();
+
+  const pendingProposals =
+    await this.prisma.proposal.count({
+      where: {
+        status: 'PENDING_SUPERVISOR',
+      },
+    });
+
+  const assignedProposals =
+    await this.prisma.proposal.count({
+      where: {
+        status: 'SUPERVISOR_ASSIGNED',
+      },
+    });
+
+  return {
+    totalProposals,
+    pendingProposals,
+    assignedProposals,
+  };
+}
+
 }

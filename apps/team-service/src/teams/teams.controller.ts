@@ -123,4 +123,9 @@ getTeamMembers(
   );
 }
 
+@Get('all')
+getAllTeamsForCoordinator() {
+  return this.teamsService.getAllTeamsForCoordinator();
+}
+
 }

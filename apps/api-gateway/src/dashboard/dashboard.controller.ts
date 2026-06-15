@@ -53,4 +53,41 @@ export class DashboardController {
       proposal,
     };
   }
+
+  @UseGuards(JwtAuthGuard)
+@Get('coordinator')
+async getCoordinatorDashboard(
+  @Headers('authorization')
+  authorization: string,
+) {
+  const [
+    userStats,
+    teams,
+    proposalStats,
+  ] = await Promise.all([
+    this.gatewayHttpService.get(
+      `${process.env.AUTH_SERVICE_URL}/auth/stats`,
+      authorization,
+    ),
+
+    this.gatewayHttpService.get(
+      `${process.env.TEAM_SERVICE_URL}/teams/all`,
+      authorization,
+    ),
+
+    this.gatewayHttpService.get(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/stats`,
+      authorization,
+    ),
+  ]);
+
+  return {
+    users: userStats,
+
+    totalTeams: teams.length,
+
+    proposals: proposalStats,
+  };
+}
+
 }
