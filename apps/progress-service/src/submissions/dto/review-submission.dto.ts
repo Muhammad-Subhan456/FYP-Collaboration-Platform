@@ -1,19 +1,18 @@
 import {
+  IsInt,
   IsOptional,
   IsString,
 } from 'class-validator';
 
-export class CreateAnnouncementDto {
+export class ReviewSubmissionDto {
   @IsString()
-  title!: string;
-
-  @IsString()
-  message!: string;
+  status!: string;
 
   @IsOptional()
   @IsString()
-  type?: string;
+  feedback?: string;
 
   @IsOptional()
-  dueDate?: Date;
+  @IsInt()
+  grade?: number;
 }

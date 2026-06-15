@@ -10,18 +10,26 @@ export class AnnouncementsService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async createAnnouncement(
-    supervisorId: string,
-    dto: CreateAnnouncementDto,
-  ) {
-    return this.prisma.announcement.create({
-      data: {
-        supervisorId,
-        title: dto.title,
-        message: dto.message,
-      },
-    });
-  }
+async createAnnouncement(
+  supervisorId: string,
+  dto: CreateAnnouncementDto,
+) {
+  return this.prisma.announcement.create({
+    data: {
+      supervisorId,
+
+      title: dto.title,
+
+      message: dto.message,
+
+      type:
+        (dto.type as any) ??
+        'GENERAL',
+
+      dueDate: dto.dueDate,
+    },
+  });
+}
 
   async getMyAnnouncements(
     supervisorId: string,

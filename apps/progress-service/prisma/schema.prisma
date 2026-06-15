@@ -22,14 +22,26 @@ enum SubmissionStatus {
   APPROVED
 }
 
+enum AnnouncementType {
+  GENERAL
+  DEADLINE
+  MEETING
+  WORKSHOP
+  VIVA
+}
+
 model Announcement {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
 
   supervisorId  String
 
   title         String
 
   message       String
+
+  type          AnnouncementType @default(GENERAL)
+
+  dueDate       DateTime?
 
   createdAt     DateTime @default(now())
 }
