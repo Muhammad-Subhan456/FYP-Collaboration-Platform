@@ -181,3 +181,15 @@ model ActivityLog {
 
   createdAt   DateTime @default(now())
 }
+
+model GlobalAnnouncement {
+  id            String   @id @default(uuid())
+
+  coordinatorId String
+
+  title         String
+
+  message       String
+
+  createdAt     DateTime @default(now())
+}

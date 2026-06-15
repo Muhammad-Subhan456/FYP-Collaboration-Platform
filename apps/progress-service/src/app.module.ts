@@ -13,6 +13,7 @@ import { MeetingsModule } from './meetings/meetings.module';
 import { MilestonesModule } from './milestones/milestones.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { GlobalAnnouncementsModule } from './global-announcements/global-announcements.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     MilestonesModule,
     TasksModule,
     ActivityLogsModule,
+    GlobalAnnouncementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
