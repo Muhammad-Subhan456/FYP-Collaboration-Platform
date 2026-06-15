@@ -30,6 +30,46 @@ enum AnnouncementType {
   VIVA
 }
 
+enum MeetingType {
+  WEEKLY
+  VIVA
+  WORKSHOP
+  DISCUSSION
+  OTHER
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Meeting {
+  id            String @id @default(uuid())
+
+  supervisorId  String
+
+  title         String
+
+  description   String?
+
+  type          MeetingType
+
+  meetingDate   DateTime
+
+  location      String?
+
+  meetingLink   String?
+
+  createdAt     DateTime @default(now())
+}
+
 model Announcement {
   id            String @id @default(uuid())
 
@@ -90,4 +130,54 @@ model Submission {
   deliverable       Deliverable @relation(fields: [deliverableId], references: [id])
 
   @@unique([deliverableId, teamId])
+}
+
+model Milestone {
+  id            String @id @default(uuid())
+
+  proposalId    String
+
+  title         String
+
+  description   String?
+
+  dueDate       DateTime
+
+  status        MilestoneStatus @default(PENDING)
+
+  createdAt     DateTime @default(now())
+
+  tasks         Task[]
+}
+
+model Task {
+  id            String @id @default(uuid())
+
+  milestoneId   String
+
+  title         String
+
+  description   String?
+
+  assignedTo    String
+
+  dueDate       DateTime?
+
+  status        TaskStatus @default(TODO)
+
+  createdAt     DateTime @default(now())
+
+  milestone     Milestone @relation(fields: [milestoneId],references: [id])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+
+  authUserId  String
+
+  title       String
+
+  description String?
+
+  createdAt   DateTime @default(now())
 }

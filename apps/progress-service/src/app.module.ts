@@ -9,6 +9,10 @@ import { AuthModule } from './auth/auth.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { DeliverablesModule } from './deliverables/deliverables.module';
 import { SubmissionsModule } from './submissions/submissions.module';
+import { MeetingsModule } from './meetings/meetings.module';
+import { MilestonesModule } from './milestones/milestones.module';
+import { TasksModule } from './tasks/tasks.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 
 @Module({
   imports: [
@@ -17,6 +21,10 @@ import { SubmissionsModule } from './submissions/submissions.module';
     AnnouncementsModule,
     DeliverablesModule,
     SubmissionsModule,
+    MeetingsModule,
+    MilestonesModule,
+    TasksModule,
+    ActivityLogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
