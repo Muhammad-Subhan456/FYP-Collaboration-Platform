@@ -3,18 +3,22 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class DeliverablesService {
   constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  private readonly prisma: PrismaService,
 
+  private readonly activityLogsService:
+    ActivityLogsService,
+) {}
   async createDeliverable(
-    supervisorId: string,
-    dto: CreateDeliverableDto,
-  ) {
-    return this.prisma.deliverable.create({
+  supervisorId: string,
+  dto: CreateDeliverableDto,
+) {
+  const deliverable =
+    await this.prisma.deliverable.create({
       data: {
         supervisorId,
 
@@ -30,7 +34,15 @@ export class DeliverablesService {
           dto.attachmentUrl,
       },
     });
-  }
+
+  await this.activityLogsService.logActivity(
+    supervisorId,
+    'Deliverable Created',
+    deliverable.title,
+  );
+
+  return deliverable;
+}
 
   async getMyDeliverables(
     supervisorId: string,

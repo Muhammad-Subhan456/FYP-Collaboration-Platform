@@ -2,11 +2,16 @@ import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
 
+import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
+
 import { DeliverablesController } from './deliverables.controller';
 import { DeliverablesService } from './deliverables.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    PrismaModule,
+    ActivityLogsModule,
+  ],
   controllers: [
     DeliverablesController,
   ],

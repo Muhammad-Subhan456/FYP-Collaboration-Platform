@@ -37,4 +37,19 @@ export class ActivityLogsService {
       take: 50,
     });
   }
+
+  async logActivity(
+  authUserId: string,
+  title: string,
+  description?: string,
+) {
+  return this.prisma.activityLog.create({
+    data: {
+      authUserId,
+      title,
+      description,
+    },
+  });
+}
+
 }

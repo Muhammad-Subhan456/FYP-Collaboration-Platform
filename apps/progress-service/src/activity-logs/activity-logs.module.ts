@@ -13,5 +13,8 @@ import { ActivityLogsService } from './activity-logs.service';
   providers: [
     ActivityLogsService,
   ],
+  exports: [
+    ActivityLogsService,
+  ],
 })
 export class ActivityLogsModule {}
