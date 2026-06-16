@@ -14,6 +14,8 @@ import { MilestonesModule } from './milestones/milestones.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { GlobalAnnouncementsModule } from './global-announcements/global-announcements.module';
+import { EvaluationsModule } from './evaluations/evaluations.module';
+import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { GlobalAnnouncementsModule } from './global-announcements/global-announc
     TasksModule,
     ActivityLogsModule,
     GlobalAnnouncementsModule,
+    EvaluationsModule,
+    EvaluationResultsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -5,7 +5,12 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 import { SubmissionsService } from './submissions.service';
 
@@ -19,6 +24,11 @@ export class SubmissionsController {
       SubmissionsService,
   ) {}
 
+  @UseGuards(
+    JwtAuthGuard,
+    RolesGuard,
+  )
+  @Roles('STUDENT')
   @Post()
   createSubmission(
     @Body()
@@ -28,6 +38,7 @@ export class SubmissionsController {
       .createSubmission(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('deliverable/:id')
   getDeliverableSubmissions(
     @Param('id')
@@ -39,6 +50,11 @@ export class SubmissionsController {
       );
   }
 
+  @UseGuards(
+    JwtAuthGuard,
+    RolesGuard,
+  )
+  @Roles('SUPERVISOR')
   @Patch(':id/review')
   reviewSubmission(
     @Param('id')
@@ -51,6 +67,36 @@ export class SubmissionsController {
       .reviewSubmission(
         submissionId,
         dto,
+      );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(
+    ':deliverableId/team/:teamId/latest',
+  )
+  getLatestSubmission(
+    @Param('deliverableId')
+    deliverableId: string,
+
+    @Param('teamId')
+    teamId: string,
+  ) {
+    return this.submissionsService
+      .getLatestSubmission(
+        deliverableId,
+        teamId,
+      );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('team/:teamId')
+  getTeamSubmissions(
+    @Param('teamId')
+    teamId: string,
+  ) {
+    return this.submissionsService
+      .getTeamSubmissions(
+        teamId,
       );
   }
 }
