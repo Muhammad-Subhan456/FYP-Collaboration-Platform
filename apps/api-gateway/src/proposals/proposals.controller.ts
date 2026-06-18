@@ -69,6 +69,28 @@ export class ProposalsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('supervisor/invitations')
+  getSupervisorInvitations(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervisor/invitations`,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('supervised')
+  getSupervisedProposals(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervised`,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('my-invitations')
   getMyInvitations(
     @Headers('authorization') authorization: string,
@@ -123,11 +145,10 @@ export class ProposalsController {
   inviteProposal(
     @Headers('authorization') authorization: string,
     @Param('proposalId') proposalId: string,
-    @Body() body: any,
   ) {
     return this.gatewayHttpService.post(
       `${process.env.PROPOSAL_SERVICE_URL}/proposals/${proposalId}/invite`,
-      body,
+      {},
       authorization,
     );
   }

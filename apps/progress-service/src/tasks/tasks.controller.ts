@@ -46,6 +46,15 @@ export class TasksController {
       );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('user/:authUserId')
+  getTasksForUser(
+    @Param('authUserId') authUserId: string,
+  ) {
+    return this.tasksService.getTasksForUser(authUserId);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('my')
   getMyTasks(

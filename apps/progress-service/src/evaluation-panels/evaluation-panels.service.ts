@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePanelDto } from './dto/create-panel.dto';
@@ -11,7 +13,15 @@ import { AddEvaluatorDto } from './dto/add-evaluator.dto';
 export class EvaluationPanelsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly httpService: HttpService,
   ) {}
+
+  private internalHeaders() {
+    return {
+      'X-Internal-Api-Key':
+        process.env.INTERNAL_API_KEY,
+    };
+  }
 
   async createPanel(dto: CreatePanelDto) {
     const evaluation =
@@ -61,6 +71,35 @@ export class EvaluationPanelsService {
         evaluatorId: dto.evaluatorId,
         role: dto.role ?? 'EVALUATOR',
       },
+    }).then(async (evaluatorRecord) => {
+      const panel =
+        await this.prisma.evaluationPanel.findUnique({
+          where: { id: panelId },
+          include: { evaluation: true },
+        });
+
+      if (panel?.evaluation) {
+        try {
+          await firstValueFrom(
+            this.httpService.post(
+              `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+              {
+                authUserId: dto.evaluatorId,
+                title: 'FOASIS Evaluation Panel Assignment',
+                message: `You have been assigned as an evaluator for ${panel.evaluation.title} in room ${panel.room}.`,
+              },
+              { headers: this.internalHeaders() },
+            ),
+          );
+        } catch (error: any) {
+          console.error(
+            'Failed to notify panel evaluator',
+            error.message,
+          );
+        }
+      }
+
+      return evaluatorRecord;
     });
   }
 

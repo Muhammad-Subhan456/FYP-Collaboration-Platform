@@ -17,6 +17,7 @@ import { EvaluationsService } from './evaluations.service';
 
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { AssignTeamDto } from './dto/assign-team.dto';
+import { AssignTeamsDto } from './dto/assign-teams.dto';
 
 @Controller('evaluations')
 export class EvaluationsController {
@@ -48,17 +49,9 @@ export class EvaluationsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
-  @Post(':id/assign-team')
-  assignTeam(
-    @Param('id') evaluationId: string,
-    @Body() dto: AssignTeamDto,
-  ) {
-    return this.evaluationsService
-      .assignTeam(
-        evaluationId,
-        dto.teamId,
-        dto.panelId,
-      );
+  @Get('evaluator-overview')
+  getEvaluatorOverview() {
+    return this.evaluationsService.getEvaluatorOverview();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -83,5 +76,45 @@ export class EvaluationsController {
       .getMyEvaluations(
         authorization,
       );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Post(':id/assign-team')
+  assignTeam(
+    @Param('id') evaluationId: string,
+    @Body() dto: AssignTeamDto,
+  ) {
+    return this.evaluationsService
+      .assignTeam(
+        evaluationId,
+        dto.teamId,
+        dto.panelId,
+      );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Post(':id/assign-teams')
+  assignTeams(
+    @Param('id') evaluationId: string,
+    @Body() dto: AssignTeamsDto,
+  ) {
+    return this.evaluationsService.assignTeams(
+      evaluationId,
+      dto.teamIds,
+      dto.panelId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get(':id/assignments')
+  getEvaluationAssignments(
+    @Param('id') evaluationId: string,
+  ) {
+    return this.evaluationsService.getEvaluationAssignments(
+      evaluationId,
+    );
   }
 }

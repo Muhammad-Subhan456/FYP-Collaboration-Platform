@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InternalApiKeyGuard } from '../auth/guards/internal-api-key.guard';
 
 import { CreateNotificationDto } from './dto/create-notification.dto';
+import { CreateBulkNotificationDto } from './dto/create-bulk-notification.dto';
 import { NotificationsService } from './notifications.service';
 import { PaginationQueryDto } from '../common/pagination';
 
@@ -30,6 +31,16 @@ export class NotificationsController {
   ) {
     return this.notificationsService.create(
       createNotificationDto,
+    );
+  }
+
+  @UseGuards(InternalApiKeyGuard)
+  @Post('bulk')
+  createBulk(
+    @Body() dto: CreateBulkNotificationDto,
+  ) {
+    return this.notificationsService.createBulk(
+      dto.notifications,
     );
   }
 

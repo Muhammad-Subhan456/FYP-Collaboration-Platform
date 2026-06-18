@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -6,7 +8,34 @@ import { PrismaService } from '../prisma/prisma.service';
 export class StatsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly httpService: HttpService,
   ) {}
+
+  private internalHeaders() {
+    return {
+      'X-Internal-Api-Key':
+        process.env.INTERNAL_API_KEY,
+    };
+  }
+
+  private async getSupervisedTeamCount(
+    supervisorId: string,
+  ): Promise<number> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervised/${supervisorId}`,
+          { headers: this.internalHeaders() },
+        ),
+      );
+
+      return Array.isArray(response.data)
+        ? response.data.length
+        : 0;
+    } catch {
+      return 0;
+    }
+  }
 
   async getCoordinatorStats() {
     const now = new Date();
@@ -47,7 +76,7 @@ export class StatsService {
       activeDeliverables,
       pendingReviews,
       upcomingMeetings,
-      teamsWithSubmissions,
+      supervisedTeams,
     ] = await Promise.all([
       this.prisma.deliverable.count({
         where: { supervisorId, isActive: true },
@@ -67,19 +96,14 @@ export class StatsService {
         },
       }),
 
-      this.prisma.submission.groupBy({
-        by: ['teamId'],
-        where: {
-          deliverable: { supervisorId },
-        },
-      }),
+      this.getSupervisedTeamCount(supervisorId),
     ]);
 
     return {
       activeDeliverables,
       pendingReviews,
       upcomingMeetings,
-      supervisedTeams: teamsWithSubmissions.length,
+      supervisedTeams,
     };
   }
 

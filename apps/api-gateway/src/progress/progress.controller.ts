@@ -59,6 +59,20 @@ export class ProgressController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch('deliverables/:id/extend-deadline')
+  extendDeliverableDeadline(
+    @Headers('authorization') authorization: string,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    return this.gatewayHttpService.patch(
+      this.progressUrl(`/deliverables/${id}/extend-deadline`),
+      body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('deliverables/:id')
   updateDeliverable(
     @Headers('authorization') authorization: string,
@@ -192,6 +206,17 @@ export class ProgressController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('evaluations/evaluator-overview')
+  getEvaluatorOverview(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
+      this.progressUrl('/evaluations/evaluator-overview'),
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('evaluations/my')
   getMyEvaluations(
     @Headers('authorization') authorization: string,
@@ -212,6 +237,32 @@ export class ProgressController {
     return this.gatewayHttpService.post(
       this.progressUrl(`/evaluations/${id}/assign-team`),
       body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('evaluations/:id/assign-teams')
+  assignTeams(
+    @Headers('authorization') authorization: string,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    return this.gatewayHttpService.post(
+      this.progressUrl(`/evaluations/${id}/assign-teams`),
+      body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('evaluations/:id/assignments')
+  getEvaluationAssignments(
+    @Headers('authorization') authorization: string,
+    @Param('id') id: string,
+  ) {
+    return this.gatewayHttpService.get(
+      this.progressUrl(`/evaluations/${id}/assignments`),
       authorization,
     );
   }
@@ -249,6 +300,20 @@ export class ProgressController {
   ) {
     return this.gatewayHttpService.get(
       this.progressUrl('/evaluation-results/my'),
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('evaluation-results/:resultId')
+  updateResult(
+    @Headers('authorization') authorization: string,
+    @Param('resultId') resultId: string,
+    @Body() body: any,
+  ) {
+    return this.gatewayHttpService.patch(
+      this.progressUrl(`/evaluation-results/${resultId}`),
+      body,
       authorization,
     );
   }
@@ -407,6 +472,18 @@ export class ProgressController {
     return this.gatewayHttpService.post(
       this.progressUrl('/tasks'),
       body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('tasks/user/:authUserId')
+  getTasksForUser(
+    @Headers('authorization') authorization: string,
+    @Param('authUserId') authUserId: string,
+  ) {
+    return this.gatewayHttpService.get(
+      this.progressUrl(`/tasks/user/${authUserId}`),
       authorization,
     );
   }

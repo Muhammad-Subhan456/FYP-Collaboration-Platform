@@ -36,6 +36,18 @@ export class MeetingsService {
       meeting.title,
     );
 
+    await this.teamAccessService.notifySupervisedTeamMembers(
+      supervisorId,
+      'FOASIS Meeting Scheduled',
+      `${meeting.title} on ${meeting.meetingDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })}`,
+    );
+
     return meeting;
   }
 
@@ -53,9 +65,7 @@ export class MeetingsService {
       );
 
     if (!supervisorId) {
-      throw new BadRequestException(
-        'No supervisor assigned to your team yet',
-      );
+      return [];
     }
 
     return this.prisma.meeting.findMany({

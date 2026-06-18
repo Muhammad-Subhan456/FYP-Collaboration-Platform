@@ -6,13 +6,17 @@ import { AuthService } from './auth.service';
 import { jwtConstants } from './constants/jwt.constants';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
+import { InternalApiKeyGuard } from './guards/internal-api-key.guard';
+
+const jwtExpiresIn =
+  process.env.JWT_EXPIRES_IN ?? '8h';
 
 @Module({
   imports: [
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: {
-        expiresIn: '15m',
+        expiresIn: jwtExpiresIn as `${number}h`,
       },
     }),
   ],
@@ -21,6 +25,7 @@ import { RolesGuard } from './guards/roles.guard';
   AuthService,
   JwtStrategy,
   RolesGuard,
+  InternalApiKeyGuard,
 ],
 })
 export class AuthModule {}

@@ -31,6 +31,7 @@ model TeamMember {
   id            String   @id @default(uuid())
   teamId        String
   authUserId    String   @unique
+  teamRole      String?
   joinedAt      DateTime @default(now())
 
   team          Team @relation(fields: [teamId], references: [id])

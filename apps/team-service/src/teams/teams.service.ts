@@ -138,6 +138,29 @@ async requestToJoin(
       teamId,
       authUserId,
     },
+  }).then(async (request) => {
+    try {
+      await axios.post(
+        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+        {
+          authUserId: team.leaderId,
+          title: 'FOASIS Team Join Request',
+          message: `A student has requested to join your team "${team.name}".`,
+        },
+        {
+          headers: {
+            'X-Internal-Api-Key':
+              process.env.INTERNAL_API_KEY,
+          },
+        },
+      );
+    } catch (error) {
+      console.error(
+        'Failed to notify team leader of join request',
+        error,
+      );
+    }
+    return request;
   });
 }
 
@@ -353,9 +376,7 @@ async getMyTeam(authUserId: string) {
     });
 
   if (!membership) {
-    throw new BadRequestException(
-      'User does not belong to any team',
-    );
+    return null;
   }
 
   return this.prisma.team.findUnique({
@@ -414,6 +435,107 @@ async getAllTeamsForCoordinator() {
       createdAt: 'desc',
     },
   });
+}
+
+async getTeamContextForMember(authUserId: string) {
+  const membership =
+    await this.prisma.teamMember.findUnique({
+      where: { authUserId },
+    });
+
+  if (!membership) {
+    return null;
+  }
+
+  const team = await this.prisma.team.findUnique({
+    where: { id: membership.teamId },
+  });
+
+  if (!team) {
+    return null;
+  }
+
+  const members = await this.prisma.teamMember.findMany({
+    where: { teamId: team.id },
+  });
+
+  return {
+    team,
+    membership,
+    memberCount: members.length,
+    isLeader: team.leaderId === authUserId,
+  };
+}
+
+async updateMemberRole(
+  leaderId: string,
+  memberId: string,
+  teamRole?: string,
+) {
+  const team = await this.prisma.team.findFirst({
+    where: { leaderId },
+  });
+
+  if (!team) {
+    throw new ForbiddenException(
+      'Only team leaders can assign roles',
+    );
+  }
+
+  const member =
+    await this.prisma.teamMember.findUnique({
+      where: { id: memberId },
+    });
+
+  if (!member || member.teamId !== team.id) {
+    throw new BadRequestException(
+      'Member not found in your team',
+    );
+  }
+
+  const previousRole = member.teamRole;
+
+  const updated = await this.prisma.teamMember.update({
+    where: { id: memberId },
+    data: {
+      teamRole: teamRole?.trim() || null,
+    },
+  });
+
+  const normalizedRole = teamRole?.trim() || null;
+  const title = previousRole
+    ? 'Team Role Updated'
+    : normalizedRole
+      ? 'Team Role Assigned'
+      : 'Team Role Removed';
+
+  const message = normalizedRole
+    ? `Your team leader assigned you the role "${normalizedRole}" in team "${team.name}".`
+    : `Your team leader removed your role in team "${team.name}".`;
+
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      {
+        authUserId: member.authUserId,
+        title,
+        message,
+      },
+      {
+        headers: {
+          'X-Internal-Api-Key':
+            process.env.INTERNAL_API_KEY,
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      'Failed to notify member of role change',
+      error,
+    );
+  }
+
+  return updated;
 }
 
 

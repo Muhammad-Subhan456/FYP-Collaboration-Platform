@@ -15,23 +15,44 @@ enum Department {
   DS
 }
 
+enum ProfileType {
+  STUDENT
+  SUPERVISOR
+  COORDINATOR
+}
+
 model UserProfile {
-  id            String      @id @default(uuid())
+  id                 String       @id @default(uuid())
+  authUserId         String       @unique
+  profileType        ProfileType  @default(STUDENT)
 
-  authUserId    String      @unique
+  profilePicture     String?
+  fullName           String
+  email              String?
 
-  fullName      String
+  registrationNumber String?
+  department         Department?
+  batch              String?
+  degreeProgram      String?
+  semester           Int?
+  skills             String[]     @default([])
+  interests          String[]     @default([])
+  linkedIn           String?
+  github             String?
+  bio                String?
 
-  department    Department
+  facultyId          String?
+  designation        String?
+  officeLocation     String?
+  biography          String?
+  researchAreas      String[]     @default([])
+  publications       String[]     @default([])
+  officeHours        String?
+  googleScholar      String?
 
-  semester      Int
+  coordinatorRole    String?
+  contactInformation String?
 
-  skills        String[]
-
-  interests     String[]
-
-  bio           String?
-
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 }

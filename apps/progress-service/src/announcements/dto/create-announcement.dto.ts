@@ -1,4 +1,5 @@
 import {
+  IsDateString,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -15,5 +16,6 @@ export class CreateAnnouncementDto {
   type?: string;
 
   @IsOptional()
-  dueDate?: Date;
+  @IsDateString()
+  dueDate?: string;
 }

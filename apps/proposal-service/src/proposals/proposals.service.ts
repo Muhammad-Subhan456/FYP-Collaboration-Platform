@@ -24,7 +24,7 @@ export class ProposalsService {
 
   private async getTeamIdFromAuth(
     authorization: string,
-  ) {
+  ): Promise<string> {
     const response = await axios.get(
       `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
       {
@@ -32,7 +32,15 @@ export class ProposalsService {
       },
     );
 
-    return response.data.id as string;
+    const teamId = response.data?.id;
+
+    if (!teamId) {
+      throw new BadRequestException(
+        'User does not belong to any team',
+      );
+    }
+
+    return teamId;
   }
 
   async createProposal(
@@ -47,7 +55,15 @@ export class ProposalsService {
       },
     );
 
-    if (teamResponse.data.id !== createProposalDto.teamId) {
+    const team = teamResponse.data;
+
+    if (!team?.id) {
+      throw new BadRequestException(
+        'User does not belong to any team',
+      );
+    }
+
+    if (team.id !== createProposalDto.teamId) {
       throw new ForbiddenException(
         'You can only create a proposal for your own team',
       );
@@ -82,20 +98,20 @@ export class ProposalsService {
   }
 
   async getMyProposal(authorization: string) {
-    const teamId =
-      await this.getTeamIdFromAuth(
-        authorization,
-      );
+    let teamId: string;
 
-    const proposal =
-      await this.prisma.proposal.findUnique({
-        where: { teamId },
-      });
+    try {
+      teamId = await this.getTeamIdFromAuth(authorization);
+    } catch {
+      return null;
+    }
+
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { teamId },
+    });
 
     if (!proposal) {
-      throw new BadRequestException(
-        'Proposal not found',
-      );
+      return null;
     }
 
     return proposal;
@@ -136,6 +152,12 @@ async requestSupervisor(
   ) {
     throw new BadRequestException(
       'Supervisor already assigned',
+    );
+  }
+
+  if (proposal.assignedSupervisorId) {
+    throw new BadRequestException(
+      'This team already has a supervisor',
     );
   }
 
@@ -366,8 +388,9 @@ if (
 async getAllProposals() {
   return this.prisma.proposal.findMany({
     where: {
+      assignedSupervisorId: null,
       status: {
-        not: 'SUPERVISOR_ASSIGNED',
+        in: ['DRAFT', 'PENDING_SUPERVISOR'],
       },
     },
     orderBy: {
@@ -399,6 +422,12 @@ async inviteProposal(
   ) {
     throw new BadRequestException(
       'Supervisor already assigned',
+    );
+  }
+
+  if (proposal.assignedSupervisorId) {
+    throw new BadRequestException(
+      'This team already has a supervisor',
     );
   }
 
@@ -654,27 +683,40 @@ async getAllProposalsForCoordinator() {
 }
 
 async getProposalStats() {
-  const totalProposals =
-    await this.prisma.proposal.count();
-
-  const pendingProposals =
-    await this.prisma.proposal.count({
-      where: {
-        status: 'PENDING_SUPERVISOR',
-      },
-    });
-
-  const assignedProposals =
-    await this.prisma.proposal.count({
-      where: {
-        status: 'SUPERVISOR_ASSIGNED',
-      },
-    });
+  const [
+    total,
+    pending,
+    approved,
+    rejected,
+    pendingSupervisor,
+    supervisorAssigned,
+  ] = await Promise.all([
+    this.prisma.proposal.count(),
+    this.prisma.proposal.count({
+      where: { status: 'SUPERVISOR_ASSIGNED' },
+    }),
+    this.prisma.proposal.count({
+      where: { status: 'APPROVED' },
+    }),
+    this.prisma.proposal.count({
+      where: { status: 'REJECTED' },
+    }),
+    this.prisma.proposal.count({
+      where: { status: 'PENDING_SUPERVISOR' },
+    }),
+    this.prisma.proposal.count({
+      where: { status: 'SUPERVISOR_ASSIGNED' },
+    }),
+  ]);
 
   return {
-    totalProposals,
-    pendingProposals,
-    assignedProposals,
+    total,
+    pending,
+    approved,
+    rejected,
+    totalProposals: total,
+    pendingProposals: pendingSupervisor,
+    assignedProposals: supervisorAssigned,
   };
 }
 
@@ -723,11 +765,29 @@ async getProposalById(
   throw new ForbiddenException('Access denied');
 }
 
+async getProposalByTeamId(teamId: string) {
+  return this.prisma.proposal.findUnique({
+    where: { teamId },
+  });
+}
+
+async getSupervisorInvitations(
+  supervisorId: string,
+) {
+  return this.prisma.supervisorInvitation.findMany({
+    where: { supervisorId },
+    include: { proposal: true },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
 async getSupervisedProposals(supervisorId: string) {
   return this.prisma.proposal.findMany({
     where: {
       assignedSupervisorId: supervisorId,
-      status: 'SUPERVISOR_ASSIGNED',
+      status: {
+        in: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -766,7 +826,7 @@ async approveProposal(proposalId: string) {
             proposal.teamLeaderAuthUserId,
           title: 'Proposal Approved',
           message:
-            'Your FYP proposal has been approved by the coordinator.',
+            'Your FOASIS proposal has been approved by the coordinator.',
         },
         { headers: this.notificationHeaders() },
       );
@@ -818,7 +878,7 @@ async rejectProposal(
           title: 'Proposal Rejected',
           message:
             reason ??
-            'Your FYP proposal has been rejected by the coordinator.',
+            'Your FOASIS proposal has been rejected by the coordinator.',
         },
         { headers: this.notificationHeaders() },
       );

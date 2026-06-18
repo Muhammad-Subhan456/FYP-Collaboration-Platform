@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { DeliverablesService } from './deliverables.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
+import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
 import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
 
 @Controller('deliverables')
@@ -58,6 +59,22 @@ export class DeliverablesController {
   ) {
     return this.deliverablesService
       .getForMyTeam(authorization);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Patch(':id/extend-deadline')
+  extendDeadline(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: ExtendDeadlineDto,
+  ) {
+    return this.deliverablesService
+      .extendDeadline(
+        id,
+        req.user.userId,
+        dto,
+      );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

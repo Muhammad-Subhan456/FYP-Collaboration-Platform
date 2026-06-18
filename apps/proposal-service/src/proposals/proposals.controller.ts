@@ -19,7 +19,6 @@ import { InternalApiKeyGuard } from '../auth/guards/internal-api-key.guard';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { ProposalsService } from './proposals.service';
 import { RequestSupervisorDto } from './dto/request-supervisor.dto';
-import { InviteProposalDto } from './dto/invite-proposal.dto';
 import { RejectProposalDto } from './dto/reject-proposal.dto';
 
 @Controller('proposals')
@@ -126,14 +125,32 @@ export class ProposalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
+  @Get('supervisor/invitations')
+  getSupervisorInvitations(@Req() req: any) {
+    return this.proposalsService.getSupervisorInvitations(
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Get('supervised')
+  getSupervisedProposals(@Req() req: any) {
+    return this.proposalsService.getSupervisedProposals(
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Post(':proposalId/invite')
   inviteProposal(
     @Param('proposalId') proposalId: string,
-    @Body() dto: InviteProposalDto,
+    @Req() req: any,
   ) {
     return this.proposalsService.inviteProposal(
       proposalId,
-      dto.supervisorId,
+      req.user.userId,
     );
   }
 
@@ -178,8 +195,18 @@ export class ProposalsController {
   }
 
   @UseGuards(InternalApiKeyGuard)
+  @Get('internal/team/:teamId')
+  getProposalByTeamId(
+    @Param('teamId') teamId: string,
+  ) {
+    return this.proposalsService.getProposalByTeamId(
+      teamId,
+    );
+  }
+
+  @UseGuards(InternalApiKeyGuard)
   @Get('supervised/:supervisorId')
-  getSupervisedProposals(
+  getSupervisedProposalsInternal(
     @Param('supervisorId') supervisorId: string,
   ) {
     return this.proposalsService.getSupervisedProposals(

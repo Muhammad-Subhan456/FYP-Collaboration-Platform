@@ -98,7 +98,7 @@ export class DashboardController {
   async getSupervisorDashboard(
     @Headers('authorization') authorization: string,
   ) {
-    const [stats, deliverables, requests] =
+    const [stats, deliverables, requests, supervised] =
       await Promise.all([
         this.gatewayHttpService.get(
           `${process.env.PROGRESS_SERVICE_URL}/stats/supervisor`,
@@ -114,12 +114,26 @@ export class DashboardController {
           `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervisor/requests`,
           authorization,
         ),
+
+        this.gatewayHttpService.get(
+          `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervised`,
+          authorization,
+        ),
       ]);
 
+    const supervisedTeams = Array.isArray(supervised)
+      ? supervised.length
+      : 0;
+
     return {
-      stats,
+      stats: {
+        ...stats,
+        supervisedTeams:
+          supervisedTeams || stats?.supervisedTeams || 0,
+      },
       deliverables,
       pendingRequests: requests,
+      supervisedTeams: supervised,
     };
   }
 
@@ -129,6 +143,13 @@ export class DashboardController {
   async getStudentDashboard(
     @Headers('authorization') authorization: string,
   ) {
+    const emptyStats = {
+      pendingSubmissions: 0,
+      upcomingDeliverables: 0,
+      openTasks: 0,
+      upcomingEvaluations: 0,
+    };
+
     const [profile, team, proposal, stats, deliverables, evaluations] =
       await Promise.all([
         this.gatewayHttpService.get(
@@ -136,10 +157,12 @@ export class DashboardController {
           authorization,
         ),
 
-        this.gatewayHttpService.get(
-          `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
-          authorization,
-        ),
+        this.gatewayHttpService
+          .get(
+            `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+            authorization,
+          )
+          .catch(() => null),
 
         this.gatewayHttpService
           .get(
@@ -148,10 +171,12 @@ export class DashboardController {
           )
           .catch(() => null),
 
-        this.gatewayHttpService.get(
-          `${process.env.PROGRESS_SERVICE_URL}/stats/student`,
-          authorization,
-        ),
+        this.gatewayHttpService
+          .get(
+            `${process.env.PROGRESS_SERVICE_URL}/stats/student`,
+            authorization,
+          )
+          .catch(() => emptyStats),
 
         this.gatewayHttpService
           .get(

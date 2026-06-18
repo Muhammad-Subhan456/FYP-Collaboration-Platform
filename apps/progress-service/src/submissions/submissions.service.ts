@@ -207,6 +207,15 @@ export class SubmissionsService {
       limit,
     );
 
+    if (!team) {
+      return buildPaginatedResponse(
+        [],
+        0,
+        pagination.page,
+        pagination.limit,
+      );
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.submission.findMany({
         where: { teamId: team.id },

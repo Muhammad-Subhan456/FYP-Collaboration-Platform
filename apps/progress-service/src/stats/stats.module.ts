@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
@@ -8,7 +9,7 @@ import { StatsController } from './stats.controller';
 import { StatsService } from './stats.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, CommonModule],
+  imports: [PrismaModule, AuthModule, CommonModule, HttpModule],
   controllers: [StatsController],
   providers: [StatsService],
 })

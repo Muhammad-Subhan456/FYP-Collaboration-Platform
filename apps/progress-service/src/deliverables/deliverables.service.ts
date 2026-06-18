@@ -9,6 +9,7 @@ import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
+import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
 import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { TeamAccessService } from '../common/team-access.service';
@@ -128,9 +129,7 @@ export class DeliverablesService {
       );
 
     if (!supervisorId) {
-      throw new BadRequestException(
-        'No supervisor assigned to your team yet',
-      );
+      return [];
     }
 
     return this.prisma.deliverable.findMany({
@@ -172,5 +171,75 @@ export class DeliverablesService {
         }),
       },
     });
+  }
+
+  async extendDeadline(
+    deliverableId: string,
+    supervisorId: string,
+    dto: ExtendDeadlineDto,
+  ) {
+    const deliverable =
+      await this.prisma.deliverable.findUnique({
+        where: { id: deliverableId },
+      });
+
+    if (!deliverable) {
+      throw new BadRequestException(
+        'Deliverable not found',
+      );
+    }
+
+    if (deliverable.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only extend deadlines for your own deliverables',
+      );
+    }
+
+    const newDueDate = new Date(dto.newDueDate);
+    const previousDueDate = deliverable.dueDate;
+
+    if (newDueDate <= previousDueDate) {
+      throw new BadRequestException(
+        'New deadline must be after the current deadline',
+      );
+    }
+
+    const [updated, extension] =
+      await this.prisma.$transaction([
+        this.prisma.deliverable.update({
+          where: { id: deliverableId },
+          data: { dueDate: newDueDate },
+        }),
+        this.prisma.deliverableDeadlineExtension.create({
+          data: {
+            deliverableId,
+            previousDueDate,
+            newDueDate,
+            extendedBy: supervisorId,
+            reason: dto.reason,
+          },
+        }),
+      ]);
+
+    const dateLabel = (d: Date) =>
+      d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Deliverable Deadline Extended',
+      `${deliverable.title}: ${dateLabel(previousDueDate)} → ${dateLabel(newDueDate)}`,
+    );
+
+    await this.notifySupervisedTeams(
+      supervisorId,
+      'Deliverable Deadline Extended',
+      `The deadline for "${deliverable.title}" has been extended to ${dateLabel(newDueDate)}.`,
+    );
+
+    return { deliverable: updated, extension };
   }
 }

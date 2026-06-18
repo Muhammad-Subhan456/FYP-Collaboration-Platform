@@ -129,6 +129,32 @@ export class TeamsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch('my-team/members/:memberId/role')
+  updateMemberRole(
+    @Headers('authorization') authorization: string,
+    @Param('memberId') memberId: string,
+    @Body() body: any,
+  ) {
+    return this.gatewayHttpService.patch(
+      `${process.env.TEAM_SERVICE_URL}/teams/my-team/members/${memberId}/role`,
+      body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('member/:authUserId/team')
+  getTeamForMember(
+    @Headers('authorization') authorization: string,
+    @Param('authUserId') authUserId: string,
+  ) {
+    return this.gatewayHttpService.get(
+      `${process.env.TEAM_SERVICE_URL}/teams/member/${authUserId}/team`,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('all')
   getAllTeamsForCoordinator(
     @Headers('authorization') authorization: string,

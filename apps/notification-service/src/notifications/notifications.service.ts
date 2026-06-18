@@ -26,6 +26,14 @@ export class NotificationsService {
     });
   }
 
+  createBulk(
+    notifications: CreateNotificationDto[],
+  ) {
+    return this.prisma.notification.createMany({
+      data: notifications,
+    });
+  }
+
   async getMyNotifications(
     authUserId: string,
     page = 1,

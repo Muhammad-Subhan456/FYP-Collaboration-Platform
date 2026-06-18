@@ -47,25 +47,19 @@ export class EvaluationsService {
     teamId: string,
     panelId?: string,
   ) {
-    const existingAssignment =
-      await this.prisma.evaluationAssignment.findFirst({
-        where: {
-          evaluationId,
-          teamId,
-        },
-      });
+    return this.assignTeams(evaluationId, [teamId], panelId);
+  }
 
-    if (existingAssignment) {
-      throw new BadRequestException(
-        'Team already assigned to this evaluation',
-      );
-    }
+  async assignTeams(
+    evaluationId: string,
+    teamIds: string[],
+    panelId?: string,
+  ) {
+    const uniqueTeamIds = [...new Set(teamIds)];
 
     const evaluation =
       await this.prisma.evaluation.findUnique({
-        where: {
-          id: evaluationId,
-        },
+        where: { id: evaluationId },
       });
 
     if (!evaluation) {
@@ -87,46 +81,88 @@ export class EvaluationsService {
       }
     }
 
-    const assignment =
-      await this.prisma.evaluationAssignment.create({
-        data: {
-          evaluationId,
-          teamId,
-          panelId,
-        },
-      });
+    const assignments: Awaited<
+      ReturnType<typeof this.prisma.evaluationAssignment.create>
+    >[] = [];
 
-    try {
-      const team = await firstValueFrom(
-        this.httpService.get(
-          `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
-          { headers: this.internalHeaders() },
-        ),
-      );
+    for (const teamId of uniqueTeamIds) {
+      const existingAssignment =
+        await this.prisma.evaluationAssignment.findFirst({
+          where: {
+            evaluationId,
+            teamId,
+          },
+        });
 
-      const members = team.data;
+      if (existingAssignment) {
+        throw new BadRequestException(
+          `Team ${teamId} is already assigned to this evaluation`,
+        );
+      }
 
-      for (const member of members) {
-        await firstValueFrom(
-          this.httpService.post(
-            `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-            {
-              authUserId: member.authUserId,
-              title: 'Evaluation Scheduled',
-              message: `Your team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
-            },
+      const assignment =
+        await this.prisma.evaluationAssignment.create({
+          data: {
+            evaluationId,
+            teamId,
+            panelId,
+          },
+        });
+
+      assignments.push(assignment);
+
+      try {
+        const team = await firstValueFrom(
+          this.httpService.get(
+            `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
             { headers: this.internalHeaders() },
           ),
         );
+
+        const members = team.data;
+
+        await Promise.allSettled(
+          members.map((member: { authUserId: string }) =>
+            firstValueFrom(
+              this.httpService.post(
+                `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+                {
+                  authUserId: member.authUserId,
+                  title: 'FOASIS Evaluation Scheduled',
+                  message: `Your team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
+                },
+                { headers: this.internalHeaders() },
+              ),
+            ),
+          ),
+        );
+      } catch (error: any) {
+        console.error(
+          'Failed to create evaluation assignment notifications',
+          error.message,
+        );
       }
-    } catch (error: any) {
-      console.error(
-        'Failed to create notifications',
-        error.message,
+    }
+
+    return assignments;
+  }
+
+  async getEvaluationAssignments(evaluationId: string) {
+    const evaluation =
+      await this.prisma.evaluation.findUnique({
+        where: { id: evaluationId },
+      });
+
+    if (!evaluation) {
+      throw new BadRequestException(
+        'Evaluation not found',
       );
     }
 
-    return assignment;
+    return this.prisma.evaluationAssignment.findMany({
+      where: { evaluationId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async getTeamEvaluations(teamId: string) {
@@ -141,26 +177,92 @@ export class EvaluationsService {
   }
 
   async getMyEvaluations(authorization: string) {
-    const team = await firstValueFrom(
-      this.httpService.get(
-        `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
-        {
-          headers: {
-            authorization,
+    try {
+      const team = await firstValueFrom(
+        this.httpService.get(
+          `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+          {
+            headers: {
+              authorization,
+            },
+          },
+        ),
+      );
+
+      if (!team.data?.id) {
+        return [];
+      }
+
+      const teamId = team.data.id;
+
+      return this.prisma.evaluationAssignment.findMany({
+        where: {
+          teamId,
+        },
+        include: {
+          evaluation: true,
+        },
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async getEvaluatorOverview() {
+    const panelEvaluators =
+      await this.prisma.panelEvaluator.findMany({
+        include: {
+          panel: {
+            include: {
+              evaluation: true,
+              assignments: true,
+            },
           },
         },
-      ),
-    );
+        orderBy: { createdAt: 'desc' },
+      });
 
-    const teamId = team.data.id;
+    const overview = new Map<
+      string,
+      {
+        evaluatorId: string;
+        teams: Array<{
+          teamId: string;
+          evaluationId: string;
+          evaluationTitle: string;
+          panelRoom: string;
+        }>;
+      }
+    >();
 
-    return this.prisma.evaluationAssignment.findMany({
-      where: {
-        teamId,
-      },
-      include: {
-        evaluation: true,
-      },
-    });
+    for (const record of panelEvaluators) {
+      if (!overview.has(record.evaluatorId)) {
+        overview.set(record.evaluatorId, {
+          evaluatorId: record.evaluatorId,
+          teams: [],
+        });
+      }
+
+      const entry = overview.get(record.evaluatorId)!;
+
+      for (const assignment of record.panel.assignments) {
+        const exists = entry.teams.some(
+          (team) =>
+            team.teamId === assignment.teamId &&
+            team.evaluationId === record.panel.evaluationId,
+        );
+
+        if (!exists) {
+          entry.teams.push({
+            teamId: assignment.teamId,
+            evaluationId: record.panel.evaluationId,
+            evaluationTitle: record.panel.evaluation.title,
+            panelRoom: record.panel.room,
+          });
+        }
+      }
+    }
+
+    return Array.from(overview.values());
   }
 }

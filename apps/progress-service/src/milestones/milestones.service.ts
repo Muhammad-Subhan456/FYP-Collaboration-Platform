@@ -8,12 +8,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneStatusDto } from './dto/update-milestone-status.dto';
 import { ProposalAccessService } from '../common/proposal-access.service';
+import { TeamAccessService } from '../common/team-access.service';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
 @Injectable()
 export class MilestonesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly proposalAccessService: ProposalAccessService,
+    private readonly teamAccessService: TeamAccessService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async createMilestone(
@@ -27,7 +31,12 @@ export class MilestonesService {
       authorization,
     );
 
-    return this.prisma.milestone.create({
+    const proposal = await this.proposalAccessService.getProposal(
+      dto.proposalId,
+      authorization,
+    );
+
+    const milestone = await this.prisma.milestone.create({
       data: {
         proposalId: dto.proposalId,
         title: dto.title,
@@ -35,6 +44,24 @@ export class MilestonesService {
         dueDate: new Date(dto.dueDate),
       },
     });
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Milestone Created',
+      milestone.title,
+    );
+
+    await this.teamAccessService.notifyTeamMembers(
+      proposal.teamId,
+      'FOASIS Milestone Added',
+      `New milestone "${milestone.title}" is due on ${milestone.dueDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}.`,
+    );
+
+    return milestone;
   }
 
   async getMilestones(
@@ -75,9 +102,22 @@ export class MilestonesService {
       authorization,
     );
 
-    return this.prisma.milestone.update({
+    const updated = await this.prisma.milestone.update({
       where: { id: milestoneId },
       data: { status: dto.status as any },
     });
+
+    const proposal = await this.proposalAccessService.getProposal(
+      milestone.proposalId,
+      authorization,
+    );
+
+    await this.teamAccessService.notifyTeamMembers(
+      proposal.teamId,
+      'FOASIS Milestone Updated',
+      `Milestone "${updated.title}" is now ${dto.status.replace(/_/g, ' ').toLowerCase()}.`,
+    );
+
+    return updated;
   }
 }

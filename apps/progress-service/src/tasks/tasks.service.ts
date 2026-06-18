@@ -63,6 +63,24 @@ export class TasksService {
     });
   }
 
+  async getTasksForUser(authUserId: string) {
+    return this.prisma.task.findMany({
+      where: { assignedTo: authUserId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        milestone: {
+          select: {
+            id: true,
+            title: true,
+            proposalId: true,
+            dueDate: true,
+            status: true,
+          },
+        },
+      },
+    });
+  }
+
   async updateTaskStatus(
     taskId: string,
     dto: UpdateTaskStatusDto,

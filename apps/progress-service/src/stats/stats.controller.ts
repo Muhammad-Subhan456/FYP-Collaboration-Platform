@@ -48,6 +48,15 @@ export class StatsController {
         authorization,
       );
 
+    if (!team) {
+      return {
+        pendingSubmissions: 0,
+        upcomingDeliverables: 0,
+        openTasks: 0,
+        upcomingEvaluations: 0,
+      };
+    }
+
     const supervisorId =
       await this.teamAccessService.getAssignedSupervisorId(
         authorization,

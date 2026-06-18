@@ -111,6 +111,25 @@ model Deliverable {
   createdAt DateTime @default(now())
 
   submissions Submission[]
+  deadlineExtensions DeliverableDeadlineExtension[]
+}
+
+model DeliverableDeadlineExtension {
+  id String @id @default(uuid())
+
+  deliverableId String
+
+  previousDueDate DateTime
+
+  newDueDate DateTime
+
+  extendedBy String
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
 }
 
 model Submission {

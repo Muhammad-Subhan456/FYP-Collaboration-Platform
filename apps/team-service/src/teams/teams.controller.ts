@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -15,6 +16,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { InternalOrJwtAuthGuard } from '../auth/guards/internal-or-jwt-auth.guard';
 
 import { CreateTeamDto } from './dto/create-team.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TeamsService } from './teams.service';
 
 @Controller('teams')
@@ -104,6 +106,28 @@ export class TeamsController {
       requestId,
       req.user.userId,
     );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Patch('my-team/members/:memberId/role')
+  updateMemberRole(
+    @Req() req: any,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateMemberRoleDto,
+  ) {
+    return this.teamsService.updateMemberRole(
+      req.user.userId,
+      memberId,
+      dto.teamRole,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('member/:authUserId/team')
+  getTeamForMember(@Param('authUserId') authUserId: string) {
+    return this.teamsService.getTeamContextForMember(authUserId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
