@@ -2,16 +2,22 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
+  Param,
+  Patch,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 import { DeliverablesService } from './deliverables.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
+import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
 
 @Controller('deliverables')
 export class DeliverablesController {
@@ -20,7 +26,8 @@ export class DeliverablesController {
       DeliverablesService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Post()
   createDeliverable(
     @Req() req: any,
@@ -33,14 +40,39 @@ export class DeliverablesController {
       );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Get('my')
-  getMyDeliverables(
-    @Req() req: any,
-  ) {
+  getMyDeliverables(@Req() req: any) {
     return this.deliverablesService
       .getMyDeliverables(
         req.user.userId,
+      );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Get('for-my-team')
+  getForMyTeam(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.deliverablesService
+      .getForMyTeam(authorization);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Patch(':id')
+  updateDeliverable(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateDeliverableDto,
+  ) {
+    return this.deliverablesService
+      .updateDeliverable(
+        id,
+        req.user.userId,
+        dto,
       );
   }
 }

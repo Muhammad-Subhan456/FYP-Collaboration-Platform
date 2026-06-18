@@ -7,6 +7,9 @@
 # Environment files
 **/.env
 **/.env.*
+!**/.env.example
+!/.env.example
+.env.example
 
 # Logs
 *.log
@@ -16,4 +19,8 @@
 
 # OS files
 .DS_Store
-Thumbs.db
+uploads/
+
+# MD Files
+API_TESTING.md
+BACKEND_STATUS.md

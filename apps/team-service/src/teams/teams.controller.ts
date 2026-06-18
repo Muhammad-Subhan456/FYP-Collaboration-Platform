@@ -1,18 +1,21 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { InternalOrJwtAuthGuard } from '../auth/guards/internal-or-jwt-auth.guard';
 
 import { CreateTeamDto } from './dto/create-team.dto';
 import { TeamsService } from './teams.service';
-import { Get, Query } from '@nestjs/common';
-import { Param } from '@nestjs/common';
-
 
 @Controller('teams')
 export class TeamsController {
@@ -20,7 +23,8 @@ export class TeamsController {
     private readonly teamsService: TeamsService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Post()
   createTeam(
     @Req() req: any,
@@ -32,100 +36,86 @@ export class TeamsController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-getAllTeams() {
-  return this.teamsService.getAllTeams();
-}
+  getAllTeams() {
+    return this.teamsService.getAllTeams();
+  }
 
-@Get('search')
-searchTeams(
-  @Query('domain') domain: string,
-) {
-  return this.teamsService.searchByDomain(
-    domain,
-  );
-}
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  searchTeams(@Query('domain') domain: string) {
+    return this.teamsService.searchByDomain(domain);
+  }
 
-@UseGuards(JwtAuthGuard)
-@Get('my-team')
-getMyTeam(@Req() req: any) {
-  return this.teamsService.getMyTeam(
-    req.user.userId,
-  );
-}
+  @UseGuards(JwtAuthGuard)
+  @Get('my-team')
+  getMyTeam(@Req() req: any) {
+    return this.teamsService.getMyTeam(req.user.userId);
+  }
 
-@UseGuards(JwtAuthGuard)
-@Get('my-team/members')
-getMyTeamMembers(
-  @Req() req: any,
-) {
-  return this.teamsService.getMyTeamMembers(
-    req.user.userId,
-  );
-}
+  @UseGuards(JwtAuthGuard)
+  @Get('my-team/members')
+  getMyTeamMembers(@Req() req: any) {
+    return this.teamsService.getMyTeamMembers(req.user.userId);
+  }
 
-@UseGuards(JwtAuthGuard)
-@Post(':teamId/join')
-requestToJoin(
-  @Param('teamId') teamId: string,
-  @Req() req: any,
-) {
-  return this.teamsService.requestToJoin(
-    teamId,
-    req.user.userId,
-  );
-}
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Post(':teamId/join')
+  requestToJoin(
+    @Param('teamId') teamId: string,
+    @Req() req: any,
+  ) {
+    return this.teamsService.requestToJoin(
+      teamId,
+      req.user.userId,
+    );
+  }
 
-@UseGuards(JwtAuthGuard)
-@Get('my-team/requests')
-getMyTeamRequests(
-  @Req() req: any,
-) {
-  return this.teamsService.getMyTeamRequests(
-    req.user.userId,
-  );
-}
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Get('my-team/requests')
+  getMyTeamRequests(@Req() req: any) {
+    return this.teamsService.getMyTeamRequests(req.user.userId);
+  }
 
-@UseGuards(JwtAuthGuard)
-@Post('requests/:requestId/approve')
-approveRequest(
-  @Param('requestId')
-  requestId: string,
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Post('requests/:requestId/approve')
+  approveRequest(
+    @Param('requestId') requestId: string,
+    @Req() req: any,
+  ) {
+    return this.teamsService.approveRequest(
+      requestId,
+      req.user.userId,
+    );
+  }
 
-  @Req() req: any,
-) {
-  return this.teamsService.approveRequest(
-    requestId,
-    req.user.userId,
-  );
-}
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Post('requests/:requestId/reject')
+  rejectRequest(
+    @Param('requestId') requestId: string,
+    @Req() req: any,
+  ) {
+    return this.teamsService.rejectRequest(
+      requestId,
+      req.user.userId,
+    );
+  }
 
-@UseGuards(JwtAuthGuard)
-@Post('requests/:requestId/reject')
-rejectRequest(
-  @Param('requestId')
-  requestId: string,
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('all')
+  getAllTeamsForCoordinator() {
+    return this.teamsService.getAllTeamsForCoordinator();
+  }
 
-  @Req() req: any,
-) {
-  return this.teamsService.rejectRequest(
-    requestId,
-    req.user.userId,
-  );
-}
-
-@Get(':teamId/members')
-getTeamMembers(
-  @Param('teamId') teamId: string,
-) {
-  return this.teamsService.getTeamMembers(
-    teamId,
-  );
-}
-
-@Get('all')
-getAllTeamsForCoordinator() {
-  return this.teamsService.getAllTeamsForCoordinator();
-}
-
+  @UseGuards(InternalOrJwtAuthGuard)
+  @Get(':teamId/members')
+  getTeamMembers(@Param('teamId') teamId: string) {
+    return this.teamsService.getTeamMembers(teamId);
+  }
 }

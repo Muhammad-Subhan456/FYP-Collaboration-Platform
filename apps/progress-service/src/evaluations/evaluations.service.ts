@@ -7,136 +7,141 @@ import { firstValueFrom } from 'rxjs';
 @Injectable()
 export class EvaluationsService {
   constructor(
-  private readonly prisma: PrismaService,
-  private readonly httpService: HttpService,
-) {}
-    async createEvaluation(
-  coordinatorId: string,
-  dto: CreateEvaluationDto,
-) {
-  return this.prisma.evaluation.create({
-    data: {
-      coordinatorId,
+    private readonly prisma: PrismaService,
+    private readonly httpService: HttpService,
+  ) {}
 
-      title: dto.title,
-
-      type: dto.type as any,
-
-      date: new Date(dto.date),
-
-      venue: dto.venue,
-
-      remarks: dto.remarks,
-    },
-  });
-}
-async getAllEvaluations() {
-  return this.prisma.evaluation.findMany({
-    orderBy: {
-      date: 'asc',
-    },
-  });
-}
-async assignTeam(
-  evaluationId: string,
-  teamId: string,
-) {
-  const existingAssignment =
-  await this.prisma.evaluationAssignment.findFirst({
-    where: {
-      evaluationId,
-      teamId,
-    },
-  });
-
-if (existingAssignment) {
-  throw new BadRequestException(
-    'Team already assigned to this evaluation',
-  );
-}
-  const evaluation =
-    await this.prisma.evaluation.findUnique({
-      where: {
-        id: evaluationId,
-      },
-    });
-
-  if (!evaluation) {
-    throw new BadRequestException(
-      'Evaluation not found',
-    );
+  private internalHeaders() {
+    return {
+      'X-Internal-Api-Key':
+        process.env.INTERNAL_API_KEY,
+    };
   }
 
-  const assignment =
-    await this.prisma.evaluationAssignment.create({
+  async createEvaluation(
+    coordinatorId: string,
+    dto: CreateEvaluationDto,
+  ) {
+    return this.prisma.evaluation.create({
       data: {
-        evaluationId,
-        teamId,
+        coordinatorId,
+        title: dto.title,
+        type: dto.type as any,
+        date: new Date(dto.date),
+        venue: dto.venue,
+        remarks: dto.remarks,
       },
     });
+  }
 
-  try {
-//     console.log(
-//   'Team URL:',
-//   `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
-// );
-    const team =
-      await firstValueFrom(
-        this.httpService.get(
-          `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
-        ),
-      );
+  async getAllEvaluations() {
+    return this.prisma.evaluation.findMany({
+      orderBy: {
+        date: 'asc',
+      },
+    });
+  }
 
-    const members = team.data;
-//       console.log(
-//   'Notification URL:',
-//   `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-// );
-    for (const member of members) {
-      await firstValueFrom(
-        this.httpService.post(
-          `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-          {
-            authUserId:
-              member.authUserId,
+  async assignTeam(
+    evaluationId: string,
+    teamId: string,
+    panelId?: string,
+  ) {
+    const existingAssignment =
+      await this.prisma.evaluationAssignment.findFirst({
+        where: {
+          evaluationId,
+          teamId,
+        },
+      });
 
-            title:
-              'Evaluation Scheduled',
-
-            message:
-              `Your team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
-          },
-        ),
+    if (existingAssignment) {
+      throw new BadRequestException(
+        'Team already assigned to this evaluation',
       );
     }
-  } catch (error: any) {
-    console.error(
-      'Failed to create notifications',
-      error.message,
-    );
+
+    const evaluation =
+      await this.prisma.evaluation.findUnique({
+        where: {
+          id: evaluationId,
+        },
+      });
+
+    if (!evaluation) {
+      throw new BadRequestException(
+        'Evaluation not found',
+      );
+    }
+
+    if (panelId) {
+      const panel =
+        await this.prisma.evaluationPanel.findUnique({
+          where: { id: panelId },
+        });
+
+      if (!panel || panel.evaluationId !== evaluationId) {
+        throw new BadRequestException(
+          'Panel not found for this evaluation',
+        );
+      }
+    }
+
+    const assignment =
+      await this.prisma.evaluationAssignment.create({
+        data: {
+          evaluationId,
+          teamId,
+          panelId,
+        },
+      });
+
+    try {
+      const team = await firstValueFrom(
+        this.httpService.get(
+          `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
+          { headers: this.internalHeaders() },
+        ),
+      );
+
+      const members = team.data;
+
+      for (const member of members) {
+        await firstValueFrom(
+          this.httpService.post(
+            `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+            {
+              authUserId: member.authUserId,
+              title: 'Evaluation Scheduled',
+              message: `Your team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
+            },
+            { headers: this.internalHeaders() },
+          ),
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        'Failed to create notifications',
+        error.message,
+      );
+    }
+
+    return assignment;
   }
 
-  return assignment;
-}
-async getTeamEvaluations(
-  teamId: string,
-) {
-  return this.prisma.evaluationAssignment.findMany({
-    where: {
-      teamId,
-    },
-    include: {
-      evaluation: true,
-    },
-  });
-}
+  async getTeamEvaluations(teamId: string) {
+    return this.prisma.evaluationAssignment.findMany({
+      where: {
+        teamId,
+      },
+      include: {
+        evaluation: true,
+      },
+    });
+  }
 
-async getMyEvaluations(
-  authUserId: string,
-  authorization: string,
-) {
-  const team =
-    await firstValueFrom(
+  async getMyEvaluations(authorization: string) {
+    const team = await firstValueFrom(
       this.httpService.get(
         `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
         {
@@ -147,16 +152,15 @@ async getMyEvaluations(
       ),
     );
 
-  const teamId = team.data.id;
+    const teamId = team.data.id;
 
-  return this.prisma.evaluationAssignment.findMany({
-    where: {
-      teamId,
-    },
-    include: {
-      evaluation: true,
-    },
-  });
-}
-
+    return this.prisma.evaluationAssignment.findMany({
+      where: {
+        teamId,
+      },
+      include: {
+        evaluation: true,
+      },
+    });
+  }
 }

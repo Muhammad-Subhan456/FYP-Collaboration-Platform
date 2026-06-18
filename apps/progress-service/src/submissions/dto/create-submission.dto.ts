@@ -8,9 +8,6 @@ export class CreateSubmissionDto {
   deliverableId!: string;
 
   @IsString()
-  teamId!: string;
-
-  @IsString()
   fileUrl!: string;
 
   @IsOptional()

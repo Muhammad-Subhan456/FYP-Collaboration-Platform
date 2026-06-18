@@ -2,9 +2,12 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
+  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -16,6 +19,7 @@ import { SubmissionsService } from './submissions.service';
 
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
+import { PaginationQueryDto } from '../common/pagination';
 
 @Controller('submissions')
 export class SubmissionsController {
@@ -24,79 +28,109 @@ export class SubmissionsController {
       SubmissionsService,
   ) {}
 
-  @UseGuards(
-    JwtAuthGuard,
-    RolesGuard,
-  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Post()
   createSubmission(
-    @Body()
-    dto: CreateSubmissionDto,
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+    @Body() dto: CreateSubmissionDto,
   ) {
-    return this.submissionsService
-      .createSubmission(dto);
+    return this.submissionsService.createSubmission(
+      req.user.userId,
+      authorization,
+      dto,
+    );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Get('my')
+  getMySubmissions(
+    @Headers('authorization') authorization: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.submissionsService.getMySubmissions(
+      authorization,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Get('deliverable/:id')
   getDeliverableSubmissions(
-    @Param('id')
-    deliverableId: string,
+    @Req() req: any,
+    @Param('id') deliverableId: string,
   ) {
-    return this.submissionsService
-      .getDeliverableSubmissions(
-        deliverableId,
-      );
+    return this.submissionsService.getDeliverableSubmissions(
+      deliverableId,
+      req.user.userId,
+    );
   }
 
-  @UseGuards(
-    JwtAuthGuard,
-    RolesGuard,
-  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
   @Patch(':id/review')
   reviewSubmission(
-    @Param('id')
-    submissionId: string,
-
-    @Body()
-    dto: ReviewSubmissionDto,
+    @Req() req: any,
+    @Param('id') submissionId: string,
+    @Body() dto: ReviewSubmissionDto,
   ) {
-    return this.submissionsService
-      .reviewSubmission(
-        submissionId,
-        dto,
-      );
+    return this.submissionsService.reviewSubmission(
+      submissionId,
+      req.user.userId,
+      dto,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get(
-    ':deliverableId/team/:teamId/latest',
-  )
+  @Get(':deliverableId/team/:teamId/latest')
   getLatestSubmission(
-    @Param('deliverableId')
-    deliverableId: string,
-
-    @Param('teamId')
-    teamId: string,
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+    @Param('deliverableId') deliverableId: string,
+    @Param('teamId') teamId: string,
   ) {
-    return this.submissionsService
-      .getLatestSubmission(
-        deliverableId,
-        teamId,
-      );
+    return this.submissionsService.getLatestSubmission(
+      deliverableId,
+      teamId,
+      req.user.userId,
+      req.user.role,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':deliverableId/team/:teamId/history')
+  getSubmissionHistory(
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+    @Param('deliverableId') deliverableId: string,
+    @Param('teamId') teamId: string,
+  ) {
+    return this.submissionsService.getSubmissionHistory(
+      deliverableId,
+      teamId,
+      req.user.userId,
+      req.user.role,
+      authorization,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('team/:teamId')
   getTeamSubmissions(
-    @Param('teamId')
-    teamId: string,
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+    @Param('teamId') teamId: string,
   ) {
-    return this.submissionsService
-      .getTeamSubmissions(
-        teamId,
-      );
+    return this.submissionsService.getTeamSubmissions(
+      teamId,
+      req.user.userId,
+      req.user.role,
+      authorization,
+    );
   }
 }

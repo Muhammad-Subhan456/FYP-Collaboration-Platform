@@ -1,30 +1,73 @@
-import axios from 'axios';
-import { Injectable } from '@nestjs/common';
+import axios, { Method } from 'axios';
+import { HttpException, Injectable } from '@nestjs/common';
+
+type ForwardOptions = {
+  authorization?: string;
+  data?: any;
+  params?: any;
+};
 
 @Injectable()
 export class GatewayHttpService {
-  async get(url: string, authorization?: string, params?: any) {
-    console.log(`[Gateway] GET ${url}`);
-    const response = await axios.get(url, {
+  async forward(
+    method: Method,
+    url: string,
+    options: ForwardOptions = {},
+  ) {
+    const response = await axios({
+      method,
+      url,
       headers: {
-        Authorization: authorization,
+        ...(options.authorization
+          ? { Authorization: options.authorization }
+          : {}),
       },
-      params,
-      timeout: 5000,
+      data: options.data,
+      params: options.params,
+      timeout: 10000,
+      validateStatus: () => true,
     });
+
+    if (response.status >= 400) {
+      throw new HttpException(
+        response.data,
+        response.status,
+      );
+    }
 
     return response.data;
   }
 
-  async post(url: string, body: any, authorization?: string) {
-    console.log(`[Gateway] GET ${url}`);
-    const response = await axios.post(url, body, {
-      headers: {
-        Authorization: authorization,
-      },
-      timeout: 5000,
+  async get(
+    url: string,
+    authorization?: string,
+    params?: any,
+  ) {
+    return this.forward('get', url, {
+      authorization,
+      params,
     });
+  }
 
-    return response.data;
+  async post(
+    url: string,
+    data: any,
+    authorization?: string,
+  ) {
+    return this.forward('post', url, {
+      authorization,
+      data,
+    });
+  }
+
+  async patch(
+    url: string,
+    data: any,
+    authorization?: string,
+  ) {
+    return this.forward('patch', url, {
+      authorization,
+      data,
+    });
   }
 }

@@ -23,7 +23,8 @@ export class GlobalAnnouncementsController {
       GlobalAnnouncementsService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
   @Post()
   createAnnouncement(
     @Req() req: any,
@@ -37,6 +38,7 @@ export class GlobalAnnouncementsController {
       );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   getAnnouncements() {
     return this.globalAnnouncementsService

@@ -5,14 +5,13 @@ import {
   Param,
   Post,
   UseGuards,
+  Headers,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import {
-  Headers,
-} from '@nestjs/common';
+
 import { EvaluationResultsService } from './evaluation-results.service';
 
 import { CreateResultDto } from './dto/create-result.dto';
@@ -24,18 +23,13 @@ export class EvaluationResultsController {
       EvaluationResultsService,
   ) {}
 
-  @UseGuards(
-    JwtAuthGuard,
-    RolesGuard,
-  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Post(':evaluationId')
   createResult(
     @Param('evaluationId')
     evaluationId: string,
-
-    @Body()
-    dto: CreateResultDto,
+    @Body() dto: CreateResultDto,
   ) {
     return this.evaluationResultsService
       .createResult(
@@ -44,10 +38,11 @@ export class EvaluationResultsController {
       );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
   @Get('team/:teamId')
   getResultsForTeam(
-    @Param('teamId')
-    teamId: string,
+    @Param('teamId') teamId: string,
   ) {
     return this.evaluationResultsService
       .getResultsForTeam(
@@ -56,14 +51,14 @@ export class EvaluationResultsController {
   }
 
   @UseGuards(JwtAuthGuard)
-@Get('my')
-getMyResults(
-  @Headers('authorization')
-  authorization: string,
-) {
-  return this.evaluationResultsService
-    .getMyResults(
-      authorization,
-    );
-}
+  @Get('my')
+  getMyResults(
+    @Headers('authorization')
+    authorization: string,
+  ) {
+    return this.evaluationResultsService
+      .getMyResults(
+        authorization,
+      );
+  }
 }

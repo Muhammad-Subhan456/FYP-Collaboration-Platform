@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 
@@ -14,10 +15,44 @@ export class ProposalsService {
     private readonly prisma: PrismaService,
   ) {}
 
+  private notificationHeaders() {
+    return {
+      'X-Internal-Api-Key':
+        process.env.INTERNAL_API_KEY,
+    };
+  }
+
+  private async getTeamIdFromAuth(
+    authorization: string,
+  ) {
+    const response = await axios.get(
+      `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+      {
+        headers: { Authorization: authorization },
+      },
+    );
+
+    return response.data.id as string;
+  }
+
   async createProposal(
   authUserId: string,
+  authorization: string,
   createProposalDto: CreateProposalDto,
 ) {
+    const teamResponse = await axios.get(
+      `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+      {
+        headers: { Authorization: authorization },
+      },
+    );
+
+    if (teamResponse.data.id !== createProposalDto.teamId) {
+      throw new ForbiddenException(
+        'You can only create a proposal for your own team',
+      );
+    }
+
     const existingProposal =
       await this.prisma.proposal.findUnique({
         where: {
@@ -46,27 +81,36 @@ export class ProposalsService {
 });
   }
 
-  async getMyProposal(teamId: string) {
-  const proposal =
-    await this.prisma.proposal.findUnique({
-      where: {
-        teamId,
-      },
-    });
+  async getMyProposal(authorization: string) {
+    const teamId =
+      await this.getTeamIdFromAuth(
+        authorization,
+      );
 
-  if (!proposal) {
-    throw new BadRequestException(
-      'Proposal not found',
-    );
+    const proposal =
+      await this.prisma.proposal.findUnique({
+        where: { teamId },
+      });
+
+    if (!proposal) {
+      throw new BadRequestException(
+        'Proposal not found',
+      );
+    }
+
+    return proposal;
   }
-
-  return proposal;
-}
 
 async requestSupervisor(
   proposalId: string,
   supervisorId: string,
+  authorization: string,
 ) {
+  const teamId =
+    await this.getTeamIdFromAuth(
+      authorization,
+    );
+
   const proposal =
     await this.prisma.proposal.findUnique({
       where: {
@@ -77,6 +121,12 @@ async requestSupervisor(
   if (!proposal) {
     throw new BadRequestException(
       'Proposal not found',
+    );
+  }
+
+  if (proposal.teamId !== teamId) {
+    throw new ForbiddenException(
+      'You can only request supervisors for your own team proposal',
     );
   }
 
@@ -141,6 +191,7 @@ async getSupervisorRequests(
 
 async acceptRequest(
   requestId: string,
+  supervisorId: string,
 ) {
   const request =
   await this.prisma.supervisorRequest.findUnique({
@@ -152,6 +203,12 @@ async acceptRequest(
 if (!request) {
   throw new BadRequestException(
     'Request not found',
+  );
+}
+
+if (request.supervisorId !== supervisorId) {
+  throw new ForbiddenException(
+    'You can only accept your own supervisor requests',
   );
 }
 const proposal =
@@ -220,6 +277,7 @@ if (proposal.teamLeaderAuthUserId) {
         message:
           'A supervisor has accepted your proposal request.',
       },
+      { headers: this.notificationHeaders() },
     );
   } catch (error) {
     console.error(
@@ -237,6 +295,7 @@ return {
 
 async rejectRequest(
   requestId: string,
+  supervisorId: string,
 ) {
   const request =
     await this.prisma.supervisorRequest.findUnique({
@@ -248,6 +307,12 @@ async rejectRequest(
   if (!request) {
     throw new BadRequestException(
       'Request not found',
+    );
+  }
+
+  if (request.supervisorId !== supervisorId) {
+    throw new ForbiddenException(
+      'You can only reject your own supervisor requests',
     );
   }
 
@@ -283,6 +348,7 @@ if (
         message:
           'A supervisor has rejected your proposal request.',
       },
+      { headers: this.notificationHeaders() },
     );
   } catch (error) {
     console.error(
@@ -362,7 +428,24 @@ async inviteProposal(
 
 async getMyInvitations(
   proposalId: string,
+  authorization: string,
 ) {
+  const teamId =
+    await this.getTeamIdFromAuth(
+      authorization,
+    );
+
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: { id: proposalId },
+    });
+
+  if (!proposal || proposal.teamId !== teamId) {
+    throw new ForbiddenException(
+      'You can only view invitations for your own team proposal',
+    );
+  }
+
   return this.prisma.supervisorInvitation.findMany({
     where: {
       proposalId,
@@ -373,6 +456,7 @@ async getMyInvitations(
 
 async acceptInvitation(
   invitationId: string,
+  authorization: string,
 ) {
   const invitation =
   await this.prisma.supervisorInvitation.findUnique({
@@ -396,6 +480,17 @@ const proposal =
 if (!proposal) {
   throw new BadRequestException(
     'Proposal not found',
+  );
+}
+
+const teamId =
+  await this.getTeamIdFromAuth(
+    authorization,
+  );
+
+if (proposal.teamId !== teamId) {
+  throw new ForbiddenException(
+    'You can only accept invitations for your own team proposal',
   );
 }
 if (
@@ -459,6 +554,7 @@ try {
       message:
         'A team has accepted your invitation.',
     },
+    { headers: this.notificationHeaders() },
   );
 } catch (error) {
   console.error(
@@ -474,6 +570,7 @@ return {
 
 async rejectInvitation(
   invitationId: string,
+  authorization: string,
 ) {
   const invitation =
     await this.prisma.supervisorInvitation.findUnique({
@@ -485,6 +582,30 @@ async rejectInvitation(
   if (!invitation) {
     throw new BadRequestException(
       'Invitation not found',
+    );
+  }
+
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: {
+        id: invitation.proposalId,
+      },
+    });
+
+  if (!proposal) {
+    throw new BadRequestException(
+      'Proposal not found',
+    );
+  }
+
+  const teamId =
+    await this.getTeamIdFromAuth(
+      authorization,
+    );
+
+  if (proposal.teamId !== teamId) {
+    throw new ForbiddenException(
+      'You can only reject invitations for your own team proposal',
     );
   }
 
@@ -510,6 +631,7 @@ try {
       message:
         'A team has rejected your invitation.',
     },
+    { headers: this.notificationHeaders() },
   );
 } catch (error) {
   console.error(
@@ -554,6 +676,158 @@ async getProposalStats() {
     pendingProposals,
     assignedProposals,
   };
+}
+
+async getProposalById(
+  proposalId: string,
+  authUserId: string,
+  role: string,
+  authorization: string,
+) {
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: { id: proposalId },
+    });
+
+  if (!proposal) {
+    throw new BadRequestException(
+      'Proposal not found',
+    );
+  }
+
+  if (role === 'COORDINATOR') {
+    return proposal;
+  }
+
+  if (role === 'SUPERVISOR') {
+    if (proposal.assignedSupervisorId === authUserId) {
+      return proposal;
+    }
+
+    throw new ForbiddenException('Access denied');
+  }
+
+  if (role === 'STUDENT') {
+    const teamId =
+      await this.getTeamIdFromAuth(
+        authorization,
+      );
+
+    if (proposal.teamId === teamId) {
+      return proposal;
+    }
+
+    throw new ForbiddenException('Access denied');
+  }
+
+  throw new ForbiddenException('Access denied');
+}
+
+async getSupervisedProposals(supervisorId: string) {
+  return this.prisma.proposal.findMany({
+    where: {
+      assignedSupervisorId: supervisorId,
+      status: 'SUPERVISOR_ASSIGNED',
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+async approveProposal(proposalId: string) {
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: { id: proposalId },
+    });
+
+  if (!proposal) {
+    throw new BadRequestException(
+      'Proposal not found',
+    );
+  }
+
+  if (proposal.status !== 'SUPERVISOR_ASSIGNED') {
+    throw new BadRequestException(
+      'Only supervisor-assigned proposals can be approved',
+    );
+  }
+
+  const updated =
+    await this.prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: 'APPROVED' },
+    });
+
+  if (proposal.teamLeaderAuthUserId) {
+    try {
+      await axios.post(
+        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+        {
+          authUserId:
+            proposal.teamLeaderAuthUserId,
+          title: 'Proposal Approved',
+          message:
+            'Your FYP proposal has been approved by the coordinator.',
+        },
+        { headers: this.notificationHeaders() },
+      );
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  return updated;
+}
+
+async rejectProposal(
+  proposalId: string,
+  reason?: string,
+) {
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: { id: proposalId },
+    });
+
+  if (!proposal) {
+    throw new BadRequestException(
+      'Proposal not found',
+    );
+  }
+
+  if (
+    proposal.status !== 'SUPERVISOR_ASSIGNED' &&
+    proposal.status !== 'PENDING_SUPERVISOR'
+  ) {
+    throw new BadRequestException(
+      'Proposal cannot be rejected in its current state',
+    );
+  }
+
+  const updated =
+    await this.prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: 'REJECTED' },
+    });
+
+  if (proposal.teamLeaderAuthUserId) {
+    try {
+      await axios.post(
+        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+        {
+          authUserId:
+            proposal.teamLeaderAuthUserId,
+          title: 'Proposal Rejected',
+          message:
+            reason ??
+            'Your FYP proposal has been rejected by the coordinator.',
+        },
+        { headers: this.notificationHeaders() },
+      );
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  return updated;
 }
 
 }

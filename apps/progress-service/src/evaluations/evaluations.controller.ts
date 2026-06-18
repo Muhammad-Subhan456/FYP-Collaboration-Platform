@@ -6,8 +6,6 @@ import {
   Post,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import {
   Headers,
 } from '@nestjs/common';
 
@@ -27,17 +25,12 @@ export class EvaluationsController {
       EvaluationsService,
   ) {}
 
-  @UseGuards(
-    JwtAuthGuard,
-    RolesGuard,
-  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Post()
   createEvaluation(
     @Req() req: any,
-
-    @Body()
-    dto: CreateEvaluationDto,
+    @Body() dto: CreateEvaluationDto,
   ) {
     return this.evaluationsService
       .createEvaluation(
@@ -46,36 +39,33 @@ export class EvaluationsController {
       );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   getAllEvaluations() {
     return this.evaluationsService
       .getAllEvaluations();
   }
 
-  @UseGuards(
-    JwtAuthGuard,
-    RolesGuard,
-  )
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Post(':id/assign-team')
   assignTeam(
-    @Param('id')
-    evaluationId: string,
-
-    @Body()
-    dto: AssignTeamDto,
+    @Param('id') evaluationId: string,
+    @Body() dto: AssignTeamDto,
   ) {
     return this.evaluationsService
       .assignTeam(
         evaluationId,
         dto.teamId,
+        dto.panelId,
       );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
   @Get('team/:teamId')
   getTeamEvaluations(
-    @Param('teamId')
-    teamId: string,
+    @Param('teamId') teamId: string,
   ) {
     return this.evaluationsService
       .getTeamEvaluations(
@@ -84,18 +74,14 @@ export class EvaluationsController {
   }
 
   @UseGuards(JwtAuthGuard)
-@Get('my')
-getMyEvaluations(
-  @Req() req: any,
-
-  @Headers('authorization')
-  authorization: string,
-) {
-  return this.evaluationsService
-    .getMyEvaluations(
-      req.user.userId,
-      authorization,
-    );
-}
-
+  @Get('my')
+  getMyEvaluations(
+    @Headers('authorization')
+    authorization: string,
+  ) {
+    return this.evaluationsService
+      .getMyEvaluations(
+        authorization,
+      );
+  }
 }

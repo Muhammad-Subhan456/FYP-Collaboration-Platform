@@ -219,6 +219,44 @@ model Evaluation {
   assignments EvaluationAssignment[]
 
   results EvaluationResult[]
+
+  panels EvaluationPanel[]
+}
+
+model EvaluationPanel {
+  id String @id @default(uuid())
+
+  evaluationId String
+
+  room String
+
+  scheduledAt DateTime?
+
+  remarks String?
+
+  createdAt DateTime @default(now())
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  evaluators PanelEvaluator[]
+
+  assignments EvaluationAssignment[]
+}
+
+model PanelEvaluator {
+  id String @id @default(uuid())
+
+  panelId String
+
+  evaluatorId String
+
+  role String @default("EVALUATOR")
+
+  createdAt DateTime @default(now())
+
+  panel EvaluationPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@unique([panelId, evaluatorId])
 }
 
 model EvaluationAssignment {
@@ -228,9 +266,13 @@ model EvaluationAssignment {
 
   teamId String
 
+  panelId String?
+
   createdAt DateTime @default(now())
 
   evaluation Evaluation @relation(fields: [evaluationId], references: [id])
+
+  panel EvaluationPanel? @relation(fields: [panelId], references: [id])
 
   @@unique([evaluationId, teamId])
 }

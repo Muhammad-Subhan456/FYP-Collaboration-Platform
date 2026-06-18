@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -11,29 +12,14 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 import { CreateOwnProfileDto } from './dto/create-own-profile.dto';
-
-import { CreateProfileDto } from './dto/create-profile.dto';
 import { ProfilesService } from './profiles.service';
-import { Patch } from '@nestjs/common';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-
 
 @Controller('profiles')
 export class ProfilesController {
-
   constructor(
     private readonly profilesService: ProfilesService,
   ) {}
-
-  @Post()
-  create(
-    @Body()
-    createProfileDto: CreateProfileDto,
-  ) {
-    return this.profilesService.create(
-      createProfileDto,
-    );
-  }
 
   @UseGuards(JwtAuthGuard)
   @Post('me')
@@ -56,15 +42,9 @@ export class ProfilesController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('debug')
-  debug(@Req() req: any) {
-    return req.user;
-  }
-
   @Get(':authUserId')
   findOne(
-    @Param('authUserId')
-    authUserId: string,
+    @Param('authUserId') authUserId: string,
   ) {
     return this.profilesService.findOne(
       authUserId,
@@ -72,14 +52,14 @@ export class ProfilesController {
   }
 
   @UseGuards(JwtAuthGuard)
-@Patch('me')
-updateMyProfile(
-  @Req() req: any,
-  @Body() updateProfileDto: UpdateProfileDto,
-) {
-  return this.profilesService.updateMyProfile(
-    req.user.userId,
-    updateProfileDto,
-  );
-}
+  @Patch('me')
+  updateMyProfile(
+    @Req() req: any,
+    @Body() updateProfileDto: UpdateProfileDto,
+  ) {
+    return this.profilesService.updateMyProfile(
+      req.user.userId,
+      updateProfileDto,
+    );
+  }
 }

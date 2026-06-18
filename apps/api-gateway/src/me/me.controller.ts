@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 import {
   Controller,
   Get,
@@ -8,64 +6,33 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GatewayHttpService } from '../common/gateway-http.service';
 
 @Controller('me')
 export class MeController {
+  constructor(
+    private readonly gatewayHttpService: GatewayHttpService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('team')
-  async getMyTeam(
-    @Headers('authorization')
-    authorization: string,
+  getMyTeam(
+    @Headers('authorization') authorization: string,
   ) {
-    const response = await axios.get(
+    return this.gatewayHttpService.get(
       `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
-      {
-        headers: {
-          Authorization: authorization,
-        },
-      },
+      authorization,
     );
-
-    return response.data;
   }
 
-@UseGuards(JwtAuthGuard)
-@Get('proposal')
-async getMyProposal(
-  @Headers('authorization')
-  authorization: string,
-) {
-  const teamResponse =
-    await axios.get(
-      `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
-      {
-        headers: {
-          Authorization:
-            authorization,
-        },
-      },
-    );
-
-  const team =
-    teamResponse.data;
-
-  const proposalResponse =
-    await axios.get(
+  @UseGuards(JwtAuthGuard)
+  @Get('proposal')
+  getMyProposal(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
       `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal`,
-      {
-        params: {
-          teamId: team.id,
-        },
-
-        headers: {
-          Authorization:
-            authorization,
-        },
-      },
+      authorization,
     );
-
-  return proposalResponse.data;
-}
-
+  }
 }

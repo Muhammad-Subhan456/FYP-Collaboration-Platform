@@ -108,4 +108,21 @@ async getUserStats() {
   };
 }
 
+async listSupervisors() {
+  return this.prisma.user.findMany({
+    where: {
+      role: 'SUPERVISOR',
+      isActive: true,
+    },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+    orderBy: {
+      fullName: 'asc',
+    },
+  });
+}
+
 }

@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 import { TasksService } from './tasks.service';
 
@@ -23,19 +25,20 @@ export class TasksController {
       TasksService,
   ) {}
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Post()
   createTask(
-    @Body()
-    dto: CreateTaskDto,
+    @Body() dto: CreateTaskDto,
   ) {
     return this.tasksService
       .createTask(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('milestone/:id')
   getMilestoneTasks(
-    @Param('id')
-    milestoneId: string,
+    @Param('id') milestoneId: string,
   ) {
     return this.tasksService
       .getMilestoneTasks(
@@ -54,18 +57,19 @@ export class TasksController {
       );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id/status')
   updateTaskStatus(
-    @Param('id')
-    taskId: string,
-
-    @Body()
-    dto: UpdateTaskStatusDto,
+    @Req() req: any,
+    @Param('id') taskId: string,
+    @Body() dto: UpdateTaskStatusDto,
   ) {
     return this.tasksService
       .updateTaskStatus(
         taskId,
         dto,
+        req.user.userId,
+        req.user.role,
       );
   }
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,10 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { GlobalAnnouncementsModule } from './global-announcements/global-announcements.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
 import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module';
+import { StatsModule } from './stats/stats.module';
+import { HealthModule } from './health/health.module';
+import { EvaluationPanelsModule } from './evaluation-panels/evaluation-panels.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
@@ -31,6 +36,10 @@ import { EvaluationResultsModule } from './evaluation-results/evaluation-results
     GlobalAnnouncementsModule,
     EvaluationsModule,
     EvaluationResultsModule,
+    StatsModule,
+    HealthModule,
+    EvaluationPanelsModule,
+    RemindersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

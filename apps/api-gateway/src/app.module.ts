@@ -8,6 +8,11 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { MeModule } from './me/me.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CommonModule } from './common/common.module';
+import { ProgressModule } from './progress/progress.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ProfilesModule } from './profiles/profiles.module';
+import { HealthModule } from './health/health.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -22,6 +27,11 @@ import { CommonModule } from './common/common.module';
     MeModule,
     DashboardModule,
     CommonModule,
+    ProgressModule,
+    NotificationsModule,
+    ProfilesModule,
+    HealthModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}

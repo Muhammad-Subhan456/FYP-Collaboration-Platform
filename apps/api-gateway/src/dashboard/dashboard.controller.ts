@@ -8,7 +8,6 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GatewayHttpService } from '../common/gateway-http.service';
 import { Roles } from '../auth/decorators/roles.decorator';
-
 import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Controller('dashboard')
@@ -20,10 +19,8 @@ export class DashboardController {
   @UseGuards(JwtAuthGuard)
   @Get()
   async getDashboard(
-    @Headers('authorization')
-    authorization: string,
+    @Headers('authorization') authorization: string,
   ) {
-    // Run independent calls in parallel
     const [profile, team] = await Promise.all([
       this.gatewayHttpService.get(
         `${process.env.USER_SERVICE_URL}/profiles/me`,
@@ -42,9 +39,6 @@ export class DashboardController {
       proposal = await this.gatewayHttpService.get(
         `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal`,
         authorization,
-        {
-          teamId: team.id,
-        },
       );
     } catch {
       proposal = null;
@@ -57,44 +51,130 @@ export class DashboardController {
     };
   }
 
-@UseGuards(
-  JwtAuthGuard,
-  RolesGuard,
-)
-@Roles('COORDINATOR')
-@Get('coordinator')
-async getCoordinatorDashboard(
-  @Headers('authorization')
-  authorization: string,
-) {
-  const [
-    userStats,
-    teams,
-    proposalStats,
-  ] = await Promise.all([
-    this.gatewayHttpService.get(
-      `${process.env.AUTH_SERVICE_URL}/auth/stats`,
-      authorization,
-    ),
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('coordinator')
+  async getCoordinatorDashboard(
+    @Headers('authorization') authorization: string,
+  ) {
+    const [
+      userStats,
+      teams,
+      proposalStats,
+      progressStats,
+    ] = await Promise.all([
+      this.gatewayHttpService.get(
+        `${process.env.AUTH_SERVICE_URL}/auth/stats`,
+        authorization,
+      ),
 
-    this.gatewayHttpService.get(
-      `${process.env.TEAM_SERVICE_URL}/teams/all`,
-      authorization,
-    ),
+      this.gatewayHttpService.get(
+        `${process.env.TEAM_SERVICE_URL}/teams/all`,
+        authorization,
+      ),
 
-    this.gatewayHttpService.get(
-      `${process.env.PROPOSAL_SERVICE_URL}/proposals/stats`,
-      authorization,
-    ),
-  ]);
+      this.gatewayHttpService.get(
+        `${process.env.PROPOSAL_SERVICE_URL}/proposals/stats`,
+        authorization,
+      ),
 
-  return {
-    users: userStats,
+      this.gatewayHttpService.get(
+        `${process.env.PROGRESS_SERVICE_URL}/stats/coordinator`,
+        authorization,
+      ),
+    ]);
 
-    totalTeams: teams.length,
+    return {
+      users: userStats,
+      totalTeams: teams.length,
+      proposals: proposalStats,
+      progress: progressStats,
+    };
+  }
 
-    proposals: proposalStats,
-  };
-}
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Get('supervisor')
+  async getSupervisorDashboard(
+    @Headers('authorization') authorization: string,
+  ) {
+    const [stats, deliverables, requests] =
+      await Promise.all([
+        this.gatewayHttpService.get(
+          `${process.env.PROGRESS_SERVICE_URL}/stats/supervisor`,
+          authorization,
+        ),
 
+        this.gatewayHttpService.get(
+          `${process.env.PROGRESS_SERVICE_URL}/deliverables/my`,
+          authorization,
+        ),
+
+        this.gatewayHttpService.get(
+          `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervisor/requests`,
+          authorization,
+        ),
+      ]);
+
+    return {
+      stats,
+      deliverables,
+      pendingRequests: requests,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Get('student')
+  async getStudentDashboard(
+    @Headers('authorization') authorization: string,
+  ) {
+    const [profile, team, proposal, stats, deliverables, evaluations] =
+      await Promise.all([
+        this.gatewayHttpService.get(
+          `${process.env.USER_SERVICE_URL}/profiles/me`,
+          authorization,
+        ),
+
+        this.gatewayHttpService.get(
+          `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+          authorization,
+        ),
+
+        this.gatewayHttpService
+          .get(
+            `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal`,
+            authorization,
+          )
+          .catch(() => null),
+
+        this.gatewayHttpService.get(
+          `${process.env.PROGRESS_SERVICE_URL}/stats/student`,
+          authorization,
+        ),
+
+        this.gatewayHttpService
+          .get(
+            `${process.env.PROGRESS_SERVICE_URL}/deliverables/for-my-team`,
+            authorization,
+          )
+          .catch(() => []),
+
+        this.gatewayHttpService
+          .get(
+            `${process.env.PROGRESS_SERVICE_URL}/evaluations/my`,
+            authorization,
+          )
+          .catch(() => []),
+      ]);
+
+    return {
+      profile,
+      team,
+      proposal,
+      stats,
+      deliverables,
+      evaluations,
+    };
+  }
 }

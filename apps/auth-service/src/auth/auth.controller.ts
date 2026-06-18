@@ -62,18 +62,25 @@ supervisorRoute() {
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
-@Get('admin')
-adminRoute() {
+@Roles('COORDINATOR')
+@Get('coordinator')
+coordinatorRoute() {
   return {
-    message:
-      'Welcome Admin',
+    message: 'Welcome Coordinator',
   };
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('COORDINATOR')
 @Get('stats')
 getUserStats() {
   return this.authService.getUserStats();
+}
+
+@UseGuards(JwtAuthGuard)
+@Get('supervisors')
+listSupervisors() {
+  return this.authService.listSupervisors();
 }
 
 }

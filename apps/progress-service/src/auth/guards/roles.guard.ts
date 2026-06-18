@@ -35,8 +35,11 @@ export class RolesGuard
     context.switchToHttp().getRequest();
     
     const user = request.user;
-    
-    console.log(request.user);
+
+    if (!user?.role) {
+      return false;
+    }
+
     return requiredRoles.includes(
       user.role,
     );

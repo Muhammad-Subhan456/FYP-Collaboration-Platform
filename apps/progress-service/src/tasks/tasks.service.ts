@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException } from '@nestjs/common';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { ActivityLogsService } from 'src/activity-logs/activity-logs.service';
@@ -60,7 +63,12 @@ export class TasksService {
     });
   }
 
-  async updateTaskStatus(taskId: string, dto: UpdateTaskStatusDto) {
+  async updateTaskStatus(
+    taskId: string,
+    dto: UpdateTaskStatusDto,
+    authUserId: string,
+    role: string,
+  ) {
     const existingTask = await this.prisma.task.findUnique({
       where: {
         id: taskId,
@@ -69,6 +77,15 @@ export class TasksService {
 
     if (!existingTask) {
       throw new BadRequestException('Task not found');
+    }
+
+    if (
+      role !== 'SUPERVISOR' &&
+      existingTask.assignedTo !== authUserId
+    ) {
+      throw new ForbiddenException(
+        'You can only update tasks assigned to you',
+      );
     }
 
     const task = await this.prisma.task.update({

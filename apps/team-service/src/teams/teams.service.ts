@@ -247,7 +247,6 @@ await this.prisma.joinRequest.update({
 
 // Create notification
 try {
-  
   await axios.post(
     `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
     {
@@ -255,24 +254,22 @@ try {
       title: 'Join Request Approved',
       message: `You have been accepted into team ${team.name}`,
     },
+    {
+      headers: {
+        'X-Internal-Api-Key':
+          process.env.INTERNAL_API_KEY,
+      },
+    },
   );
 } catch (error) {
   console.error(
     'Failed to create notification',
   );
-  
 }
 
-
 return {
-  message:
-    'Request approved successfully',
+  message: 'Request approved successfully',
 };
-return {
-  message:
-    'Request approved successfully',
-};
-
 }
 
 async rejectRequest(
@@ -329,22 +326,22 @@ try {
       title: 'Join Request Rejected',
       message: `Your request to join team ${team.name} was rejected`,
     },
+    {
+      headers: {
+        'X-Internal-Api-Key':
+          process.env.INTERNAL_API_KEY,
+      },
+    },
   );
-  
 } catch (error) {
   console.error(
     'Failed to create notification',
   );
 }
 
-
 return {
   message: 'Request rejected successfully',
 };
-
-  return {
-    message: 'Request rejected successfully',
-  };
 }
 
 async getMyTeam(authUserId: string) {
