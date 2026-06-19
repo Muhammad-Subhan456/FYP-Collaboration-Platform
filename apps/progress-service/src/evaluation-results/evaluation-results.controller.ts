@@ -71,6 +71,13 @@ export class EvaluationResultsController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('overview')
+  getCoordinatorOverview() {
+    return this.evaluationResultsService.getCoordinatorOverview();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('my')
   getMyResults(

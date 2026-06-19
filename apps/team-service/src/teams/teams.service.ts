@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import axios from 'axios';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class TeamsService {
@@ -142,11 +143,15 @@ async requestToJoin(
     try {
       await axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        {
+        buildNotification({
           authUserId: team.leaderId,
           title: 'FOASIS Team Join Request',
           message: `A student has requested to join your team "${team.name}".`,
-        },
+          type: 'JOIN_REQUEST_RECEIVED',
+          entityType: 'TEAM',
+          entityId: team.id,
+          route: '/student/team',
+        }),
         {
           headers: {
             'X-Internal-Api-Key':
@@ -272,11 +277,15 @@ await this.prisma.joinRequest.update({
 try {
   await axios.post(
     `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-    {
+    buildNotification({
       authUserId: request.authUserId,
       title: 'Join Request Approved',
       message: `You have been accepted into team ${team.name}`,
-    },
+      type: 'JOIN_REQUEST_APPROVED',
+      entityType: 'TEAM',
+      entityId: team.id,
+      route: '/student/team',
+    }),
     {
       headers: {
         'X-Internal-Api-Key':
@@ -344,11 +353,15 @@ await this.prisma.joinRequest.update({
 try {
   await axios.post(
     `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-    {
+    buildNotification({
       authUserId: request.authUserId,
       title: 'Join Request Rejected',
       message: `Your request to join team ${team.name} was rejected`,
-    },
+      type: 'JOIN_REQUEST_REJECTED',
+      entityType: 'TEAM',
+      entityId: team.id,
+      route: '/student/team',
+    }),
     {
       headers: {
         'X-Internal-Api-Key':
@@ -513,14 +526,24 @@ async updateMemberRole(
     ? `Your team leader assigned you the role "${normalizedRole}" in team "${team.name}".`
     : `Your team leader removed your role in team "${team.name}".`;
 
+  const notificationType = previousRole
+    ? 'TEAM_ROLE_UPDATED'
+    : normalizedRole
+      ? 'TEAM_ROLE_ASSIGNED'
+      : 'TEAM_ROLE_REMOVED';
+
   try {
     await axios.post(
       `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-      {
+      buildNotification({
         authUserId: member.authUserId,
         title,
         message,
-      },
+        type: notificationType,
+        entityType: 'TEAM',
+        entityId: team.id,
+        route: '/student/team',
+      }),
       {
         headers: {
           'X-Internal-Api-Key':

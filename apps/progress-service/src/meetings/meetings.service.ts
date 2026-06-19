@@ -38,14 +38,20 @@ export class MeetingsService {
 
     await this.teamAccessService.notifySupervisedTeamMembers(
       supervisorId,
-      'FOASIS Meeting Scheduled',
-      `${meeting.title} on ${meeting.meetingDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })}`,
+      {
+        title: 'FOASIS Meeting Scheduled',
+        message: `${meeting.title} on ${meeting.meetingDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })}`,
+        type: 'MEETING_CREATED',
+        entityType: 'MEETING',
+        entityId: meeting.id,
+        route: '/student/meetings',
+      },
     );
 
     return meeting;

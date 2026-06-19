@@ -12,6 +12,7 @@ import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { TeamAccessService } from '../common/team-access.service';
+import { buildNotification } from '../common/notification-payload';
 import {
   buildPaginatedResponse,
   getPaginationParams,
@@ -35,18 +36,19 @@ export class SubmissionsService {
 
   private async notifySupervisor(
     supervisorId: string,
-    title: string,
-    message: string,
+    context: Omit<
+      Parameters<typeof buildNotification>[0],
+      'authUserId'
+    >,
   ) {
     try {
       await firstValueFrom(
         this.httpService.post(
           `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-          {
+          buildNotification({
             authUserId: supervisorId,
-            title,
-            message,
-          },
+            ...context,
+          }),
           { headers: this.internalHeaders() },
         ),
       );
@@ -60,8 +62,10 @@ export class SubmissionsService {
 
   private async notifyTeamMembers(
     teamId: string,
-    title: string,
-    message: string,
+    context: Omit<
+      Parameters<typeof buildNotification>[0],
+      'authUserId'
+    >,
   ) {
     try {
       const members =
@@ -73,11 +77,10 @@ export class SubmissionsService {
         await firstValueFrom(
           this.httpService.post(
             `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-            {
+            buildNotification({
               authUserId: member.authUserId,
-              title,
-              message,
-            },
+              ...context,
+            }),
             { headers: this.internalHeaders() },
           ),
         );
@@ -185,8 +188,14 @@ export class SubmissionsService {
 
     await this.notifySupervisor(
       deliverable.supervisorId,
-      'New Submission Received',
-      `A team submitted ${deliverable.title} (v${nextVersion}).`,
+      {
+        title: 'New Submission Received',
+        message: `A team submitted ${deliverable.title} (v${nextVersion}).`,
+        type: 'NEW_SUBMISSION',
+        entityType: 'SUBMISSION',
+        entityId: submission.id,
+        route: '/supervisor/submissions',
+      },
     );
 
     return submission;
@@ -309,8 +318,14 @@ export class SubmissionsService {
 
     await this.notifyTeamMembers(
       submission.teamId,
-      'Submission Reviewed',
-      `Feedback has been provided for ${submission.deliverable.title}.`,
+      {
+        title: 'Submission Reviewed',
+        message: `Feedback has been provided for ${submission.deliverable.title}.`,
+        type: 'SUBMISSION_REVIEWED',
+        entityType: 'SUBMISSION',
+        entityId: submission.id,
+        route: '/student/submissions',
+      },
     );
 
     return updatedSubmission;

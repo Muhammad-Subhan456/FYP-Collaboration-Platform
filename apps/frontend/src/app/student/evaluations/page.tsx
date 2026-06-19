@@ -17,10 +17,16 @@ import {
 } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import {
+  isDeepLinkFocused,
+  useDeepLinkFocus,
+} from "@/hooks/use-deep-link-focus";
 import { progressService } from "@/services/progress.service";
 import { teamService } from "@/services/team.service";
+import { cn } from "@/lib/utils";
 
 export default function StudentEvaluationsPage() {
+  const evaluationFocusId = useDeepLinkFocus("evaluationId");
   const teamQuery = useQuery({
     queryKey: ["team", "my-team"],
     queryFn: teamService.getMyTeam,
@@ -81,7 +87,15 @@ export default function StudentEvaluationsPage() {
             const ev = item.evaluation;
             const isPast = new Date(ev.date) < new Date();
             return (
-              <Card key={item.id} className="transition-all hover:shadow-md">
+              <Card
+                key={item.id}
+                id={`focus-${ev.id}`}
+                className={cn(
+                  "transition-all hover:shadow-md",
+                  isDeepLinkFocused(evaluationFocusId, ev.id) &&
+                    "border-primary ring-2 ring-primary/20",
+                )}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">{ev.title}</CardTitle>

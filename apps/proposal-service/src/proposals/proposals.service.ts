@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import axios from 'axios';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class ProposalsService {
@@ -289,7 +290,7 @@ if (proposal.teamLeaderAuthUserId) {
   try {
     await axios.post(
       `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-      {
+      buildNotification({
         authUserId:
           proposal.teamLeaderAuthUserId,
 
@@ -298,7 +299,11 @@ if (proposal.teamLeaderAuthUserId) {
 
         message:
           'A supervisor has accepted your proposal request.',
-      },
+        type: 'SUPERVISOR_REQUEST_ACCEPTED',
+        entityType: 'PROPOSAL',
+        entityId: proposal.id,
+        route: '/student/proposal',
+      }),
       { headers: this.notificationHeaders() },
     );
   } catch (error) {
@@ -360,7 +365,7 @@ if (
   try {
     await axios.post(
       `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-      {
+      buildNotification({
         authUserId:
           proposal.teamLeaderAuthUserId,
 
@@ -369,7 +374,11 @@ if (
 
         message:
           'A supervisor has rejected your proposal request.',
-      },
+        type: 'SUPERVISOR_REQUEST_REJECTED',
+        entityType: 'PROPOSAL',
+        entityId: proposal.id,
+        route: '/student/proposal',
+      }),
       { headers: this.notificationHeaders() },
     );
   } catch (error) {
@@ -447,12 +456,35 @@ async inviteProposal(
     );
   }
 
-  return this.prisma.supervisorInvitation.create({
+  const invitation = await this.prisma.supervisorInvitation.create({
     data: {
       proposalId,
       supervisorId,
     },
   });
+
+  if (proposal.teamLeaderAuthUserId) {
+    try {
+      await axios.post(
+        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+        buildNotification({
+          authUserId: proposal.teamLeaderAuthUserId,
+          title: 'Supervisor Invitation Received',
+          message:
+            'A supervisor has invited your team to collaborate on your proposal.',
+          type: 'SUPERVISOR_INVITATION_RECEIVED',
+          entityType: 'PROPOSAL',
+          entityId: proposalId,
+          route: '/student/proposal',
+        }),
+        { headers: this.notificationHeaders() },
+      );
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  return invitation;
 }
 
 async getMyInvitations(
@@ -573,7 +605,7 @@ await this.prisma.supervisorRequest.updateMany({
 try {
   await axios.post(
     `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-    {
+    buildNotification({
       authUserId:
         invitation.supervisorId,
 
@@ -582,7 +614,11 @@ try {
 
       message:
         'A team has accepted your invitation.',
-    },
+      type: 'INVITATION_ACCEPTED',
+      entityType: 'PROPOSAL',
+      entityId: invitation.proposalId,
+      route: '/supervisor/proposals',
+    }),
     { headers: this.notificationHeaders() },
   );
 } catch (error) {
@@ -650,7 +686,7 @@ async rejectInvitation(
 try {
   await axios.post(
     `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-    {
+    buildNotification({
       authUserId:
         invitation.supervisorId,
 
@@ -659,7 +695,11 @@ try {
 
       message:
         'A team has rejected your invitation.',
-    },
+      type: 'INVITATION_REJECTED',
+      entityType: 'PROPOSAL',
+      entityId: invitation.proposalId,
+      route: '/supervisor/proposals',
+    }),
     { headers: this.notificationHeaders() },
   );
 } catch (error) {
@@ -821,13 +861,17 @@ async approveProposal(proposalId: string) {
     try {
       await axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        {
+        buildNotification({
           authUserId:
             proposal.teamLeaderAuthUserId,
           title: 'Proposal Approved',
           message:
             'Your FOASIS proposal has been approved by the coordinator.',
-        },
+          type: 'PROPOSAL_APPROVED',
+          entityType: 'PROPOSAL',
+          entityId: proposal.id,
+          route: '/student/proposal',
+        }),
         { headers: this.notificationHeaders() },
       );
     } catch {
@@ -872,14 +916,18 @@ async rejectProposal(
     try {
       await axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        {
+        buildNotification({
           authUserId:
             proposal.teamLeaderAuthUserId,
           title: 'Proposal Rejected',
           message:
             reason ??
             'Your FOASIS proposal has been rejected by the coordinator.',
-        },
+          type: 'PROPOSAL_REJECTED',
+          entityType: 'PROPOSAL',
+          entityId: proposal.id,
+          route: '/student/proposal',
+        }),
         { headers: this.notificationHeaders() },
       );
     } catch {

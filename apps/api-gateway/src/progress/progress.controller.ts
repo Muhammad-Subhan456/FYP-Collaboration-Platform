@@ -294,6 +294,17 @@ export class ProgressController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('evaluation-results/overview')
+  getCoordinatorResultsOverview(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
+      this.progressUrl('/evaluation-results/overview'),
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('evaluation-results/my')
   getMyResults(
     @Headers('authorization') authorization: string,

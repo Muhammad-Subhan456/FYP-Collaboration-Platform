@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Award } from "lucide-react";
+import { Award, Search } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
+import { ResultsAnalyticsCharts } from "@/components/coordinator/results-analytics-charts";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -23,22 +25,57 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { coordinatorService } from "@/services/coordinator.service";
+import { cn } from "@/lib/utils";
 
 export default function CoordinatorResultsPage() {
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [search, setSearch] = useState("");
+  const [evaluationFilter, setEvaluationFilter] = useState("all");
 
   const teamsQuery = useQuery({
     queryKey: ["coordinator", "teams"],
     queryFn: coordinatorService.getAllTeams,
   });
 
-  const resultsQuery = useQuery({
-    queryKey: ["coordinator", "results", selectedTeamId],
-    queryFn: () => coordinatorService.getResultsForTeam(selectedTeamId),
-    enabled: !!selectedTeamId,
+  const overviewQuery = useQuery({
+    queryKey: ["coordinator", "results-overview"],
+    queryFn: coordinatorService.getResultsOverview,
   });
 
-  if (teamsQuery.isLoading) return <DashboardSkeleton />;
+  const teamNameById = useMemo(
+    () =>
+      new Map(
+        (teamsQuery.data ?? []).map((team) => [team.id, team.name]),
+      ),
+    [teamsQuery.data],
+  );
+
+  const evaluationOptions = useMemo(() => {
+    const titles = new Set(
+      (overviewQuery.data ?? []).map((row) => row.evaluationTitle),
+    );
+    return Array.from(titles);
+  }, [overviewQuery.data]);
+
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return (overviewQuery.data ?? []).filter((row) => {
+      const teamName = teamNameById.get(row.teamId) ?? "";
+      const matchesEvaluation =
+        evaluationFilter === "all" ||
+        row.evaluationTitle === evaluationFilter;
+      const matchesSearch =
+        !query ||
+        row.evaluationTitle.toLowerCase().includes(query) ||
+        teamName.toLowerCase().includes(query);
+
+      return matchesEvaluation && matchesSearch;
+    });
+  }, [overviewQuery.data, evaluationFilter, search, teamNameById]);
+
+  if (teamsQuery.isLoading || overviewQuery.isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   if (teamsQuery.isError) {
     return (
@@ -49,92 +86,119 @@ export default function CoordinatorResultsPage() {
     );
   }
 
-  const teams = teamsQuery.data ?? [];
-  const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+  if (overviewQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(overviewQuery.error)}
+        onRetry={() => overviewQuery.refetch()}
+      />
+    );
+  }
+
+  const rows = overviewQuery.data ?? [];
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">Evaluation Results</h2>
         <p className="text-sm text-muted-foreground">
-          View published marks in read-only mode. Only assigned panel evaluators
-          can enter or update marks.
+          Global visibility across all evaluations, teams, and published marks.
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Select team</CardTitle>
-          <CardDescription>
-            Choose a team to view their evaluation results
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select
-            value={selectedTeamId || undefined}
-            onValueChange={setSelectedTeamId}
-          >
-            <SelectTrigger className="w-full sm:max-w-md">
-              <SelectValue placeholder="Select a team" />
-            </SelectTrigger>
-            <SelectContent>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name} ({t.domain})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {!selectedTeamId ? (
+      {rows.length === 0 ? (
         <EmptyState
-          title="No team selected"
-          description="Select a team above to view their evaluation results."
-        />
-      ) : resultsQuery.isLoading ? (
-        <DashboardSkeleton />
-      ) : resultsQuery.isError ? (
-        <ErrorState
-          message={getErrorMessage(resultsQuery.error)}
-          onRetry={() => resultsQuery.refetch()}
-        />
-      ) : (resultsQuery.data?.length ?? 0) === 0 ? (
-        <EmptyState
-          title="No results for this team"
-          description={`${selectedTeam?.name ?? "This team"} has no published results yet.`}
+          title="No evaluation assignments"
+          description="Assign teams to evaluations to track results here."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {resultsQuery.data!.map((r) => (
-            <Card key={r.id} className="transition-all hover:shadow-md">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{r.evaluation.title}</CardTitle>
-                <CardDescription>
-                  {r.evaluation.type.replace(/_/g, " ")} ·{" "}
-                  {formatDate(r.evaluation.date)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                    <Award className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">{r.marks}</p>
-                    <p className="text-xs text-muted-foreground">out of 100</p>
-                  </div>
+        <>
+          <ResultsAnalyticsCharts rows={rows} teamNameById={teamNameById} />
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Award className="h-4 w-4" />
+                All Results
+              </CardTitle>
+              <CardDescription>
+                Every team-evaluation combination with marks or pending status
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search by evaluation or team..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
                 </div>
-                {r.comments && (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    {r.comments}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <Select
+                  value={evaluationFilter}
+                  onValueChange={setEvaluationFilter}
+                >
+                  <SelectTrigger className="w-full sm:w-[220px]">
+                    <SelectValue placeholder="Filter evaluation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All evaluations</SelectItem>
+                    {evaluationOptions.map((title) => (
+                      <SelectItem key={title} value={title}>
+                        {title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="bg-muted/50 text-left">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Evaluation</th>
+                      <th className="px-4 py-3 font-medium">Team</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 font-medium text-right">Marks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row) => (
+                      <tr
+                        key={`${row.evaluationId}-${row.teamId}`}
+                        className="border-t"
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{row.evaluationTitle}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.evaluationType.replace(/_/g, " ")} ·{" "}
+                            {row.evaluationVenue}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          {teamNameById.get(row.teamId) ?? "Unknown Team"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatDate(row.evaluationDate)}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-4 py-3 text-right font-medium",
+                            !row.evaluated && "text-muted-foreground",
+                          )}
+                        >
+                          {row.evaluated ? row.marks : "Not Evaluated"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -48,11 +48,16 @@ import type { CoordinatorEvaluation } from "@/types/coordinator";
 
 function EvaluationPanels({
   evaluationId,
+  teamNameById,
   onAssignTeam,
 }: {
   evaluationId: string;
+  teamNameById: Map<string, string>;
   onAssignTeam: (panelId?: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
+
   const panelsQuery = useQuery({
     queryKey: ["coordinator", "evaluation-panels", evaluationId],
     queryFn: () => coordinatorService.getPanelsForEvaluation(evaluationId),
@@ -68,7 +73,26 @@ function EvaluationPanels({
     return <p className="text-sm text-muted-foreground">Loading panels...</p>;
   }
 
-  if ((panelsQuery.data?.length ?? 0) === 0) {
+  const panels = panelsQuery.data ?? [];
+  const filteredPanels = panels.filter((panel) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+
+    const evaluatorNames = (panel.evaluators ?? [])
+      .map((ev) => getDisplayName(profilesQuery.data, ev.evaluatorId))
+      .join(" ");
+    const teamNames = (panel.assignments ?? [])
+      .map((assignment) => teamNameById.get(assignment.teamId) ?? "")
+      .join(" ");
+
+    return (
+      `room ${panel.room}`.includes(query) ||
+      evaluatorNames.toLowerCase().includes(query) ||
+      teamNames.toLowerCase().includes(query)
+    );
+  });
+
+  if (panels.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         No panels yet. Create a panel to assign evaluators and teams.
@@ -77,47 +101,124 @@ function EvaluationPanels({
   }
 
   return (
-    <ul className="space-y-3">
-      {panelsQuery.data!.map((panel) => (
-        <li key={panel.id} className="rounded-lg border p-3 text-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-medium">Room {panel.room}</p>
-              {panel.scheduledAt && (
-                <p className="text-muted-foreground">
-                  {formatDateTime(panel.scheduledAt)}
-                </p>
-              )}
-              {panel.remarks && (
-                <p className="mt-1 text-muted-foreground">{panel.remarks}</p>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onAssignTeam(panel.id)}
-            >
-              Assign team
-            </Button>
-          </div>
-          {(panel.evaluators?.length ?? 0) > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-              {panel.evaluators!.map((ev) => (
-                <li key={ev.id}>
-                  {getDisplayName(profilesQuery.data, ev.evaluatorId)} (
-                  {ev.role})
-                </li>
-              ))}
-            </ul>
-          )}
-          {(panel.assignments?.length ?? 0) > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {pluralize(panel.assignments!.length, "team")} assigned to this panel
-            </p>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+      <div className="relative">
+        <Input
+          className="pl-9"
+          placeholder="Search panels, evaluators, or teams..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Users className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
+
+      <div className="space-y-3">
+        {filteredPanels.map((panel) => {
+          const expanded = expandedPanelId === panel.id;
+          const assignedTeams =
+            panel.assignments?.map(
+              (assignment) =>
+                teamNameById.get(assignment.teamId) ?? "Unknown Team",
+            ) ?? [];
+
+          return (
+            <Card key={panel.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base">
+                      Panel · Room {panel.room}
+                    </CardTitle>
+                    <CardDescription>
+                      {panel.scheduledAt
+                        ? formatDateTime(panel.scheduledAt)
+                        : "Schedule not set"}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAssignTeam(panel.id)}
+                  >
+                    Assign team
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {panel.remarks && (
+                  <p className="text-sm text-muted-foreground">{panel.remarks}</p>
+                )}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Assigned Evaluators
+                  </p>
+                  {(panel.evaluators?.length ?? 0) === 0 ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      No evaluators assigned yet.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {panel.evaluators!.map((ev) => (
+                        <li key={ev.id} className="rounded-md border px-3 py-2">
+                          {getDisplayName(profilesQuery.data, ev.evaluatorId)} ·{" "}
+                          {ev.role.replace(/_/g, " ")}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="px-0"
+                  onClick={() =>
+                    setExpandedPanelId(expanded ? null : panel.id)
+                  }
+                >
+                  {expanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      Hide assigned teams
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      View assigned teams ({assignedTeams.length})
+                    </>
+                  )}
+                </Button>
+
+                {expanded && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Assigned Teams
+                    </p>
+                    {assignedTeams.length === 0 ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        No teams assigned to this panel yet.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {assignedTeams.map((teamName) => (
+                          <li
+                            key={`${panel.id}-${teamName}`}
+                            className="rounded-md border bg-background px-3 py-2 text-sm"
+                          >
+                            {teamName}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -147,6 +248,7 @@ export default function CoordinatorEvaluationsPage() {
   const [assignTeamIds, setAssignTeamIds] = useState<string[]>([]);
   const [evaluatorId, setEvaluatorId] = useState("");
   const [evaluatorRole, setEvaluatorRole] = useState("EVALUATOR");
+  const [evaluationSearch, setEvaluationSearch] = useState("");
 
   const evaluationsQuery = useQuery({
     queryKey: ["coordinator", "evaluations"],
@@ -269,6 +371,7 @@ export default function CoordinatorEvaluationsPage() {
 
   const evaluations = evaluationsQuery.data ?? [];
   const teams = teamsQuery.data ?? [];
+  const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
   const supervisors = supervisorsQuery.data ?? [];
   const assignedTeamIds = new Set(
     (assignmentsQuery.data ?? []).map((assignment) => assignment.teamId),
@@ -326,7 +429,27 @@ export default function CoordinatorEvaluationsPage() {
         />
       ) : (
         <div className="space-y-4">
-          {evaluations.map((evaluation) => {
+          <div className="relative max-w-md">
+            <Input
+              className="pl-9"
+              placeholder="Search evaluations..."
+              value={evaluationSearch}
+              onChange={(e) => setEvaluationSearch(e.target.value)}
+            />
+            <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+
+          {evaluations
+            .filter((evaluation) => {
+              const query = evaluationSearch.trim().toLowerCase();
+              if (!query) return true;
+              return (
+                evaluation.title.toLowerCase().includes(query) ||
+                evaluation.venue.toLowerCase().includes(query) ||
+                evaluation.type.toLowerCase().includes(query)
+              );
+            })
+            .map((evaluation) => {
             const expanded = expandedId === evaluation.id;
             return (
               <Card key={evaluation.id}>
@@ -395,6 +518,7 @@ export default function CoordinatorEvaluationsPage() {
                   {expanded && (
                     <EvaluationPanels
                       evaluationId={evaluation.id}
+                      teamNameById={teamNameById}
                       onAssignTeam={(panelId) =>
                         setAssignOpen({ evaluation, panelId })
                       }

@@ -8,6 +8,7 @@ import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePanelDto } from './dto/create-panel.dto';
 import { AddEvaluatorDto } from './dto/add-evaluator.dto';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class EvaluationPanelsService {
@@ -83,11 +84,15 @@ export class EvaluationPanelsService {
           await firstValueFrom(
             this.httpService.post(
               `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-              {
+              buildNotification({
                 authUserId: dto.evaluatorId,
                 title: 'FOASIS Evaluation Panel Assignment',
                 message: `You have been assigned as an evaluator for ${panel.evaluation.title} in room ${panel.room}.`,
-              },
+                type: 'EVALUATION_PANEL_ASSIGNED',
+                entityType: 'EVALUATION',
+                entityId: panel.evaluationId,
+                route: '/supervisor/evaluations',
+              }),
               { headers: this.internalHeaders() },
             ),
           );

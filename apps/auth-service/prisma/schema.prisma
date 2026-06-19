@@ -24,3 +24,21 @@ enum UserRole {
   SUPERVISOR
   COORDINATOR
 }
+
+enum SubscriptionPlan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model Organization {
+  id           String           @id @default(uuid())
+  name         String
+  slug         String           @unique
+  plan         SubscriptionPlan @default(STARTER)
+  isActive     Boolean          @default(false)
+  subscribedAt DateTime?
+  ownerId      String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}

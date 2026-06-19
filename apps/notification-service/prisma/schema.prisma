@@ -15,6 +15,11 @@ model Notification {
   title String
   message String
 
+  type String?
+  entityType String?
+  entityId String?
+  route String?
+
   isRead Boolean @default(false)
 
   createdAt DateTime @default(now())

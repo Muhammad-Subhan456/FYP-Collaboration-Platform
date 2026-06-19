@@ -3,8 +3,6 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,6 +11,7 @@ import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
 import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { TeamAccessService } from '../common/team-access.service';
+import type { NotificationContext } from '../common/team-access.service';
 
 @Injectable()
 export class DeliverablesService {
@@ -20,68 +19,16 @@ export class DeliverablesService {
     private readonly prisma: PrismaService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly teamAccessService: TeamAccessService,
-    private readonly httpService: HttpService,
   ) {}
-
-  private internalHeaders() {
-    return {
-      'X-Internal-Api-Key':
-        process.env.INTERNAL_API_KEY,
-    };
-  }
-
-  private async notifyTeamMembers(
-    teamId: string,
-    title: string,
-    message: string,
-  ) {
-    try {
-      const members =
-        await this.teamAccessService.getTeamMembers(
-          teamId,
-        );
-
-      for (const member of members) {
-        await firstValueFrom(
-          this.httpService.post(
-            `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-            {
-              authUserId: member.authUserId,
-              title,
-              message,
-            },
-            { headers: this.internalHeaders() },
-          ),
-        );
-      }
-    } catch {
-      // Non-blocking
-    }
-  }
 
   private async notifySupervisedTeams(
     supervisorId: string,
-    title: string,
-    message: string,
+    context: NotificationContext,
   ) {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervised/${supervisorId}`,
-          { headers: this.internalHeaders() },
-        ),
-      );
-
-      for (const proposal of response.data) {
-        await this.notifyTeamMembers(
-          proposal.teamId,
-          title,
-          message,
-        );
-      }
-    } catch {
-      // Non-blocking
-    }
+    await this.teamAccessService.notifySupervisedTeamMembers(
+      supervisorId,
+      context,
+    );
   }
 
   async createDeliverable(
@@ -108,8 +55,14 @@ export class DeliverablesService {
 
     await this.notifySupervisedTeams(
       supervisorId,
-      'New Deliverable Assigned',
-      `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
+      {
+        title: 'New Deliverable Assigned',
+        message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
+        type: 'DELIVERABLE_CREATED',
+        entityType: 'DELIVERABLE',
+        entityId: deliverable.id,
+        route: '/student/submissions',
+      },
     );
 
     return deliverable;
@@ -236,8 +189,14 @@ export class DeliverablesService {
 
     await this.notifySupervisedTeams(
       supervisorId,
-      'Deliverable Deadline Extended',
-      `The deadline for "${deliverable.title}" has been extended to ${dateLabel(newDueDate)}.`,
+      {
+        title: 'Deliverable Deadline Extended',
+        message: `The deadline for "${deliverable.title}" has been extended to ${dateLabel(newDueDate)}.`,
+        type: 'DELIVERABLE_DEADLINE_EXTENDED',
+        entityType: 'DELIVERABLE',
+        entityId: deliverable.id,
+        route: '/student/submissions',
+      },
     );
 
     return { deliverable: updated, extension };

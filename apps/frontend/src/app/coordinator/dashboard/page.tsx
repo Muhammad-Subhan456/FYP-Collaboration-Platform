@@ -6,7 +6,6 @@ import { FileText, Package, Users } from "lucide-react";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { GlobalAnnouncementsCard } from "@/components/dashboard/global-announcements-card";
-import { EvaluatorOverviewCard } from "@/components/dashboard/evaluator-overview-card";
 import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
 import { ErrorState } from "@/components/common/state-blocks";
 import {
@@ -115,7 +114,6 @@ export default function CoordinatorDashboardPage() {
       </div>
 
       <GlobalAnnouncementsCard announcements={globalAnnouncementsQuery.data} />
-      <EvaluatorOverviewCard />
       <RecentActivityFeed />
     </div>
   );

@@ -10,6 +10,7 @@ import { CreateResultDto } from './dto/create-result.dto';
 import { UpdateResultDto } from './dto/update-result.dto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class EvaluationResultsService {
@@ -130,11 +131,15 @@ export class EvaluationResultsService {
           firstValueFrom(
             this.httpService.post(
               `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-              {
+              buildNotification({
                 authUserId: member.authUserId,
                 title: 'FOASIS Evaluation Result Published',
                 message: `Your team received ${dto.marks} marks in ${evaluation.title}.`,
-              },
+                type: 'RESULT_PUBLISHED',
+                entityType: 'EVALUATION_RESULT',
+                entityId: result.id,
+                route: '/student/results',
+              }),
               { headers: this.internalHeaders() },
             ),
           ),
@@ -193,11 +198,15 @@ export class EvaluationResultsService {
             firstValueFrom(
               this.httpService.post(
                 `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-                {
+                buildNotification({
                   authUserId: member.authUserId,
                   title: 'FOASIS Evaluation Marks Updated',
                   message: `Your team marks for ${updated.evaluation.title} have been updated to ${dto.marks}.`,
-                },
+                  type: 'RESULT_UPDATED',
+                  entityType: 'EVALUATION_RESULT',
+                  entityId: updated.id,
+                  route: '/student/results',
+                }),
                 { headers: this.internalHeaders() },
               ),
             ),
@@ -248,6 +257,45 @@ export class EvaluationResultsService {
       include: {
         evaluation: true,
       },
+    });
+  }
+
+  async getCoordinatorOverview() {
+    const assignments =
+      await this.prisma.evaluationAssignment.findMany({
+        include: { evaluation: true },
+        orderBy: [
+          { evaluation: { date: 'asc' } },
+          { teamId: 'asc' },
+        ],
+      });
+
+    const results =
+      await this.prisma.evaluationResult.findMany();
+
+    const resultMap = new Map(
+      results.map((result) => [
+        `${result.evaluationId}:${result.teamId}`,
+        result,
+      ]),
+    );
+
+    return assignments.map((assignment) => {
+      const result = resultMap.get(
+        `${assignment.evaluationId}:${assignment.teamId}`,
+      );
+
+      return {
+        evaluationId: assignment.evaluationId,
+        evaluationTitle: assignment.evaluation.title,
+        evaluationType: assignment.evaluation.type,
+        evaluationDate: assignment.evaluation.date,
+        evaluationVenue: assignment.evaluation.venue,
+        teamId: assignment.teamId,
+        marks: result?.marks ?? null,
+        resultId: result?.id ?? null,
+        evaluated: !!result,
+      };
     });
   }
 

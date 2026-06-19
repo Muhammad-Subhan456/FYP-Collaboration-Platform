@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   ExternalLink,
@@ -42,9 +42,14 @@ import {
 } from "@/components/ui/select";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import {
+  isDeepLinkFocused,
+  useDeepLinkFocus,
+} from "@/hooks/use-deep-link-focus";
 import { progressService, uploadService } from "@/services/progress.service";
 import { teamService } from "@/services/team.service";
 import type { Submission } from "@/types/student";
+import { cn } from "@/lib/utils";
 
 function isPastDue(dueDate: string) {
   return new Date(dueDate).getTime() < Date.now();
@@ -52,6 +57,8 @@ function isPastDue(dueDate: string) {
 
 export default function StudentSubmissionsPage() {
   const queryClient = useQueryClient();
+  const submissionFocusId = useDeepLinkFocus("submissionId");
+  const deliverableFocusId = useDeepLinkFocus("deliverableId");
   const [open, setOpen] = useState(false);
   const [deliverableId, setDeliverableId] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -111,6 +118,23 @@ export default function StudentSubmissionsPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const submissions = submissionsQuery.data?.data ?? [];
+
+  useEffect(() => {
+    if (!submissionFocusId || submissions.length === 0) {
+      return;
+    }
+
+    const matched = submissions.find((s) => s.id === submissionFocusId);
+    if (matched) {
+      setHistoryTarget({
+        deliverableId: matched.deliverableId,
+        title: matched.deliverable?.title ?? "Deliverable",
+      });
+      setHistoryOpen(true);
+    }
+  }, [submissionFocusId, submissions]);
+
   if (teamQuery.isLoading) return <DashboardSkeleton />;
 
   if (!teamQuery.data) {
@@ -140,8 +164,8 @@ export default function StudentSubmissionsPage() {
     );
   }
 
-  const submissions = submissionsQuery.data?.data ?? [];
   const deliverables = deliverablesQuery.data ?? [];
+
   const submittableDeliverables = deliverables.filter(
     (d) => !isPastDue(d.dueDate),
   );
@@ -253,7 +277,14 @@ export default function StudentSubmissionsPage() {
             {deliverables.map((d) => {
               const pastDue = isPastDue(d.dueDate);
               return (
-              <Card key={d.id}>
+              <Card
+                key={d.id}
+                id={`focus-${d.id}`}
+                className={cn(
+                  isDeepLinkFocused(deliverableFocusId, d.id) &&
+                    "border-primary ring-2 ring-primary/20",
+                )}
+              >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">{d.title}</CardTitle>
                   <CardDescription>
@@ -308,7 +339,14 @@ export default function StudentSubmissionsPage() {
       ) : (
         <div className="space-y-3">
           {submissions.map((s: Submission) => (
-            <Card key={s.id}>
+            <Card
+              key={s.id}
+              id={`focus-${s.id}`}
+              className={cn(
+                isDeepLinkFocused(submissionFocusId, s.id) &&
+                  "border-primary ring-2 ring-primary/20",
+              )}
+            >
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <p className="font-medium">

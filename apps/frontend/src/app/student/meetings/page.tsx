@@ -17,10 +17,18 @@ import {
 } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
+import {
+  isDeepLinkFocused,
+  useDeepLinkFocus,
+} from "@/hooks/use-deep-link-focus";
 import { progressService } from "@/services/progress.service";
 import { teamService } from "@/services/team.service";
+import { cn } from "@/lib/utils";
 
 export default function StudentMeetingsPage() {
+  const meetingFocusId = useDeepLinkFocus("meetingId");
+
   const teamQuery = useQuery({
     queryKey: ["team", "my-team"],
     queryFn: teamService.getMyTeam,
@@ -60,6 +68,8 @@ export default function StudentMeetingsPage() {
   }
 
   const meetings = meetingsQuery.data ?? [];
+  const supervisorIds = [...new Set(meetings.map((m) => m.supervisorId))];
+  const profilesQuery = useProfilesLookup(supervisorIds);
   const now = Date.now();
   const upcoming = meetings.filter(
     (m) => new Date(m.meetingDate).getTime() >= now,
@@ -69,7 +79,15 @@ export default function StudentMeetingsPage() {
   );
 
   const renderMeeting = (meeting: (typeof meetings)[number]) => (
-    <Card key={meeting.id}>
+    <Card
+      key={meeting.id}
+      id={`focus-${meeting.id}`}
+      className={cn(
+        "transition-all",
+        isDeepLinkFocused(meetingFocusId, meeting.id) &&
+          "border-primary ring-2 ring-primary/20",
+      )}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -82,7 +100,13 @@ export default function StudentMeetingsPage() {
           {formatDateTime(meeting.meetingDate)}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm text-muted-foreground">
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <p>
+          Created by{" "}
+          <span className="font-medium text-foreground">
+            {getDisplayName(profilesQuery.data, meeting.supervisorId)}
+          </span>
+        </p>
         {meeting.description && <p>{meeting.description}</p>}
         {meeting.location && (
           <p className="flex items-center gap-1.5">
@@ -91,15 +115,16 @@ export default function StudentMeetingsPage() {
           </p>
         )}
         {meeting.meetingLink && (
-          <a
-            href={meeting.meetingLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-primary hover:underline"
-          >
-            <Video className="h-3.5 w-3.5" />
-            Join meeting
-          </a>
+          <Button asChild className="w-full sm:w-auto">
+            <a
+              href={meeting.meetingLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Video className="h-4 w-4" />
+              Join Meeting
+            </a>
+          </Button>
         )}
       </CardContent>
     </Card>

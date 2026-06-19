@@ -16,10 +16,16 @@ import {
 } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import {
+  isDeepLinkFocused,
+  useDeepLinkFocus,
+} from "@/hooks/use-deep-link-focus";
 import { progressService } from "@/services/progress.service";
 import { teamService } from "@/services/team.service";
+import { cn } from "@/lib/utils";
 
 export default function StudentResultsPage() {
+  const resultFocusId = useDeepLinkFocus("resultId");
   const teamQuery = useQuery({
     queryKey: ["team", "my-team"],
     queryFn: teamService.getMyTeam,
@@ -77,7 +83,15 @@ export default function StudentResultsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((r) => (
-            <Card key={r.id} className="transition-all hover:shadow-md">
+            <Card
+              key={r.id}
+              id={`focus-${r.id}`}
+              className={cn(
+                "transition-all hover:shadow-md",
+                isDeepLinkFocused(resultFocusId, r.id) &&
+                  "border-primary ring-2 ring-primary/20",
+              )}
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{r.evaluation.title}</CardTitle>
                 <CardDescription>

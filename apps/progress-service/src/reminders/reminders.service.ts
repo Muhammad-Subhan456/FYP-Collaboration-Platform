@@ -4,6 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class RemindersService {
@@ -24,21 +25,22 @@ export class RemindersService {
   }
 
   private async sendNotification(
-    authUserId: string,
-    title: string,
-    message: string,
+    payload: Omit<
+      Parameters<typeof buildNotification>[0],
+      'authUserId'
+    > & { authUserId: string },
   ) {
     try {
       await firstValueFrom(
         this.httpService.post(
           `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-          { authUserId, title, message },
+          buildNotification(payload),
           { headers: this.internalHeaders() },
         ),
       );
     } catch (error: any) {
       this.logger.error(
-        `Failed to notify ${authUserId}: ${error.message}`,
+        `Failed to notify ${payload.authUserId}: ${error.message}`,
       );
     }
   }
@@ -62,11 +64,15 @@ export class RemindersService {
       });
 
     for (const deliverable of dueDeliverables) {
-      await this.sendNotification(
-        deliverable.supervisorId,
-        'Deliverable Deadline Approaching',
-        `${deliverable.title} is due within 24 hours.`,
-      );
+      await this.sendNotification({
+        authUserId: deliverable.supervisorId,
+        title: 'Deliverable Deadline Approaching',
+        message: `${deliverable.title} is due within 24 hours.`,
+        type: 'DEADLINE_REMINDER',
+        entityType: 'DELIVERABLE',
+        entityId: deliverable.id,
+        route: '/supervisor/submissions',
+      });
 
       try {
         const proposals = await firstValueFrom(
@@ -85,11 +91,15 @@ export class RemindersService {
           );
 
           for (const member of team.data) {
-            await this.sendNotification(
-              member.authUserId,
-              'Submission Deadline Reminder',
-              `${deliverable.title} is due within 24 hours.`,
-            );
+            await this.sendNotification({
+              authUserId: member.authUserId,
+              title: 'Submission Deadline Reminder',
+              message: `${deliverable.title} is due within 24 hours.`,
+              type: 'DEADLINE_REMINDER',
+              entityType: 'DELIVERABLE',
+              entityId: deliverable.id,
+              route: '/student/submissions',
+            });
           }
         }
       } catch (error: any) {
@@ -123,11 +133,15 @@ export class RemindersService {
           );
 
           for (const member of team.data) {
-            await this.sendNotification(
-              member.authUserId,
-              'Evaluation Reminder',
-              `${evaluation.title} is scheduled within 24 hours at ${evaluation.venue}.`,
-            );
+            await this.sendNotification({
+              authUserId: member.authUserId,
+              title: 'Evaluation Reminder',
+              message: `${evaluation.title} is scheduled within 24 hours at ${evaluation.venue}.`,
+              type: 'EVALUATION_ASSIGNED',
+              entityType: 'EVALUATION',
+              entityId: evaluation.id,
+              route: '/student/evaluations',
+            });
           }
         } catch (error: any) {
           this.logger.error(

@@ -145,6 +145,23 @@ export const coordinatorService = {
     return res.data;
   },
 
+  getResultsOverview: async () => {
+    const res = await api.get<
+      Array<{
+        evaluationId: string;
+        evaluationTitle: string;
+        evaluationType: string;
+        evaluationDate: string;
+        evaluationVenue: string;
+        teamId: string;
+        marks: number | null;
+        resultId: string | null;
+        evaluated: boolean;
+      }>
+    >("/evaluation-results/overview");
+    return res.data;
+  },
+
   getEvaluatorOverview: async () => {
     const res = await api.get<
       Array<{

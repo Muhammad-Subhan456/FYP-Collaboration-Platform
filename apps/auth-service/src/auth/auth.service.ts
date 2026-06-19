@@ -5,6 +5,9 @@ import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtService } from '@nestjs/jwt';
+import {
+  buildRoleNotification,
+} from '../common/notification-payload';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +27,8 @@ export class AuthService {
     authUserId: string,
     title: string,
     message: string,
+    type: string,
+    role: string,
   ) {
     if (!process.env.NOTIFICATION_SERVICE_URL) {
       return;
@@ -32,7 +37,13 @@ export class AuthService {
     try {
       await axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        { authUserId, title, message },
+        buildRoleNotification(
+          authUserId,
+          role,
+          title,
+          message,
+          type,
+        ),
         { headers: this.notificationHeaders() },
       );
     } catch (error) {
@@ -176,7 +187,7 @@ async listAllUsers() {
 async listActiveUserIds() {
   return this.prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true },
+    select: { id: true, role: true },
   });
 }
 
@@ -215,6 +226,8 @@ async updateUserRole(
       targetUserId,
       'FOASIS Role Updated',
       `Your account role has been updated to ${role}.`,
+      'ROLE_UPDATED',
+      role,
     );
     return updated;
   });
@@ -257,6 +270,8 @@ async updateUserStatus(
       isActive
         ? 'Your FOASIS account has been re-enabled.'
         : 'Your FOASIS account has been disabled. Contact the coordinator.',
+      'ACCOUNT_STATUS_UPDATED',
+      updated.role,
     );
     return updated;
   });

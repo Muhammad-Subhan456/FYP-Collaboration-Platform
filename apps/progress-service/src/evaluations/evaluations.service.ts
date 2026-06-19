@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { buildNotification } from '../common/notification-payload';
 
 @Injectable()
 export class EvaluationsService {
@@ -126,11 +127,15 @@ export class EvaluationsService {
             firstValueFrom(
               this.httpService.post(
                 `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-                {
+                buildNotification({
                   authUserId: member.authUserId,
                   title: 'FOASIS Evaluation Scheduled',
                   message: `Your team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
-                },
+                  type: 'EVALUATION_ASSIGNED',
+                  entityType: 'EVALUATION',
+                  entityId: evaluationId,
+                  route: '/student/evaluations',
+                }),
                 { headers: this.internalHeaders() },
               ),
             ),

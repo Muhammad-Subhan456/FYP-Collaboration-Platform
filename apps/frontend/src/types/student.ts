@@ -123,6 +123,10 @@ export interface Notification {
   authUserId: string;
   title: string;
   message: string;
+  type?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  route?: string | null;
   isRead: boolean;
   createdAt: string;
 }

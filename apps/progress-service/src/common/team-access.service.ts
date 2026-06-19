@@ -5,6 +5,16 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
+import {
+  buildNotification,
+  NotificationPayload,
+} from './notification-payload';
+
+export type NotificationContext = Omit<
+  NotificationPayload,
+  'authUserId'
+>;
+
 @Injectable()
 export class TeamAccessService {
   constructor(
@@ -131,8 +141,7 @@ export class TeamAccessService {
 
   async notifyTeamMembers(
     teamId: string,
-    title: string,
-    message: string,
+    context: NotificationContext,
   ): Promise<void> {
     if (!process.env.NOTIFICATION_SERVICE_URL) {
       return;
@@ -145,11 +154,10 @@ export class TeamAccessService {
         await firstValueFrom(
           this.httpService.post(
             `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-            {
+            buildNotification({
               authUserId: member.authUserId,
-              title,
-              message,
-            },
+              ...context,
+            }),
             { headers: this.internalHeaders() },
           ),
         );
@@ -161,8 +169,7 @@ export class TeamAccessService {
 
   async notifySupervisedTeamMembers(
     supervisorId: string,
-    title: string,
-    message: string,
+    context: NotificationContext,
   ): Promise<void> {
     if (!process.env.PROPOSAL_SERVICE_URL) {
       return;
@@ -179,8 +186,7 @@ export class TeamAccessService {
       for (const proposal of response.data ?? []) {
         await this.notifyTeamMembers(
           proposal.teamId,
-          title,
-          message,
+          context,
         );
       }
     } catch {

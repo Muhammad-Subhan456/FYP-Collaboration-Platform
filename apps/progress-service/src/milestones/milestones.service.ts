@@ -53,12 +53,18 @@ export class MilestonesService {
 
     await this.teamAccessService.notifyTeamMembers(
       proposal.teamId,
-      'FOASIS Milestone Added',
-      `New milestone "${milestone.title}" is due on ${milestone.dueDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })}.`,
+      {
+        title: 'FOASIS Milestone Added',
+        message: `New milestone "${milestone.title}" is due on ${milestone.dueDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })}.`,
+        type: 'MILESTONE_CREATED',
+        entityType: 'MILESTONE',
+        entityId: milestone.id,
+        route: '/student/milestones',
+      },
     );
 
     return milestone;
@@ -114,8 +120,14 @@ export class MilestonesService {
 
     await this.teamAccessService.notifyTeamMembers(
       proposal.teamId,
-      'FOASIS Milestone Updated',
-      `Milestone "${updated.title}" is now ${dto.status.replace(/_/g, ' ').toLowerCase()}.`,
+      {
+        title: 'FOASIS Milestone Updated',
+        message: `Milestone "${updated.title}" is now ${dto.status.replace(/_/g, ' ').toLowerCase()}.`,
+        type: 'MILESTONE_UPDATED',
+        entityType: 'MILESTONE',
+        entityId: updated.id,
+        route: '/student/milestones',
+      },
     );
 
     return updated;

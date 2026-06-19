@@ -42,6 +42,9 @@ export default function HomePage() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button variant="ghost" asChild>
+            <Link href="/pricing">Pricing</Link>
+          </Button>
+          <Button variant="ghost" asChild>
             <Link href="/auth/login">Sign in</Link>
           </Button>
           <Button asChild>

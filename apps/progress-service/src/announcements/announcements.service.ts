@@ -66,8 +66,14 @@ export class AnnouncementsService {
 
     await this.teamAccessService.notifySupervisedTeamMembers(
       supervisorId,
-      'FOASIS Team Announcement',
-      `${announcement.title}: ${announcement.message}`,
+      {
+        title: 'FOASIS Team Announcement',
+        message: `${announcement.title}: ${announcement.message}`,
+        type: 'ANNOUNCEMENT_PUBLISHED',
+        entityType: 'ANNOUNCEMENT',
+        entityId: announcement.id,
+        route: '/student/announcements',
+      },
     );
 
     return announcement;
