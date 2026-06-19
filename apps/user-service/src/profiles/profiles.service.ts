@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentProfileDto } from './dto/create-student-profile.dto';
 import { CreateSupervisorProfileDto } from './dto/create-supervisor-profile.dto';
 import { CreateCoordinatorProfileDto } from './dto/create-coordinator-profile.dto';
+import { logActivity } from '../common/activity-log';
+import { sendNotification } from '../common/notification';
 
 type UserRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR';
 
@@ -26,13 +28,21 @@ export class ProfilesService {
     requesterId: string,
     requesterRole: UserRole,
   ) {
-    if (
-      requesterId !== authUserId &&
-      requesterRole !== 'COORDINATOR'
-    ) {
-      throw new ForbiddenException(
-        'You can only view your own profile',
-      );
+    if (requesterId !== authUserId) {
+      const target = await this.findOne(authUserId);
+
+      if (
+        target?.profileType === 'SUPERVISOR' &&
+        (requesterRole === 'STUDENT' || requesterRole === 'SUPERVISOR')
+      ) {
+        return target;
+      }
+
+      if (requesterRole !== 'COORDINATOR') {
+        throw new ForbiddenException(
+          'You can only view your own profile',
+        );
+      }
     }
 
     const profile = await this.findOne(authUserId);
@@ -84,7 +94,7 @@ export class ProfilesService {
 
     await this.assertNoProfile(authUserId);
 
-    return this.prisma.userProfile.create({
+    const profile = await this.prisma.userProfile.create({
       data: {
         authUserId,
         profileType: 'STUDENT',
@@ -96,13 +106,29 @@ export class ProfilesService {
         batch: dto.batch,
         degreeProgram: dto.degreeProgram,
         semester: dto.semester,
-        skills: dto.skills,
-        interests: dto.interests,
+        skills: dto.skills ?? [],
+        interests: dto.interests ?? [],
         linkedIn: dto.linkedIn,
         github: dto.github,
         bio: dto.bio,
       },
     });
+
+    await logActivity(
+      authUserId,
+      'Student Profile Completed',
+      `${dto.fullName} completed their FOASIS student profile.`,
+    );
+
+    await sendNotification({
+      authUserId,
+      title: 'Profile Complete',
+      message: 'Your FOASIS student profile has been saved successfully.',
+      type: 'PROFILE_COMPLETED',
+      route: '/student/dashboard',
+    });
+
+    return profile;
   }
 
   async createSupervisorProfile(
@@ -118,7 +144,7 @@ export class ProfilesService {
 
     await this.assertNoProfile(authUserId);
 
-    return this.prisma.userProfile.create({
+    const profile = await this.prisma.userProfile.create({
       data: {
         authUserId,
         profileType: 'SUPERVISOR',
@@ -128,7 +154,7 @@ export class ProfilesService {
         facultyId: dto.facultyId,
         department: dto.department,
         designation: dto.designation,
-        researchAreas: dto.researchAreas,
+        researchAreas: dto.researchAreas ?? [],
         publications: dto.publications ?? [],
         officeLocation: dto.officeLocation,
         officeHours: dto.officeHours,
@@ -137,6 +163,22 @@ export class ProfilesService {
         biography: dto.biography,
       },
     });
+
+    await logActivity(
+      authUserId,
+      'Supervisor Profile Completed',
+      `${dto.fullName} completed their FOASIS supervisor profile.`,
+    );
+
+    await sendNotification({
+      authUserId,
+      title: 'Profile Complete',
+      message: 'Your FOASIS supervisor profile has been saved successfully.',
+      type: 'PROFILE_COMPLETED',
+      route: '/supervisor/dashboard',
+    });
+
+    return profile;
   }
 
   async createCoordinatorProfile(
@@ -175,20 +217,28 @@ export class ProfilesService {
     role: UserRole,
     data: Record<string, unknown>,
   ) {
-    const profile = await this.findOne(authUserId);
-    if (!profile) {
+    const existing = await this.findOne(authUserId);
+    if (!existing) {
       throw new BadRequestException('Profile not found');
     }
 
-    if (profile.profileType !== role) {
+    if (existing.profileType !== role) {
       throw new ForbiddenException(
         'Profile type does not match your role',
       );
     }
 
-    return this.prisma.userProfile.update({
+    const profile = await this.prisma.userProfile.update({
       where: { authUserId },
       data: data as any,
     });
+
+    await logActivity(
+      authUserId,
+      'Profile Updated',
+      `${profile.fullName} updated their FOASIS profile.`,
+    );
+
+    return profile;
   }
 }

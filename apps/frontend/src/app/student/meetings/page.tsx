@@ -40,6 +40,10 @@ export default function StudentMeetingsPage() {
     enabled: !!teamQuery.data,
   });
 
+  const meetings = meetingsQuery.data ?? [];
+  const supervisorIds = [...new Set(meetings.map((m) => m.supervisorId))];
+  const profilesQuery = useProfilesLookup(supervisorIds);
+
   if (teamQuery.isLoading) return <DashboardSkeleton />;
 
   if (!teamQuery.data) {
@@ -67,9 +71,6 @@ export default function StudentMeetingsPage() {
     );
   }
 
-  const meetings = meetingsQuery.data ?? [];
-  const supervisorIds = [...new Set(meetings.map((m) => m.supervisorId))];
-  const profilesQuery = useProfilesLookup(supervisorIds);
   const now = Date.now();
   const upcoming = meetings.filter(
     (m) => new Date(m.meetingDate).getTime() >= now,

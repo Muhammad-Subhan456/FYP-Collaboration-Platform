@@ -20,6 +20,7 @@ import { CreateProposalDto } from './dto/create-proposal.dto';
 import { ProposalsService } from './proposals.service';
 import { RequestSupervisorDto } from './dto/request-supervisor.dto';
 import { RejectProposalDto } from './dto/reject-proposal.dto';
+import { ResubmitProposalDto } from './dto/resubmit-proposal.dto';
 
 @Controller('proposals')
 export class ProposalsController {
@@ -159,10 +160,12 @@ export class ProposalsController {
   @Post('invitations/:invitationId/accept')
   acceptInvitation(
     @Param('invitationId') invitationId: string,
+    @Req() req: any,
     @Headers('authorization') authorization: string,
   ) {
     return this.proposalsService.acceptInvitation(
       invitationId,
+      req.user.userId,
       authorization,
     );
   }
@@ -172,11 +175,48 @@ export class ProposalsController {
   @Post('invitations/:invitationId/reject')
   rejectInvitation(
     @Param('invitationId') invitationId: string,
+    @Req() req: any,
     @Headers('authorization') authorization: string,
   ) {
     return this.proposalsService.rejectInvitation(
       invitationId,
+      req.user.userId,
       authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Patch('my-proposal/resubmit')
+  resubmitProposal(
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+    @Body() dto: ResubmitProposalDto,
+  ) {
+    return this.proposalsService.resubmitProposal(
+      req.user.userId,
+      authorization,
+      dto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Get('supervisor/review-queue')
+  getSupervisorReviewQueue(@Req() req: any) {
+    return this.proposalsService.getSupervisorReviewQueue(
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR', 'STUDENT', 'COORDINATOR')
+  @Get('supervisor/:supervisorId/overview')
+  getSupervisorOverview(
+    @Param('supervisorId') supervisorId: string,
+  ) {
+    return this.proposalsService.getSupervisorOverview(
+      supervisorId,
     );
   }
 
@@ -230,25 +270,29 @@ export class ProposalsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('COORDINATOR')
+  @Roles('SUPERVISOR')
   @Patch(':proposalId/approve')
   approveProposal(
     @Param('proposalId') proposalId: string,
+    @Req() req: any,
   ) {
     return this.proposalsService.approveProposal(
       proposalId,
+      req.user.userId,
     );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('COORDINATOR')
+  @Roles('SUPERVISOR')
   @Patch(':proposalId/reject')
   rejectProposal(
     @Param('proposalId') proposalId: string,
+    @Req() req: any,
     @Body() dto: RejectProposalDto,
   ) {
     return this.proposalsService.rejectProposal(
       proposalId,
+      req.user.userId,
       dto.reason,
     );
   }

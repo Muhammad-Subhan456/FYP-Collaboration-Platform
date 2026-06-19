@@ -25,6 +25,7 @@ export const STUDENT_NAV: NavItemConfig[] = [
 export const SUPERVISOR_NAV: NavItemConfig[] = [
   { title: "Dashboard", href: "/supervisor/dashboard", icon: "LayoutDashboard" },
   { title: "Requests", href: "/supervisor/requests", icon: "Inbox" },
+  { title: "Proposals", href: "/supervisor/proposals", icon: "FileText" },
   { title: "Invitations", href: "/supervisor/invitations", icon: "Mail" },
   { title: "Deliverables", href: "/supervisor/deliverables", icon: "Package" },
   { title: "Reviews", href: "/supervisor/reviews", icon: "CheckSquare" },

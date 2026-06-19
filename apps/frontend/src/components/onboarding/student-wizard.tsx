@@ -28,15 +28,15 @@ import { profileService } from "@/services/profile.service";
 import { useAuth } from "@/providers/auth-provider";
 
 const schema = z.object({
-  fullName: z.string().min(2),
-  email: z.string().email().optional().or(z.literal("")),
-  registrationNumber: z.string().min(1),
+  fullName: z.string().min(2, "Full name is required"),
+  email: z.union([z.string().email("Enter a valid email"), z.literal("")]).optional(),
+  registrationNumber: z.string().min(1, "Registration number is required"),
   department: z.enum(["CS", "SE", "IT", "AI", "DS"]),
-  batch: z.string().min(1),
-  degreeProgram: z.string().min(1),
-  semester: z.number().min(1).max(12),
-  skills: z.string().min(1),
-  interests: z.string().min(1),
+  batch: z.string().min(1, "Batch is required"),
+  degreeProgram: z.string().min(1, "Degree program is required"),
+  semester: z.number().min(1, "Semester is required").max(12),
+  skills: z.string().optional(),
+  interests: z.string().optional(),
   linkedIn: z.string().optional(),
   github: z.string().optional(),
   bio: z.string().optional(),
@@ -45,6 +45,14 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 const STEPS = ["Basic Info", "Academic", "Skills", "Social Links", "Finish"];
+
+const STEP_FIELDS: Array<Array<keyof FormData>> = [
+  ["fullName", "email"],
+  ["registrationNumber", "department", "batch", "degreeProgram", "semester"],
+  ["skills", "interests", "bio"],
+  ["linkedIn", "github"],
+  [],
+];
 
 export function StudentOnboardingWizard() {
   const router = useRouter();
@@ -55,11 +63,47 @@ export function StudentOnboardingWizard() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { department: "CS", semester: 7 },
+    defaultValues: {
+      department: "CS",
+      semester: 7,
+      fullName: user?.email?.split("@")[0] ?? "",
+    },
   });
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    trigger,
+    formState: { errors },
+  } = form;
   const department = watch("department");
+
+  const goToStepWithError = (field: keyof FormData) => {
+    const stepIndex = STEP_FIELDS.findIndex((fields) =>
+      fields.includes(field),
+    );
+    if (stepIndex >= 0) {
+      setStep(stepIndex);
+    }
+  };
+
+  const handleNext = async () => {
+    const fields = STEP_FIELDS[step];
+    if (fields.length === 0) {
+      setStep((current) => current + 1);
+      return;
+    }
+
+    const valid = await trigger(fields);
+    if (!valid) {
+      toast.error("Please complete the required fields on this step.");
+      return;
+    }
+
+    setStep((current) => current + 1);
+  };
 
   const onSubmit = async (data: FormData) => {
     if (!user) return;
@@ -71,30 +115,52 @@ export function StudentOnboardingWizard() {
         profilePicture = uploaded.fileUrl;
       }
 
-      await profileService.createStudentProfile({
-        fullName: data.fullName,
-        email: data.email || user.email,
+      const created = await profileService.createStudentProfile({
+        fullName: data.fullName.trim(),
+        email: data.email?.trim() || user.email,
         profilePicture,
-        registrationNumber: data.registrationNumber,
+        registrationNumber: data.registrationNumber.trim(),
         department: data.department,
-        batch: data.batch,
-        degreeProgram: data.degreeProgram,
+        batch: data.batch.trim(),
+        degreeProgram: data.degreeProgram.trim(),
         semester: data.semester,
-        skills: data.skills.split(",").map((s) => s.trim()).filter(Boolean),
-        interests: data.interests.split(",").map((s) => s.trim()).filter(Boolean),
-        linkedIn: data.linkedIn,
-        github: data.github,
-        bio: data.bio,
+        skills: (data.skills ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        interests: (data.interests ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        linkedIn: data.linkedIn?.trim() || undefined,
+        github: data.github?.trim() || undefined,
+        bio: data.bio?.trim() || undefined,
       });
 
       await refreshProfile();
       toast.success("Profile complete! Welcome aboard.");
-      router.push(getDashboardPath(user.role));
+      router.replace(getDashboardPath(user.role));
+      return created;
     } catch (e) {
-      toast.error(getErrorMessage(e));
+      const message = getErrorMessage(e);
+      if (message.toLowerCase().includes("already exists")) {
+        await refreshProfile();
+        toast.success("Your profile is already complete.");
+        router.replace(getDashboardPath(user.role));
+        return;
+      }
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onInvalid = () => {
+    const firstError = Object.keys(errors)[0] as keyof FormData | undefined;
+    if (firstError) {
+      goToStepWithError(firstError);
+    }
+    toast.error("Please complete all required fields before finishing.");
   };
 
   return (
@@ -117,34 +183,58 @@ export function StudentOnboardingWizard() {
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={handleSubmit(onSubmit, onInvalid)}
+          className="space-y-4"
+        >
           {step === 0 && (
             <>
               <div className="space-y-2">
-                <Label>Full Name</Label>
+                <Label>Full Name *</Label>
                 <Input {...register("fullName")} />
-                {errors.fullName && <p className="text-sm text-destructive">{errors.fullName.message}</p>}
+                {errors.fullName && (
+                  <p className="text-sm text-destructive">{errors.fullName.message}</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>Email (optional)</Label>
                 <Input {...register("email")} placeholder={user?.email} />
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email.message}</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Profile Picture</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setPicture(e.target.files?.[0] ?? null)} />
+                <Label>Profile Picture (optional)</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setPicture(e.target.files?.[0] ?? null)}
+                />
               </div>
             </>
           )}
           {step === 1 && (
             <>
               <div className="space-y-2">
-                <Label>Registration Number</Label>
+                <Label>Registration Number *</Label>
                 <Input {...register("registrationNumber")} placeholder="FA21-BCS-001" />
+                {errors.registrationNumber && (
+                  <p className="text-sm text-destructive">
+                    {errors.registrationNumber.message}
+                  </p>
+                )}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Department</Label>
-                  <Select value={department} onValueChange={(v) => setValue("department", v as FormData["department"])}>
+                  <Label>Department *</Label>
+                  <Select
+                    value={department}
+                    onValueChange={(v) =>
+                      setValue("department", v as FormData["department"], {
+                        shouldValidate: true,
+                      })
+                    }
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {["CS", "SE", "IT", "AI", "DS"].map((d) => (
@@ -154,32 +244,46 @@ export function StudentOnboardingWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Semester</Label>
-                  <Input type="number" {...register("semester", { valueAsNumber: true })} />
+                  <Label>Semester *</Label>
+                  <Input
+                    type="number"
+                    {...register("semester", { valueAsNumber: true })}
+                  />
+                  {errors.semester && (
+                    <p className="text-sm text-destructive">{errors.semester.message}</p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Batch</Label>
+                <Label>Batch *</Label>
                 <Input {...register("batch")} placeholder="2021-2025" />
+                {errors.batch && (
+                  <p className="text-sm text-destructive">{errors.batch.message}</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Degree Program</Label>
+                <Label>Degree Program *</Label>
                 <Input {...register("degreeProgram")} placeholder="BS Computer Science" />
+                {errors.degreeProgram && (
+                  <p className="text-sm text-destructive">
+                    {errors.degreeProgram.message}
+                  </p>
+                )}
               </div>
             </>
           )}
           {step === 2 && (
             <>
               <div className="space-y-2">
-                <Label>Skills (comma-separated)</Label>
+                <Label>Skills (optional, comma-separated)</Label>
                 <Textarea {...register("skills")} placeholder="React, Python, ML" />
               </div>
               <div className="space-y-2">
-                <Label>Interests (comma-separated)</Label>
+                <Label>Interests (optional, comma-separated)</Label>
                 <Textarea {...register("interests")} placeholder="Web Dev, AI" />
               </div>
               <div className="space-y-2">
-                <Label>Bio</Label>
+                <Label>Bio (optional)</Label>
                 <Textarea {...register("bio")} />
               </div>
             </>
@@ -187,11 +291,11 @@ export function StudentOnboardingWizard() {
           {step === 3 && (
             <>
               <div className="space-y-2">
-                <Label>LinkedIn URL</Label>
+                <Label>LinkedIn URL (optional)</Label>
                 <Input {...register("linkedIn")} placeholder="https://linkedin.com/in/..." />
               </div>
               <div className="space-y-2">
-                <Label>GitHub URL</Label>
+                <Label>GitHub URL (optional)</Label>
                 <Input {...register("github")} placeholder="https://github.com/..." />
               </div>
             </>
@@ -203,11 +307,18 @@ export function StudentOnboardingWizard() {
           )}
 
           <div className="flex justify-between pt-2">
-            <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={step === 0 || submitting}
+              onClick={() => setStep((s) => s - 1)}
+            >
               Back
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button type="button" onClick={() => setStep((s) => s + 1)}>Next</Button>
+              <Button type="button" onClick={handleNext}>
+                Next
+              </Button>
             ) : (
               <Button type="submit" disabled={submitting}>
                 {submitting && <Loader2 className="animate-spin" />}

@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import axios from 'axios';
 import { buildNotification } from '../common/notification-payload';
+import { logActivity } from '../common/activity-log';
 
 @Injectable()
 export class ProposalsService {
@@ -42,6 +43,87 @@ export class ProposalsService {
     }
 
     return teamId;
+  }
+
+  private async getMyTeam(authorization: string) {
+    const response = await axios.get(
+      `${process.env.TEAM_SERVICE_URL}/teams/my-team`,
+      {
+        headers: { Authorization: authorization },
+      },
+    );
+
+    return response.data as {
+      id: string;
+      name: string;
+      leaderId: string;
+    } | null;
+  }
+
+  private async assertTeamLeader(
+    authUserId: string,
+    authorization: string,
+  ) {
+    const team = await this.getMyTeam(authorization);
+
+    if (!team?.id) {
+      throw new BadRequestException(
+        'User does not belong to any team',
+      );
+    }
+
+    if (team.leaderId !== authUserId) {
+      throw new ForbiddenException(
+        'Only the team leader can respond to supervisor invitations',
+      );
+    }
+
+    return team;
+  }
+
+  private async getTeamMemberIds(teamId: string) {
+    try {
+      const response = await axios.get<
+        Array<{ authUserId: string }>
+      >(
+        `${process.env.TEAM_SERVICE_URL}/teams/${teamId}/members`,
+        {
+          headers: {
+            'X-Internal-Api-Key':
+              process.env.INTERNAL_API_KEY,
+          },
+        },
+      );
+
+      return (response.data ?? []).map(
+        (member) => member.authUserId,
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  private async notifyTeamMembers(
+    teamId: string,
+    context: Omit<
+      Parameters<typeof buildNotification>[0],
+      'authUserId'
+    >,
+  ) {
+    const memberIds = await this.getTeamMemberIds(teamId);
+
+    await Promise.allSettled(
+      memberIds.map((authUserId) =>
+        axios.post(
+          `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+          buildNotification({
+            authUserId,
+            ...context,
+          }),
+          { headers: this.notificationHeaders() },
+        ),
+      ),
+    );
   }
 
   async createProposal(
@@ -83,19 +165,33 @@ export class ProposalsService {
       );
     }
 
-    return this.prisma.proposal.create({
-  data: {
-    teamId: createProposalDto.teamId,
+    const proposal = await this.prisma.proposal.create({
+      data: {
+        teamId: createProposalDto.teamId,
+        teamLeaderAuthUserId: authUserId,
+        title: createProposalDto.title,
+        domain: createProposalDto.domain,
+        abstract: createProposalDto.abstract,
+        status: 'DRAFT',
+      },
+    });
 
-    teamLeaderAuthUserId: authUserId,
+    await this.notifyTeamMembers(team.id, {
+      title: 'Proposal Submitted',
+      message: `Your team submitted the FYP proposal "${proposal.title}".`,
+      type: 'PROPOSAL_SUBMITTED',
+      entityType: 'PROPOSAL',
+      entityId: proposal.id,
+      route: '/student/proposal',
+    });
 
-    title: createProposalDto.title,
-    domain: createProposalDto.domain,
-    abstract: createProposalDto.abstract,
+    await logActivity(
+      authUserId,
+      'Proposal Submitted',
+      `Team "${team.name}" submitted proposal "${proposal.title}".`,
+    );
 
-    status: 'DRAFT',
-  },
-});
+    return proposal;
   }
 
   async getMyProposal(authorization: string) {
@@ -194,6 +290,30 @@ async requestSupervisor(
       status: 'PENDING_SUPERVISOR',
     },
   });
+
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      buildNotification({
+        authUserId: supervisorId,
+        title: 'Supervision Request Received',
+        message: `A team has requested you to supervise their proposal "${proposal.title}".`,
+        type: 'SUPERVISOR_REQUEST_RECEIVED',
+        entityType: 'PROPOSAL',
+        entityId: proposalId,
+        route: '/supervisor/proposals',
+      }),
+      { headers: this.notificationHeaders() },
+    );
+  } catch {
+    // Non-blocking
+  }
+
+  await logActivity(
+    supervisorId,
+    'Supervision Request Received',
+    `A team requested supervision for "${proposal.title}".`,
+  );
 
   return request;
 }
@@ -463,34 +583,69 @@ async inviteProposal(
     },
   });
 
-  if (proposal.teamLeaderAuthUserId) {
-    try {
-      await axios.post(
+  const memberIds = await this.getTeamMemberIds(proposal.teamId);
+
+  await Promise.allSettled(
+    memberIds.map((authUserId) =>
+      axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
         buildNotification({
-          authUserId: proposal.teamLeaderAuthUserId,
+          authUserId,
           title: 'Supervisor Invitation Received',
-          message:
-            'A supervisor has invited your team to collaborate on your proposal.',
+          message: `A supervisor has invited your team "${proposal.title}" to collaborate.`,
           type: 'SUPERVISOR_INVITATION_RECEIVED',
           entityType: 'PROPOSAL',
           entityId: proposalId,
           route: '/student/proposal',
         }),
         { headers: this.notificationHeaders() },
-      );
-    } catch {
-      // Non-blocking
-    }
+      ),
+    ),
+  );
+
+  await logActivity(
+    supervisorId,
+    'Supervisor Invitation Sent',
+    `Invitation sent to team for proposal "${proposal.title}".`,
+  );
+
+  if (proposal.teamLeaderAuthUserId) {
+    await logActivity(
+      proposal.teamLeaderAuthUserId,
+      'Supervisor Invitation Received',
+      `Your team received a supervision invitation for "${proposal.title}".`,
+    );
   }
 
   return invitation;
+}
+
+async getTeamInvitations(authorization: string) {
+  const teamId = await this.getTeamIdFromAuth(authorization);
+
+  const proposal = await this.prisma.proposal.findUnique({
+    where: { teamId },
+  });
+
+  if (!proposal) {
+    return [];
+  }
+
+  return this.prisma.supervisorInvitation.findMany({
+    where: { proposalId: proposal.id },
+    include: { proposal: true },
+    orderBy: { createdAt: 'desc' },
+  });
 }
 
 async getMyInvitations(
   proposalId: string,
   authorization: string,
 ) {
+  if (!proposalId) {
+    return this.getTeamInvitations(authorization);
+  }
+
   const teamId =
     await this.getTeamIdFromAuth(
       authorization,
@@ -510,13 +665,15 @@ async getMyInvitations(
   return this.prisma.supervisorInvitation.findMany({
     where: {
       proposalId,
-      status: 'PENDING',
     },
+    include: { proposal: true },
+    orderBy: { createdAt: 'desc' },
   });
 }
 
 async acceptInvitation(
   invitationId: string,
+  authUserId: string,
   authorization: string,
 ) {
   const invitation =
@@ -531,6 +688,13 @@ if (!invitation) {
     'Invitation not found',
   );
 }
+
+if (invitation.status !== 'PENDING') {
+  throw new BadRequestException(
+    'This invitation is no longer pending',
+  );
+}
+
 const proposal =
   await this.prisma.proposal.findUnique({
     where: {
@@ -544,12 +708,12 @@ if (!proposal) {
   );
 }
 
-const teamId =
-  await this.getTeamIdFromAuth(
-    authorization,
-  );
+const team = await this.assertTeamLeader(
+  authUserId,
+  authorization,
+);
 
-if (proposal.teamId !== teamId) {
+if (proposal.teamId !== team.id) {
   throw new ForbiddenException(
     'You can only accept invitations for your own team proposal',
   );
@@ -562,6 +726,13 @@ if (
     'Supervisor already assigned',
   );
 }
+
+if (proposal.assignedSupervisorId) {
+  throw new BadRequestException(
+    'This team already has a supervisor',
+  );
+}
+
 await this.prisma.proposal.update({
   where: {
     id: proposal.id,
@@ -613,7 +784,7 @@ try {
         'Invitation Accepted',
 
       message:
-        'A team has accepted your invitation.',
+        `${team.name} has accepted your supervision invitation.`,
       type: 'INVITATION_ACCEPTED',
       entityType: 'PROPOSAL',
       entityId: invitation.proposalId,
@@ -627,6 +798,30 @@ try {
   );
 }
 
+await this.notifyTeamMembers(
+  proposal.teamId,
+  {
+    title: 'Supervisor Assigned',
+    message: `Your team is now supervised on "${proposal.title}".`,
+    type: 'SUPERVISOR_REQUEST_ACCEPTED',
+    entityType: 'PROPOSAL',
+    entityId: proposal.id,
+    route: '/student/proposal',
+  },
+);
+
+await logActivity(
+  invitation.supervisorId,
+  'Supervisor Invitation Accepted',
+  `${team.name} accepted your invitation for "${proposal.title}".`,
+);
+
+await logActivity(
+  authUserId,
+  'Supervisor Assignment Completed',
+  `Your team accepted a supervision invitation for "${proposal.title}".`,
+);
+
 return {
   message:
     'Supervisor assigned successfully',
@@ -635,6 +830,7 @@ return {
 
 async rejectInvitation(
   invitationId: string,
+  authUserId: string,
   authorization: string,
 ) {
   const invitation =
@@ -647,6 +843,12 @@ async rejectInvitation(
   if (!invitation) {
     throw new BadRequestException(
       'Invitation not found',
+    );
+  }
+
+  if (invitation.status !== 'PENDING') {
+    throw new BadRequestException(
+      'This invitation is no longer pending',
     );
   }
 
@@ -663,12 +865,12 @@ async rejectInvitation(
     );
   }
 
-  const teamId =
-    await this.getTeamIdFromAuth(
-      authorization,
-    );
+  const team = await this.assertTeamLeader(
+    authUserId,
+    authorization,
+  );
 
-  if (proposal.teamId !== teamId) {
+  if (proposal.teamId !== team.id) {
     throw new ForbiddenException(
       'You can only reject invitations for your own team proposal',
     );
@@ -694,11 +896,11 @@ try {
         'Invitation Rejected',
 
       message:
-        'A team has rejected your invitation.',
+        `${team.name} has declined your supervision invitation.`,
       type: 'INVITATION_REJECTED',
       entityType: 'PROPOSAL',
       entityId: invitation.proposalId,
-      route: '/supervisor/proposals',
+      route: '/supervisor/invitations',
     }),
     { headers: this.notificationHeaders() },
   );
@@ -707,6 +909,18 @@ try {
     'Failed to create notification',
   );
 }
+
+await logActivity(
+  invitation.supervisorId,
+  'Supervisor Invitation Rejected',
+  `${team.name} declined your invitation for "${proposal.title}".`,
+);
+
+await logActivity(
+  authUserId,
+  'Supervisor Invitation Rejected',
+  `You declined a supervision invitation for "${proposal.title}".`,
+);
 
 return {
   message:
@@ -833,107 +1047,335 @@ async getSupervisedProposals(supervisorId: string) {
   });
 }
 
-async approveProposal(proposalId: string) {
-  const proposal =
-    await this.prisma.proposal.findUnique({
-      where: { id: proposalId },
+async getSupervisorReviewQueue(supervisorId: string) {
+  const assigned = await this.prisma.proposal.findMany({
+    where: {
+      assignedSupervisorId: supervisorId,
+      status: 'SUPERVISOR_ASSIGNED',
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const pendingRequests =
+    await this.prisma.supervisorRequest.findMany({
+      where: {
+        supervisorId,
+        status: 'PENDING',
+        proposal: {
+          status: {
+            in: ['DRAFT', 'PENDING_SUPERVISOR'],
+          },
+          assignedSupervisorId: null,
+        },
+      },
+      include: { proposal: true },
+      orderBy: { createdAt: 'desc' },
     });
+
+  const fromRequests = pendingRequests.map(
+    (request) => request.proposal,
+  );
+
+  const seen = new Set<string>();
+  const combined = [...assigned, ...fromRequests].filter(
+    (proposal) => {
+      if (seen.has(proposal.id)) {
+        return false;
+      }
+      seen.add(proposal.id);
+      return true;
+    },
+  );
+
+  return combined;
+}
+
+async getSupervisorOverview(supervisorId: string) {
+  const proposals = await this.prisma.proposal.findMany({
+    where: { assignedSupervisorId: supervisorId },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      domain: true,
+      status: true,
+      teamId: true,
+      createdAt: true,
+    },
+  });
+
+  return {
+    supervisedProposals: proposals,
+    activeCount: proposals.filter(
+      (proposal) =>
+        proposal.status === 'APPROVED' ||
+        proposal.status === 'SUPERVISOR_ASSIGNED',
+    ).length,
+    approvedCount: proposals.filter(
+      (proposal) => proposal.status === 'APPROVED',
+    ).length,
+    totalCount: proposals.length,
+  };
+}
+
+private async assertSupervisorCanReviewProposal(
+  proposalId: string,
+  supervisorId: string,
+) {
+  const proposal = await this.prisma.proposal.findUnique({
+    where: { id: proposalId },
+  });
 
   if (!proposal) {
-    throw new BadRequestException(
-      'Proposal not found',
-    );
+    throw new BadRequestException('Proposal not found');
   }
 
-  if (proposal.status !== 'SUPERVISOR_ASSIGNED') {
-    throw new BadRequestException(
-      'Only supervisor-assigned proposals can be approved',
-    );
+  if (
+    proposal.assignedSupervisorId === supervisorId &&
+    proposal.status === 'SUPERVISOR_ASSIGNED'
+  ) {
+    return proposal;
   }
 
-  const updated =
-    await this.prisma.proposal.update({
-      where: { id: proposalId },
-      data: { status: 'APPROVED' },
+  const pendingRequest =
+    await this.prisma.supervisorRequest.findFirst({
+      where: {
+        proposalId,
+        supervisorId,
+        status: 'PENDING',
+      },
     });
 
-  if (proposal.teamLeaderAuthUserId) {
-    try {
-      await axios.post(
-        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        buildNotification({
-          authUserId:
-            proposal.teamLeaderAuthUserId,
-          title: 'Proposal Approved',
-          message:
-            'Your FOASIS proposal has been approved by the coordinator.',
-          type: 'PROPOSAL_APPROVED',
-          entityType: 'PROPOSAL',
-          entityId: proposal.id,
-          route: '/student/proposal',
-        }),
-        { headers: this.notificationHeaders() },
-      );
-    } catch {
-      // Non-blocking
-    }
+  if (
+    pendingRequest &&
+    !proposal.assignedSupervisorId &&
+    (proposal.status === 'DRAFT' ||
+      proposal.status === 'PENDING_SUPERVISOR')
+  ) {
+    return proposal;
   }
+
+  throw new ForbiddenException(
+    'You are not authorized to review this proposal',
+  );
+}
+
+async resubmitProposal(
+  authUserId: string,
+  authorization: string,
+  dto: {
+    title: string;
+    domain: string;
+    abstract: string;
+  },
+) {
+  await this.assertTeamLeader(authUserId, authorization);
+
+  const teamId = await this.getTeamIdFromAuth(authorization);
+  const proposal = await this.prisma.proposal.findUnique({
+    where: { teamId },
+  });
+
+  if (!proposal) {
+    throw new BadRequestException('Proposal not found');
+  }
+
+  if (proposal.status !== 'REJECTED') {
+    throw new BadRequestException(
+      'Only rejected proposals can be resubmitted',
+    );
+  }
+
+  const updated = await this.prisma.proposal.update({
+    where: { id: proposal.id },
+    data: {
+      title: dto.title,
+      domain: dto.domain,
+      abstract: dto.abstract,
+      status: 'DRAFT',
+      reviewFeedback: null,
+      reviewedAt: null,
+      reviewedById: null,
+      assignedSupervisorId: null,
+    },
+  });
+
+  await this.notifyTeamMembers(proposal.teamId, {
+    title: 'Proposal Revised',
+    message: `Your team revised the proposal "${updated.title}" and it is ready for supervisor review.`,
+    type: 'PROPOSAL_RESUBMITTED',
+    entityType: 'PROPOSAL',
+    entityId: updated.id,
+    route: '/student/proposal',
+  });
+
+  await logActivity(
+    authUserId,
+    'Proposal Resubmitted',
+    `Revised proposal "${updated.title}" after supervisor feedback.`,
+  );
+
+  return updated;
+}
+
+async approveProposal(
+  proposalId: string,
+  supervisorId: string,
+) {
+  const proposal =
+    await this.assertSupervisorCanReviewProposal(
+      proposalId,
+      supervisorId,
+    );
+
+  if (proposal.status === 'APPROVED') {
+    throw new BadRequestException('Proposal is already approved');
+  }
+
+  const updated = await this.prisma.proposal.update({
+    where: { id: proposalId },
+    data: {
+      assignedSupervisorId: supervisorId,
+      status: 'APPROVED',
+      reviewedAt: new Date(),
+      reviewedById: supervisorId,
+      reviewFeedback: null,
+    },
+  });
+
+  await this.prisma.supervisorRequest.updateMany({
+    where: {
+      proposalId,
+      supervisorId,
+      status: 'PENDING',
+    },
+    data: { status: 'ACCEPTED' },
+  });
+
+  await this.prisma.supervisorRequest.updateMany({
+    where: {
+      proposalId,
+      supervisorId: { not: supervisorId },
+    },
+    data: { status: 'CANCELLED' },
+  });
+
+  await this.prisma.supervisorInvitation.updateMany({
+    where: { proposalId },
+    data: { status: 'CANCELLED' },
+  });
+
+  await this.notifyTeamMembers(proposal.teamId, {
+    title: 'Proposal Accepted',
+    message: `Your FOASIS proposal "${proposal.title}" has been accepted by your supervisor.`,
+    type: 'PROPOSAL_APPROVED',
+    entityType: 'PROPOSAL',
+    entityId: proposal.id,
+    route: '/student/proposal',
+  });
+
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      buildNotification({
+        authUserId: supervisorId,
+        title: 'Proposal Accepted',
+        message: `You accepted the proposal "${proposal.title}" and are now assigned as supervisor.`,
+        type: 'PROPOSAL_APPROVED',
+        entityType: 'PROPOSAL',
+        entityId: proposal.id,
+        route: '/supervisor/teams',
+      }),
+      { headers: this.notificationHeaders() },
+    );
+  } catch {
+    // Non-blocking
+  }
+
+  await logActivity(
+    supervisorId,
+    'Proposal Accepted',
+    `Accepted proposal "${proposal.title}" and was assigned as supervisor.`,
+  );
+
+  await logActivity(
+    proposal.teamLeaderAuthUserId ?? supervisorId,
+    'Supervisor Assigned',
+    `A supervisor was assigned after proposal "${proposal.title}" was accepted.`,
+  );
 
   return updated;
 }
 
 async rejectProposal(
   proposalId: string,
-  reason?: string,
+  supervisorId: string,
+  reason: string,
 ) {
   const proposal =
-    await this.prisma.proposal.findUnique({
-      where: { id: proposalId },
-    });
+    await this.assertSupervisorCanReviewProposal(
+      proposalId,
+      supervisorId,
+    );
 
-  if (!proposal) {
+  if (!reason?.trim()) {
     throw new BadRequestException(
-      'Proposal not found',
+      'Review feedback is required when rejecting a proposal',
     );
   }
 
-  if (
-    proposal.status !== 'SUPERVISOR_ASSIGNED' &&
-    proposal.status !== 'PENDING_SUPERVISOR'
-  ) {
-    throw new BadRequestException(
-      'Proposal cannot be rejected in its current state',
+  const updated = await this.prisma.proposal.update({
+    where: { id: proposalId },
+    data: {
+      status: 'REJECTED',
+      reviewFeedback: reason.trim(),
+      reviewedAt: new Date(),
+      reviewedById: supervisorId,
+      assignedSupervisorId: null,
+    },
+  });
+
+  await this.prisma.supervisorRequest.updateMany({
+    where: {
+      proposalId,
+      supervisorId,
+      status: 'PENDING',
+    },
+    data: { status: 'REJECTED' },
+  });
+
+  await this.notifyTeamMembers(proposal.teamId, {
+    title: 'Proposal Rejected',
+    message: `Your proposal "${proposal.title}" was rejected. Feedback: ${reason.trim()}`,
+    type: 'PROPOSAL_REJECTED',
+    entityType: 'PROPOSAL',
+    entityId: proposal.id,
+    route: '/student/proposal',
+  });
+
+  try {
+    await axios.post(
+      `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
+      buildNotification({
+        authUserId: supervisorId,
+        title: 'Proposal Rejected',
+        message: `You rejected the proposal "${proposal.title}".`,
+        type: 'PROPOSAL_REJECTED',
+        entityType: 'PROPOSAL',
+        entityId: proposal.id,
+        route: '/supervisor/proposals',
+      }),
+      { headers: this.notificationHeaders() },
     );
+  } catch {
+    // Non-blocking
   }
 
-  const updated =
-    await this.prisma.proposal.update({
-      where: { id: proposalId },
-      data: { status: 'REJECTED' },
-    });
-
-  if (proposal.teamLeaderAuthUserId) {
-    try {
-      await axios.post(
-        `${process.env.NOTIFICATION_SERVICE_URL}/notifications`,
-        buildNotification({
-          authUserId:
-            proposal.teamLeaderAuthUserId,
-          title: 'Proposal Rejected',
-          message:
-            reason ??
-            'Your FOASIS proposal has been rejected by the coordinator.',
-          type: 'PROPOSAL_REJECTED',
-          entityType: 'PROPOSAL',
-          entityId: proposal.id,
-          route: '/student/proposal',
-        }),
-        { headers: this.notificationHeaders() },
-      );
-    } catch {
-      // Non-blocking
-    }
-  }
+  await logActivity(
+    supervisorId,
+    'Proposal Rejected',
+    `Rejected proposal "${proposal.title}" with review feedback.`,
+  );
 
   return updated;
 }

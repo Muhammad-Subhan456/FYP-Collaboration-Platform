@@ -39,11 +39,13 @@ export class CreateStudentProfileDto {
 
   @IsArray()
   @IsString({ each: true })
-  skills!: string[];
+  @IsOptional()
+  skills?: string[];
 
   @IsArray()
   @IsString({ each: true })
-  interests!: string[];
+  @IsOptional()
+  interests?: string[];
 
   @IsOptional()
   @IsString()

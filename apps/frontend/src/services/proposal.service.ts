@@ -78,4 +78,76 @@ export const proposalService = {
     const res = await api.get<Proposal[]>("/proposals/supervised");
     return res.data;
   },
+
+  getTeamInvitations: async () => {
+    const res = await api.get<SupervisorInvitation[]>(
+      "/proposals/my-invitations",
+    );
+    return res.data;
+  },
+
+  acceptInvitation: async (invitationId: string) => {
+    const res = await api.post(
+      `/proposals/invitations/${invitationId}/accept`,
+    );
+    return res.data;
+  },
+
+  rejectInvitation: async (invitationId: string) => {
+    const res = await api.post(
+      `/proposals/invitations/${invitationId}/reject`,
+    );
+    return res.data;
+  },
+
+  getSupervisorReviewQueue: async () => {
+    const res = await api.get<Proposal[]>(
+      "/proposals/supervisor/review-queue",
+    );
+    return res.data;
+  },
+
+  getSupervisorOverview: async (supervisorId: string) => {
+    const res = await api.get<{
+      supervisedProposals: Array<{
+        id: string;
+        title: string;
+        domain: string;
+        status: string;
+        teamId: string;
+        createdAt: string;
+      }>;
+      activeCount: number;
+      approvedCount: number;
+      totalCount: number;
+    }>(`/proposals/supervisor/${supervisorId}/overview`);
+    return res.data;
+  },
+
+  approveProposal: async (proposalId: string) => {
+    const res = await api.patch<Proposal>(
+      `/proposals/${proposalId}/approve`,
+    );
+    return res.data;
+  },
+
+  rejectProposal: async (proposalId: string, reason: string) => {
+    const res = await api.patch<Proposal>(
+      `/proposals/${proposalId}/reject`,
+      { reason },
+    );
+    return res.data;
+  },
+
+  resubmitProposal: async (data: {
+    title: string;
+    domain: string;
+    abstract: string;
+  }) => {
+    const res = await api.patch<Proposal>(
+      "/proposals/my-proposal/resubmit",
+      data,
+    );
+    return res.data;
+  },
 };

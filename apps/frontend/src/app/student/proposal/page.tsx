@@ -6,11 +6,21 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { FileText, Loader2, Send } from "lucide-react";
+import {
+  Check,
+  FileText,
+  Loader2,
+  Mail,
+  Send,
+  User,
+  X,
+} from "lucide-react";
 
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { StatusBadge } from "@/components/common/status-badge";
+
+import { SupervisorProfileModal } from "@/components/profile/supervisor-profile-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,6 +44,8 @@ import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
 import { proposalService } from "@/services/proposal.service";
 import { teamService } from "@/services/team.service";
+import { useAuth } from "@/providers/auth-provider";
+import type { SupervisorInvitation } from "@/types/supervisor";
 import { useState } from "react";
 
 const proposalSchema = z.object({
@@ -46,7 +58,10 @@ type ProposalForm = z.infer<typeof proposalSchema>;
 
 export default function StudentProposalPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [selectedSupervisor, setSelectedSupervisor] = useState("");
+  const [viewProfileId, setViewProfileId] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
 
   const teamQuery = useQuery({
     queryKey: ["team", "my-team"],
@@ -57,6 +72,12 @@ export default function StudentProposalPage() {
     queryKey: ["proposal", "my"],
     queryFn: proposalService.getMyProposal,
     enabled: !!teamQuery.data,
+  });
+
+  const invitationsQuery = useQuery({
+    queryKey: ["proposal", "invitations"],
+    queryFn: proposalService.getTeamInvitations,
+    enabled: !!proposalQuery.data,
   });
 
   const supervisorsQuery = useQuery({
@@ -74,6 +95,17 @@ export default function StudentProposalPage() {
     formState: { errors },
   } = useForm<ProposalForm>({
     resolver: zodResolver(proposalSchema),
+  });
+
+  const resubmitForm = useForm<ProposalForm>({
+    resolver: zodResolver(proposalSchema),
+    values: proposalQuery.data
+      ? {
+          title: proposalQuery.data.title,
+          domain: proposalQuery.data.domain,
+          abstract: proposalQuery.data.abstract,
+        }
+      : undefined,
   });
 
   const createMutation = useMutation({
@@ -104,11 +136,63 @@ export default function StudentProposalPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const acceptInvitationMutation = useMutation({
+    mutationFn: (invitationId: string) =>
+      proposalService.acceptInvitation(invitationId),
+    onSuccess: () => {
+      toast.success("Supervisor invitation accepted!");
+      queryClient.invalidateQueries({ queryKey: ["proposal"] });
+      queryClient.invalidateQueries({ queryKey: ["proposal", "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      setRespondingId(null);
+    },
+    onError: (e) => {
+      toast.error(getErrorMessage(e));
+      setRespondingId(null);
+    },
+  });
+
+  const rejectInvitationMutation = useMutation({
+    mutationFn: (invitationId: string) =>
+      proposalService.rejectInvitation(invitationId),
+    onSuccess: () => {
+      toast.success("Supervisor invitation declined.");
+      queryClient.invalidateQueries({ queryKey: ["proposal", "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      setRespondingId(null);
+    },
+    onError: (e) => {
+      toast.error(getErrorMessage(e));
+      setRespondingId(null);
+    },
+  });
+
+  const resubmitMutation = useMutation({
+    mutationFn: (data: ProposalForm) => proposalService.resubmitProposal(data),
+    onSuccess: () => {
+      toast.success("Proposal revised and resubmitted!");
+      queryClient.invalidateQueries({ queryKey: ["proposal"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   const supervisorId = proposalQuery.data?.assignedSupervisorId;
-  const profilesQuery = useProfilesLookup(supervisorId ? [supervisorId] : []);
+  const invitationSupervisorIds =
+    invitationsQuery.data?.map((inv) => inv.supervisorId) ?? [];
+  const profileIds = [
+    ...(supervisorId ? [supervisorId] : []),
+    ...invitationSupervisorIds,
+    ...(viewProfileId ? [viewProfileId] : []),
+  ];
+  const profilesQuery = useProfilesLookup(profileIds);
   const supervisorName = supervisorId
     ? getDisplayName(profilesQuery.data, supervisorId)
     : null;
+
+  const team = teamQuery.data;
+  const isTeamLeader = !!user && !!team && team.leaderId === user.userId;
 
   if (teamQuery.isLoading) return <DashboardSkeleton />;
 
@@ -196,6 +280,21 @@ export default function StudentProposalPage() {
     proposal.status !== "APPROVED" &&
     proposal.status !== "REJECTED";
 
+  const invitations = invitationsQuery.data ?? [];
+  const pendingInvitations = invitations.filter(
+    (inv) => inv.status === "PENDING",
+  );
+
+  const handleAcceptInvitation = (invitationId: string) => {
+    setRespondingId(invitationId);
+    acceptInvitationMutation.mutate(invitationId);
+  };
+
+  const handleRejectInvitation = (invitationId: string) => {
+    setRespondingId(invitationId);
+    rejectInvitationMutation.mutate(invitationId);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -219,12 +318,135 @@ export default function StudentProposalPage() {
           {supervisorName && (
             <p className="text-sm text-emerald-600 dark:text-emerald-400">
               Supervisor: {supervisorName}
+              {proposal.assignedSupervisorId && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="ml-2 h-auto p-0"
+                  onClick={() => setViewProfileId(proposal.assignedSupervisorId!)}
+                >
+                  View profile
+                </Button>
+              )}
             </p>
+          )}
+          {proposal.status === "REJECTED" && proposal.reviewFeedback && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <h4 className="mb-1 text-sm font-medium text-destructive">
+                Supervisor Feedback
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                {proposal.reviewFeedback}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {canRequestSupervisor && (
+      {proposal.status === "REJECTED" && isTeamLeader && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Revise & Resubmit Proposal</CardTitle>
+            <CardDescription>
+              Update your proposal based on supervisor feedback and resubmit for review.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={resubmitForm.handleSubmit((data) =>
+                resubmitMutation.mutate(data),
+              )}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label>Project Title</Label>
+                <Input {...resubmitForm.register("title")} />
+                {resubmitForm.formState.errors.title && (
+                  <p className="text-sm text-destructive">
+                    {resubmitForm.formState.errors.title.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Domain</Label>
+                <Input {...resubmitForm.register("domain")} />
+                {resubmitForm.formState.errors.domain && (
+                  <p className="text-sm text-destructive">
+                    {resubmitForm.formState.errors.domain.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Abstract</Label>
+                <Textarea rows={5} {...resubmitForm.register("abstract")} />
+                {resubmitForm.formState.errors.abstract && (
+                  <p className="text-sm text-destructive">
+                    {resubmitForm.formState.errors.abstract.message}
+                  </p>
+                )}
+              </div>
+              <Button type="submit" disabled={resubmitMutation.isPending}>
+                {resubmitMutation.isPending && (
+                  <Loader2 className="animate-spin" />
+                )}
+                Resubmit Proposal
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {(invitationsQuery.isLoading ||
+        invitations.length > 0 ||
+        pendingInvitations.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Supervisor Invitations
+            </CardTitle>
+            <CardDescription>
+              {isTeamLeader
+                ? "Review invitations from supervisors interested in supervising your team."
+                : "Invitations sent to your team. Only the team leader can accept or decline."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {invitationsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading invitations...
+              </p>
+            ) : invitationsQuery.isError ? (
+              <ErrorState message={getErrorMessage(invitationsQuery.error)} />
+            ) : invitations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No supervisor invitations yet.
+              </p>
+            ) : (
+              invitations.map((invitation) => (
+                <InvitationRow
+                  key={invitation.id}
+                  invitation={invitation}
+                  supervisorName={getDisplayName(
+                    profilesQuery.data,
+                    invitation.supervisorId,
+                  )}
+                  supervisorProfile={
+                    profilesQuery.data?.[invitation.supervisorId]
+                  }
+                  isTeamLeader={isTeamLeader}
+                  isResponding={respondingId === invitation.id}
+                  onViewProfile={() => setViewProfileId(invitation.supervisorId)}
+                  onAccept={() => handleAcceptInvitation(invitation.id)}
+                  onReject={() => handleRejectInvitation(invitation.id)}
+                />
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {canRequestSupervisor && pendingInvitations.length === 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -271,6 +493,105 @@ export default function StudentProposalPage() {
           </CardContent>
         </Card>
       )}
+
+      <SupervisorProfileModal
+        supervisorId={viewProfileId}
+        open={!!viewProfileId}
+        onOpenChange={(open) => {
+          if (!open) setViewProfileId(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function InvitationRow({
+  invitation,
+  supervisorName,
+  supervisorProfile,
+  isTeamLeader,
+  isResponding,
+  onViewProfile,
+  onAccept,
+  onReject,
+}: {
+  invitation: SupervisorInvitation;
+  supervisorName: string;
+  supervisorProfile?: {
+    department?: string | null;
+    designation?: string | null;
+    email?: string | null;
+  };
+  isTeamLeader: boolean;
+  isResponding: boolean;
+  onViewProfile: () => void;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const isPending = invitation.status === "PENDING";
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">{supervisorName}</span>
+          <StatusBadge status={invitation.status} />
+        </div>
+        {supervisorProfile?.designation && (
+          <p className="text-sm text-muted-foreground">
+            {supervisorProfile.designation}
+            {supervisorProfile.department
+              ? ` · ${supervisorProfile.department}`
+              : ""}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Invited {formatDate(invitation.createdAt)}
+        </p>
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto p-0 text-sm"
+          onClick={onViewProfile}
+        >
+          View supervisor profile
+        </Button>
+      </div>
+
+      {isPending && isTeamLeader ? (
+        <div className="flex shrink-0 gap-2">
+          <Button
+            size="sm"
+            onClick={onAccept}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Accept
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReject}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+            Decline
+          </Button>
+        </div>
+      ) : isPending ? (
+        <p className="text-sm text-muted-foreground">
+          Awaiting team leader response
+        </p>
+      ) : null}
     </div>
   );
 }

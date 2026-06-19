@@ -1,16 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Check, Eye, Loader2, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { Eye, Search } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -21,8 +18,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -38,10 +33,11 @@ import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
 import { coordinatorService } from "@/services/coordinator.service";
 import type { Proposal, ProposalStatus } from "@/types/student";
+import { useQuery } from "@tanstack/react-query";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "ALL", label: "All statuses" },
-  { value: "SUPERVISOR_ASSIGNED", label: "Ready for review" },
+  { value: "SUPERVISOR_ASSIGNED", label: "Awaiting supervisor review" },
   { value: "PENDING_SUPERVISOR", label: "Awaiting supervisor" },
   { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
@@ -49,13 +45,9 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 ];
 
 export default function CoordinatorProposalsPage() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [viewProposal, setViewProposal] = useState<Proposal | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<Proposal | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [approveTarget, setApproveTarget] = useState<Proposal | null>(null);
 
   const proposalsQuery = useQuery({
     queryKey: ["coordinator", "proposals"],
@@ -72,33 +64,6 @@ export default function CoordinatorProposalsPage() {
   }, [proposalsQuery.data]);
 
   const profilesQuery = useProfilesLookup(profileIds);
-
-  const approveMutation = useMutation({
-    mutationFn: (proposalId: string) =>
-      coordinatorService.approveProposal(proposalId),
-    onSuccess: () => {
-      toast.success("Proposal approved");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "proposals"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "coordinator"] });
-      setApproveTarget(null);
-      setViewProposal(null);
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
-      coordinatorService.rejectProposal(id, reason),
-    onSuccess: () => {
-      toast.success("Proposal rejected");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "proposals"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "coordinator"] });
-      setRejectTarget(null);
-      setRejectReason("");
-      setViewProposal(null);
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
 
   if (proposalsQuery.isLoading) return <DashboardSkeleton />;
 
@@ -123,20 +88,22 @@ export default function CoordinatorProposalsPage() {
   });
 
   const profiles = profilesQuery.data;
-  const pendingCount = (proposalsQuery.data ?? []).filter(
-    (p) => p.status === "SUPERVISOR_ASSIGNED",
+  const awaitingSupervisorCount = (proposalsQuery.data ?? []).filter(
+    (p) =>
+      p.status === "SUPERVISOR_ASSIGNED" ||
+      p.status === "PENDING_SUPERVISOR",
   ).length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Proposals</h2>
+          <h2 className="text-lg font-semibold">Proposals Oversight</h2>
           <p className="text-sm text-muted-foreground">
-            Review and approve FYP proposals
-            {pendingCount > 0 && (
+            Monitor proposal statuses and supervisor decisions across all teams.
+            {awaitingSupervisorCount > 0 && (
               <span className="ml-1 font-medium text-amber-600">
-                · {pendingCount} awaiting your review
+                · {awaitingSupervisorCount} awaiting supervisor action
               </span>
             )}
           </p>
@@ -210,35 +177,19 @@ export default function CoordinatorProposalsPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewProposal(proposal)}
-                  >
-                    <Eye className="h-4 w-4" />
-                    View details
-                  </Button>
-                  {proposal.status === "SUPERVISOR_ASSIGNED" && (
-                    <>
-                      <Button
-                        size="sm"
-                        onClick={() => setApproveTarget(proposal)}
-                      >
-                        <Check className="h-4 w-4" />
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setRejectTarget(proposal)}
-                      >
-                        <X className="h-4 w-4" />
-                        Reject
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {proposal.reviewFeedback && (
+                  <p className="text-xs text-muted-foreground">
+                    Supervisor feedback: {proposal.reviewFeedback}
+                  </p>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewProposal(proposal)}
+                >
+                  <Eye className="h-4 w-4" />
+                  View details
+                </Button>
               </CardContent>
             </Card>
           ))}
@@ -254,10 +205,10 @@ export default function CoordinatorProposalsPage() {
             <>
               <DialogHeader>
                 <DialogTitle>{viewProposal.title}</DialogTitle>
-                <DialogDescription>
+                <p className="text-sm text-muted-foreground">
                   {viewProposal.domain} ·{" "}
                   {formatProposalStatus(viewProposal.status as ProposalStatus)}
-                </DialogDescription>
+                </p>
               </DialogHeader>
               <div className="space-y-4 text-sm">
                 <div>
@@ -290,111 +241,22 @@ export default function CoordinatorProposalsPage() {
                     </p>
                   </div>
                 </div>
+                {viewProposal.reviewFeedback && (
+                  <div className="rounded-lg border bg-muted/50 p-3">
+                    <p className="font-medium">Supervisor review feedback</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {viewProposal.reviewFeedback}
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Submitted {formatDate(viewProposal.createdAt)}
+                  {viewProposal.reviewedAt &&
+                    ` · Reviewed ${formatDate(viewProposal.reviewedAt)}`}
                 </p>
               </div>
-              {viewProposal.status === "SUPERVISOR_ASSIGNED" && (
-                <DialogFooter className="gap-2 sm:gap-0">
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setViewProposal(null);
-                      setRejectTarget(viewProposal);
-                    }}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setViewProposal(null);
-                      setApproveTarget(viewProposal);
-                    }}
-                  >
-                    Approve
-                  </Button>
-                </DialogFooter>
-              )}
             </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!approveTarget}
-        onOpenChange={(open) => !open && setApproveTarget(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Approve proposal?</DialogTitle>
-            <DialogDescription>
-              This will mark &quot;{approveTarget?.title}&quot; as approved.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                approveTarget &&
-                approveMutation.mutate(approveTarget.id)
-              }
-              disabled={approveMutation.isPending}
-            >
-              {approveMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Approve
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!rejectTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRejectTarget(null);
-            setRejectReason("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject proposal?</DialogTitle>
-            <DialogDescription>
-              Optionally provide a reason for rejecting &quot;
-              {rejectTarget?.title}&quot;.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            placeholder="Reason (optional)"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            rows={3}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() =>
-                rejectTarget &&
-                rejectMutation.mutate({
-                  id: rejectTarget.id,
-                  reason: rejectReason || undefined,
-                })
-              }
-              disabled={rejectMutation.isPending}
-            >
-              {rejectMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Reject
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

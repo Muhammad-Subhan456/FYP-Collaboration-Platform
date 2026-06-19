@@ -180,6 +180,42 @@ export class ProposalsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch('my-proposal/resubmit')
+  resubmitProposal(
+    @Headers('authorization') authorization: string,
+    @Body() body: any,
+  ) {
+    return this.gatewayHttpService.patch(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/my-proposal/resubmit`,
+      body,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('supervisor/review-queue')
+  getSupervisorReviewQueue(
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.gatewayHttpService.get(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervisor/review-queue`,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('supervisor/:supervisorId/overview')
+  getSupervisorOverview(
+    @Headers('authorization') authorization: string,
+    @Param('supervisorId') supervisorId: string,
+  ) {
+    return this.gatewayHttpService.get(
+      `${process.env.PROPOSAL_SERVICE_URL}/proposals/supervisor/${supervisorId}/overview`,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('all')
   getAllProposalsForCoordinator(
     @Headers('authorization') authorization: string,

@@ -56,6 +56,9 @@ export interface Proposal {
   abstract: string;
   status: ProposalStatus;
   assignedSupervisorId?: string | null;
+  reviewFeedback?: string | null;
+  reviewedAt?: string | null;
+  reviewedById?: string | null;
   createdAt: string;
 }
 

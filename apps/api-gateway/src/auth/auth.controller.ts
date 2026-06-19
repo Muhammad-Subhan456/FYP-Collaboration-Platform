@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 import {
   Body,
   Controller,
@@ -12,92 +10,77 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GatewayHttpService } from '../common/gateway-http.service';
 
 @Controller('auth')
 export class AuthController {
+  constructor(
+    private readonly gatewayHttpService: GatewayHttpService,
+  ) {}
+
   @Post('register')
-  async register(@Body() body: any) {
-    const response = await axios.post(
+  register(@Body() body: any) {
+    return this.gatewayHttpService.post(
       `${process.env.AUTH_SERVICE_URL}/auth/register`,
       body,
     );
-
-    return response.data;
   }
 
   @Post('login')
-  async login(@Body() body: any) {
-    const response = await axios.post(
+  login(@Body() body: any) {
+    return this.gatewayHttpService.post(
       `${process.env.AUTH_SERVICE_URL}/auth/login`,
       body,
     );
-
-    return response.data;
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('supervisors')
-  async listSupervisors(
+  listSupervisors(
     @Headers('authorization') authorization: string,
   ) {
-    const response = await axios.get(
+    return this.gatewayHttpService.get(
       `${process.env.AUTH_SERVICE_URL}/auth/supervisors`,
-      {
-        headers: { Authorization: authorization },
-      },
+      authorization,
     );
-
-    return response.data;
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('users')
-  async listUsers(
+  listUsers(
     @Headers('authorization') authorization: string,
   ) {
-    const response = await axios.get(
+    return this.gatewayHttpService.get(
       `${process.env.AUTH_SERVICE_URL}/auth/users`,
-      {
-        headers: { Authorization: authorization },
-      },
+      authorization,
     );
-
-    return response.data;
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('users/:userId/role')
-  async updateUserRole(
+  updateUserRole(
     @Headers('authorization') authorization: string,
     @Param('userId') userId: string,
     @Body() body: any,
   ) {
-    const response = await axios.patch(
+    return this.gatewayHttpService.patch(
       `${process.env.AUTH_SERVICE_URL}/auth/users/${userId}/role`,
       body,
-      {
-        headers: { Authorization: authorization },
-      },
+      authorization,
     );
-
-    return response.data;
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('users/:userId/status')
-  async updateUserStatus(
+  updateUserStatus(
     @Headers('authorization') authorization: string,
     @Param('userId') userId: string,
     @Body() body: any,
   ) {
-    const response = await axios.patch(
+    return this.gatewayHttpService.patch(
       `${process.env.AUTH_SERVICE_URL}/auth/users/${userId}/status`,
       body,
-      {
-        headers: { Authorization: authorization },
-      },
+      authorization,
     );
-
-    return response.data;
   }
 }

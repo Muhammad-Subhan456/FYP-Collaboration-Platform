@@ -37,6 +37,10 @@ model Proposal {
 
   assignedSupervisorId  String?
 
+  reviewFeedback        String?
+  reviewedAt            DateTime?
+  reviewedById          String?
+
   createdAt             DateTime @default(now())
 
   supervisorRequests    SupervisorRequest[]

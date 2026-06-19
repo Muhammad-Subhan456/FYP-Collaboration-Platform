@@ -32,7 +32,8 @@ export class CreateSupervisorProfileDto {
 
   @IsArray()
   @IsString({ each: true })
-  researchAreas!: string[];
+  @IsOptional()
+  researchAreas?: string[];
 
   @IsOptional()
   @IsArray()
