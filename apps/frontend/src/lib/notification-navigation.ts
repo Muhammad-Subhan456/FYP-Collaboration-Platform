@@ -47,7 +47,7 @@ const TYPE_FALLBACK_ROUTES: Record<string, string> = {
   TEAM_ROLE_REMOVED: "/student/team",
   DELIVERABLE_CREATED: "/student/submissions",
   DELIVERABLE_DEADLINE_EXTENDED: "/student/submissions",
-  NEW_SUBMISSION: "/supervisor/submissions",
+  NEW_SUBMISSION: "/supervisor/reviews",
   SUBMISSION_REVIEWED: "/student/submissions",
   EVALUATION_ASSIGNED: "/student/evaluations",
   EVALUATION_PANEL_ASSIGNED: "/supervisor/evaluations",
@@ -120,7 +120,7 @@ function appendEntityQuery(
 export function resolveNotificationHref(
   notification: Notification,
 ): string | null {
-  const route =
+  let route =
     notification.route ??
     (notification.type
       ? TYPE_FALLBACK_ROUTES[notification.type]
@@ -128,6 +128,10 @@ export function resolveNotificationHref(
 
   if (!route) {
     return null;
+  }
+
+  if (route === "/supervisor/submissions") {
+    route = "/supervisor/reviews";
   }
 
   return appendEntityQuery(

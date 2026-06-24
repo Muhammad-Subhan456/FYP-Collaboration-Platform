@@ -2,7 +2,7 @@
 
 **Final Year Project Orchestration & Academic Supervision Information System**
 
-FOASIS is a full-stack, microservices-based platform designed to digitize and streamline the complete Final Year Project (FYP) lifecycle for universities and academic institutions. It connects students, team leaders, supervisors, coordinators, and evaluators through role-based workflows, centralized tracking, notifications, and structured academic processes.
+FOASIS is a full-stack platform for digitizing the Final Year Project (FYP) lifecycle. The **active** stack is a [modular monolith](docs/MODULAR-MONOLITH-MIGRATION.md) backend (`apps/foasis-backend`) with a Next.js frontend. Legacy microservice folders remain in the repo for reference only — see [apps/LEGACY.md](apps/LEGACY.md).
 
 ---
 
@@ -120,56 +120,30 @@ FOASIS delivers an integrated academic operations platform with:
 
 ## 4. System Overview
 
-FOASIS follows a **microservices architecture** with a single API gateway and a modern React frontend.
+> **Architecture:** FOASIS runs as a **modular monolith** — one NestJS app (`apps/foasis-backend`) and one PostgreSQL database (`foasis_db`). Legacy microservice folders are archived; see [apps/LEGACY.md](apps/LEGACY.md) and [docs/MODULAR-MONOLITH-MIGRATION.md](docs/MODULAR-MONOLITH-MIGRATION.md).
+
+FOASIS uses a **single backend API** with a modern React frontend.
 
 ### High-Level Architecture
 
 ```mermaid
 flowchart TB
     subgraph Client
-        FE[Next.js Frontend<br/>Port 3007+]
+        FE[Next.js Frontend<br/>Port 3007]
     end
 
-    subgraph Gateway
-        GW[API Gateway<br/>Port 3000]
-    end
-
-    subgraph Services
-        AUTH[Auth Service<br/>:3001]
-        USER[User Service<br/>:3002]
-        TEAM[Team Service<br/>:3003]
-        PROP[Proposal Service<br/>:3004]
-        NOTIF[Notification Service<br/>:3005]
-        PROG[Progress Service<br/>:3006]
+    subgraph Backend
+        BE[foasis-backend<br/>Modular Monolith<br/>Port 3000]
     end
 
     subgraph Storage
-        PG[(PostgreSQL<br/>per service)]
+        PG[(PostgreSQL<br/>foasis_db)]
         FS[Local File Storage<br/>/uploads]
     end
 
-    FE -->|HTTPS / REST| GW
-    GW --> AUTH
-    GW --> USER
-    GW --> TEAM
-    GW --> PROP
-    GW --> NOTIF
-    GW --> PROG
-    GW --> FS
-
-    AUTH --> PG
-    USER --> PG
-    TEAM --> PG
-    PROP --> PG
-    NOTIF --> PG
-    PROG --> PG
-
-    AUTH -.->|internal events| NOTIF
-    TEAM -.-> NOTIF
-    PROP -.-> NOTIF
-    PROG -.-> NOTIF
-    USER -.-> NOTIF
-    PROG -.->|activity logs| PROG
+    FE -->|HTTPS / REST| BE
+    BE --> PG
+    BE --> FS
 ```
 
 ### Component Summary
@@ -177,16 +151,10 @@ flowchart TB
 | Layer | Technology | Responsibility |
 |-------|------------|----------------|
 | **Frontend** | Next.js 16, React 19, Tailwind CSS | Role-based UI, dashboards, forms, notifications |
-| **API Gateway** | NestJS | Routing, JWT validation, file uploads, CORS, health checks |
-| **Auth Service** | NestJS + Prisma | Registration, login, JWT issuance, user/role management |
-| **User Service** | NestJS + Prisma | Student, supervisor, and coordinator profiles |
-| **Team Service** | NestJS + Prisma | Teams, members, join requests, role assignment |
-| **Proposal Service** | NestJS + Prisma | Proposals, supervisor requests/invitations, review |
-| **Progress Service** | NestJS + Prisma | Deliverables, submissions, milestones, meetings, evaluations |
-| **Notification Service** | NestJS + Prisma | User notifications, read state, deep-link metadata |
-| **Database** | PostgreSQL | Separate schema/database per microservice |
-| **File Storage** | Local disk (`uploads/`) | Profile images, submission documents (via API gateway) |
-| **Authentication** | JWT (Bearer tokens) | Stateless auth across all services |
+| **Backend** | NestJS 11 (`foasis-backend`) | Auth, profiles, teams, proposals, progress, notifications, uploads, dashboard |
+| **Database** | PostgreSQL (`foasis_db`) | Single merged schema via Prisma |
+| **File Storage** | Local disk (`uploads/`) | Profile images, submission documents |
+| **Authentication** | JWT (Bearer tokens) | Stateless auth |
 
 ---
 
@@ -249,7 +217,7 @@ flowchart TB
 | Global announcements | Publish institution-wide announcements |
 | Results management | Global results overview with analytics charts |
 | Analytics dashboard | Department-level statistics |
-| System health | Monitor microservice and database health |
+| System health | Monitor backend and database health |
 | Profile viewing | View any user profile |
 
 ### Evaluator Features
@@ -535,7 +503,7 @@ Each notification includes optional metadata:
 
 ## 7. Database Design
 
-FOASIS uses **database-per-service** pattern. Each microservice owns its PostgreSQL schema via Prisma.
+FOASIS uses a **single PostgreSQL database** (`foasis_db`) with a merged Prisma schema in `apps/foasis-backend`.
 
 ### Service Databases
 
@@ -662,14 +630,14 @@ JWT-based **stateless** sessions. Token expiry is checked client-side; expired t
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant GW as API Gateway
+    participant BE as foasis-backend
     participant FS as Local Storage
 
-    U->>GW: POST /uploads (multipart file + JWT)
-    GW->>GW: Validate extension & size
-    GW->>FS: Save with unique filename
-    GW-->>U: { fileUrl: "http://host/files/..." }
-    U->>GW: Reference fileUrl in submission/profile
+    U->>BE: POST /uploads (multipart file + JWT)
+    BE->>BE: Validate extension & size
+    BE->>FS: Save with unique filename
+    BE-->>U: { fileUrl: "http://host/files/..." }
+    U->>BE: Reference fileUrl in submission/profile
 ```
 
 ### File Retrieval
@@ -690,13 +658,13 @@ Files are accessed via the returned `fileUrl` (e.g., `http://localhost:3000/file
 
 ### Architecture
 
-- Dedicated **notification-service** with its own database
-- Services emit notifications via internal HTTP POST
+- Notifications are stored in `foasis_db` and created in-process by domain modules
+- `NotificationDispatchService` creates records when significant events occur
 - Payload includes deep-link fields for frontend navigation
 
 ### Event-Driven Notifications
 
-Domain services call the notification service when significant events occur (proposal accepted, join request received, submission reviewed, etc.).
+Domain services dispatch notifications when significant events occur (proposal accepted, join request received, submission reviewed, etc.).
 
 ### Notification Record Schema
 
@@ -726,26 +694,26 @@ The progress service maintains `ActivityLog` entries for profile completion, pro
 
 ### Architecture
 
-All client requests go through the **API Gateway** (`http://localhost:3000`). The gateway proxies to microservices using `GatewayHttpService`, which forwards status codes and error bodies cleanly.
+All client requests go to **foasis-backend** (`http://localhost:3000`). The API contract matches the former gateway routes — see [apps/foasis-backend/docs/ROUTE-PARITY.md](apps/foasis-backend/docs/ROUTE-PARITY.md).
 
 ### Route Organization
 
-| Prefix | Target Service |
-|--------|----------------|
-| `/auth/*` | auth-service |
-| `/profiles/*` | user-service |
-| `/teams/*` | team-service |
-| `/proposals/*` | proposal-service |
-| `/notifications/*` | notification-service |
-| `/deliverables/*`, `/submissions/*`, `/milestones/*`, `/meetings/*`, `/evaluations/*`, etc. | progress-service |
-| `/uploads` | api-gateway (local) |
-| `/health` | api-gateway (aggregated) |
-| `/dashboard/*` | api-gateway (aggregated) |
+| Prefix | Module |
+|--------|--------|
+| `/auth/*` | auth |
+| `/profiles/*`, `/users/*` | users |
+| `/teams/*` | teams |
+| `/proposals/*` | proposals |
+| `/notifications/*` | notifications |
+| `/deliverables/*`, `/submissions/*`, `/milestones/*`, `/meetings/*`, `/evaluations/*`, etc. | progress |
+| `/uploads`, `/files/*` | uploads (local disk) |
+| `/health` | health |
+| `/dashboard/*` | dashboard |
 
 ### Authentication Flow
 
 ```
-Client → Gateway (JWT guard) → Microservice (JWT + Roles guard) → Database
+Client → foasis-backend (JWT guard) → Domain service → Prisma → foasis_db
 ```
 
 ### Error Handling Strategy
@@ -755,7 +723,7 @@ Client → Gateway (JWT guard) → Microservice (JWT + Roles guard) → Database
 | Validation | `class-validator` returns 400 with field messages |
 | Authorization | 403 Forbidden for role/ownership violations |
 | Not found | 400/404 with descriptive message |
-| Gateway proxy | Downstream errors forwarded via `HttpException` |
+| Gateway proxy | N/A (monolith) |
 | Frontend | `getErrorMessage()` extracts API error messages for toasts |
 
 ---
@@ -781,7 +749,7 @@ Client → Gateway (JWT guard) → Microservice (JWT + Roles guard) → Database
 
 | Technology | Purpose |
 |------------|---------|
-| NestJS 11 | Microservice framework |
+| NestJS 11 | Modular monolith framework |
 | Prisma | ORM and migrations |
 | PostgreSQL | Primary database |
 | Passport + JWT | Authentication |
@@ -798,42 +766,123 @@ Client → Gateway (JWT guard) → Microservice (JWT + Roles guard) → Database
 | Jest | Unit testing (services) |
 | npm | Package management |
 
+---
+
+## 13. Installation Guide
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 14+
+- npm
+
+### 1. Database
+
+Create the monolith database:
+
+```sql
+CREATE DATABASE foasis_db;
+```
+
+### 2. Backend
+
+```bash
+cd apps/foasis-backend
+npm install
+cp .env.example .env
+# Edit DATABASE_URL, JWT_SECRET, CORS_ORIGIN=http://localhost:3007
+
+npx prisma generate
+npx prisma migrate deploy
+npm run start:dev
+```
+
+Health: `GET http://localhost:3000/health`
+
+**Migrating from microservices:** see [apps/foasis-backend/docs/DATA-CUTOVER.md](apps/foasis-backend/docs/DATA-CUTOVER.md).
+
+### 3. Frontend
+
+```bash
+cd apps/frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open **http://localhost:3007**.
+
+### 4. Smoke test
+
+```bash
+cd apps/foasis-backend
+# Set SMOKE_TEST_EMAIL and SMOKE_TEST_PASSWORD in .env
+npm run smoke-test
+```
+
+Full cutover checklist: [apps/foasis-backend/docs/PHASE-6-DECOMMISSION.md](apps/foasis-backend/docs/PHASE-6-DECOMMISSION.md).
+
+---
+
+## 14. Environment Variables
+
+### foasis-backend (`apps/foasis-backend/.env`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | No | API port (default `3000`) |
+| `DATABASE_URL` | Yes | PostgreSQL connection for `foasis_db` |
+| `JWT_SECRET` | Yes | Must match tokens issued during migration |
+| `JWT_EXPIRES_IN` | No | Token TTL (default `8h`) |
+| `CORS_ORIGIN` | Yes | Frontend origin (`http://localhost:3007`) |
+| `UPLOAD_DIR` | No | File upload directory (default `../../uploads`) |
+| `PUBLIC_URL` | No | Base URL for generated file links |
+
+### frontend (`apps/frontend/.env.local`)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_API_URL` | No | Backend URL (default `http://localhost:3000`) |
+
+---
 
 ## 15. Project Structure
 
 ```
 FYP-Collaboration-Platform/
 ├── apps/
-│   ├── api-gateway/          # Single entry point, routing, uploads, health
+│   ├── foasis-backend/       # Active — modular monolith API (port 3000)
+│   │   ├── prisma/           # Merged schema + migrations
+│   │   ├── src/
+│   │   │   ├── auth/
+│   │   │   ├── users/
+│   │   │   ├── teams/
+│   │   │   ├── proposals/
+│   │   │   ├── notifications/
+│   │   │   ├── progress/
+│   │   │   ├── dashboard/
+│   │   │   ├── uploads/
+│   │   │   └── health/
+│   │   └── docs/
+│   │
+│   ├── frontend/             # Active — Next.js web application (port 3007)
 │   │   └── src/
-│   │       ├── auth/         # Auth route proxy
-│   │       ├── teams/        # Team route proxy
-│   │       ├── proposals/    # Proposal route proxy
-│   │       ├── progress/     # Progress route proxy
-│   │       ├── profiles/     # Profile route proxy
-│   │       ├── notifications/
-│   │       ├── uploads/      # File upload handler
-│   │       ├── dashboard/    # Aggregated dashboard APIs
-│   │       └── health/       # Service health aggregation
+│   │       ├── app/          # App Router pages by role
+│   │       ├── components/
+│   │       ├── services/     # API client modules
+│   │       └── lib/          # axios, auth utilities
 │   │
-│   ├── auth-service/         # Users, login, JWT, organizations
-│   ├── user-service/         # Profiles (student/supervisor/coordinator)
-│   ├── team-service/         # Teams, members, join requests
-│   ├── proposal-service/     # Proposals, supervisor matching
-│   ├── notification-service/ # Notifications
-│   ├── progress-service/     # Deliverables, evaluations, milestones, meetings
-│   │
-│   └── frontend/             # Next.js web application
-│       └── src/
-│           ├── app/          # App Router pages by role
-│           ├── components/   # UI components, wizards, modals
-│           ├── services/     # API client modules
-│           ├── hooks/        # React Query hooks
-│           ├── providers/    # Auth provider
-│           ├── types/        # TypeScript interfaces
-│           └── lib/          # Utilities, axios, formatting
+│   ├── api-gateway/          # Legacy — see apps/LEGACY.md
+│   ├── auth-service/         # Legacy
+│   ├── user-service/         # Legacy
+│   ├── team-service/         # Legacy
+│   ├── proposal-service/     # Legacy
+│   ├── notification-service/ # Legacy
+│   └── progress-service/     # Legacy
 │
 ├── uploads/                  # Local uploaded files (gitignored content)
+├── docs/
+│   └── MODULAR-MONOLITH-MIGRATION.md
 └── README.md
 ```
 
@@ -848,7 +897,7 @@ FYP-Collaboration-Platform/
 | **Advanced analytics** | Predictive dashboards, department comparisons |
 | **AI recommendations** | Supervisor-team matching suggestions |
 | **Dedicated evaluator role** | Separate auth role with evaluator-specific UI |
-| **Cloud scalability** | Docker, Kubernetes, and horizontal service scaling |
+| **Cloud scalability** | Docker + single-process deploy; extract modules only if needed |
 | **Audit exports** | PDF/CSV reports for accreditation |
 
 ## 20. Conclusion

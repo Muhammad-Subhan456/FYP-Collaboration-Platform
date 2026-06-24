@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth (from auth-service) ───────────────────────────────────────────────
+
+enum UserRole {
+  STUDENT
+  SUPERVISOR
+  COORDINATOR
+}
+
+enum SubscriptionPlan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  passwordHash String?
+  googleId     String?  @unique
+  role         UserRole @default(STUDENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Organization {
+  id           String           @id @default(uuid())
+  name         String
+  slug         String           @unique
+  plan         SubscriptionPlan @default(STARTER)
+  isActive     Boolean          @default(false)
+  subscribedAt DateTime?
+  ownerId      String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+// ─── Users / Profiles (from user-service) ───────────────────────────────────
+
+enum Department {
+  CS
+  SE
+  IT
+  AI
+  DS
+}
+
+enum ProfileType {
+  STUDENT
+  SUPERVISOR
+  COORDINATOR
+}
+
+model UserProfile {
+  id                 String      @id @default(uuid())
+  authUserId         String      @unique
+  profileType        ProfileType @default(STUDENT)
+  profilePicture     String?
+  fullName           String
+  email              String?
+  registrationNumber String?
+  department         Department?
+  batch              String?
+  degreeProgram      String?
+  semester           Int?
+  skills             String[]    @default([])
+  interests          String[]    @default([])
+  linkedIn           String?
+  github             String?
+  bio                String?
+  facultyId          String?
+  designation        String?
+  officeLocation     String?
+  biography          String?
+  researchAreas      String[]    @default([])
+  publications       String[]    @default([])
+  officeHours        String?
+  googleScholar      String?
+  coordinatorRole    String?
+  contactInformation String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+// ─── Teams (from team-service) ────────────────────────────────────────────
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  domain      String
+  description String?
+  maxMembers  Int
+  leaderId    String
+  isOpen      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  members     TeamMember[]
+  joinRequests JoinRequest[]
+}
+
+model TeamMember {
+  id         String   @id @default(uuid())
+  teamId     String
+  authUserId String   @unique
+  teamRole   String?
+  joinedAt   DateTime @default(now())
+  team       Team     @relation(fields: [teamId], references: [id])
+}
+
+model JoinRequest {
+  id         String            @id @default(uuid())
+  teamId     String
+  authUserId String
+  status     JoinRequestStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  team       Team              @relation(fields: [teamId], references: [id])
+  @@unique([teamId, authUserId])
+}
+
+// ─── Proposals (from proposal-service) ────────────────────────────────────
+
+enum ProposalStatus {
+  DRAFT
+  PENDING_SUPERVISOR
+  SUPERVISOR_ASSIGNED
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Proposal {
+  id                   String         @id @default(uuid())
+  teamId               String         @unique
+  teamLeaderAuthUserId String?
+  title                String
+  domain               String
+  abstract             String
+  status               ProposalStatus @default(DRAFT)
+  assignedSupervisorId String?
+  reviewFeedback       String?
+  reviewedAt           DateTime?
+  reviewedById         String?
+  createdAt            DateTime       @default(now())
+  supervisorRequests   SupervisorRequest[]
+  supervisorInvitations SupervisorInvitation[]
+}
+
+model SupervisorRequest {
+  id           String        @id @default(uuid())
+  proposalId   String
+  supervisorId String
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  proposal     Proposal      @relation(fields: [proposalId], references: [id])
+  @@unique([proposalId, supervisorId])
+}
+
+model SupervisorInvitation {
+  id           String        @id @default(uuid())
+  proposalId   String
+  supervisorId String
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  proposal     Proposal      @relation(fields: [proposalId], references: [id])
+  @@unique([proposalId, supervisorId])
+}
+
+// ─── Notifications (from notification-service) ────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid())
+  authUserId String
+  title      String
+  message    String
+  type       String?
+  entityType String?
+  entityId   String?
+  route      String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+// ─── Progress (from progress-service) ─────────────────────────────────────
+
+enum DeliverableType {
+  SRS
+  DESIGN
+  MID_VIVA
+  FINAL_REPORT
+  PRESENTATION
+  OTHER
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  CHANGES_REQUIRED
+  APPROVED
+}
+
+enum AnnouncementType {
+  GENERAL
+  DEADLINE
+  MEETING
+  WORKSHOP
+  VIVA
+}
+
+enum MeetingType {
+  WEEKLY
+  VIVA
+  WORKSHOP
+  DISCUSSION
+  OTHER
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum EvaluationType {
+  MID_VIVA
+  FINAL_VIVA
+}
+
+model Meeting {
+  id          String      @id @default(uuid())
+  supervisorId String
+  title       String
+  description String?
+  type        MeetingType
+  meetingDate DateTime
+  location    String?
+  meetingLink String?
+  createdAt   DateTime    @default(now())
+}
+
+model Announcement {
+  id           String           @id @default(uuid())
+  supervisorId String
+  title        String
+  message      String
+  type         AnnouncementType @default(GENERAL)
+  dueDate      DateTime?
+  createdAt    DateTime         @default(now())
+}
+
+model Deliverable {
+  id                 String   @id @default(uuid())
+  supervisorId       String
+  title              String
+  description        String
+  type               DeliverableType
+  dueDate            DateTime
+  attachmentUrl      String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  submissions        Submission[]
+  deadlineExtensions DeliverableDeadlineExtension[]
+}
+
+model DeliverableDeadlineExtension {
+  id              String      @id @default(uuid())
+  deliverableId   String
+  previousDueDate DateTime
+  newDueDate      DateTime
+  extendedBy      String
+  reason          String?
+  createdAt       DateTime    @default(now())
+  deliverable     Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+}
+
+model Submission {
+  id            String           @id @default(uuid())
+  deliverableId String
+  teamId        String
+  version       Int              @default(1)
+  fileUrl       String
+  remarks       String?
+  status        SubmissionStatus @default(SUBMITTED)
+  feedback      String?
+  grade         Int?
+  submittedAt   DateTime         @default(now())
+  deliverable   Deliverable      @relation(fields: [deliverableId], references: [id])
+}
+
+model Milestone {
+  id          String          @id @default(uuid())
+  proposalId  String
+  title       String
+  description String?
+  dueDate     DateTime
+  status      MilestoneStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  tasks       Task[]
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  milestoneId String
+  title       String
+  description String?
+  assignedTo  String
+  dueDate     DateTime?
+  status      TaskStatus @default(TODO)
+  createdAt   DateTime   @default(now())
+  milestone   Milestone  @relation(fields: [milestoneId], references: [id])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  authUserId  String
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model GlobalAnnouncement {
+  id            String   @id @default(uuid())
+  coordinatorId String
+  title         String
+  message       String
+  createdAt     DateTime @default(now())
+}
+
+model Evaluation {
+  id          String         @id @default(uuid())
+  coordinatorId String
+  title       String
+  type        EvaluationType
+  date        DateTime
+  venue       String
+  remarks     String?
+  createdAt   DateTime       @default(now())
+  assignments EvaluationAssignment[]
+  results     EvaluationResult[]
+  panels      EvaluationPanel[]
+}
+
+model EvaluationPanel {
+  id           String   @id @default(uuid())
+  evaluationId String
+  room         String
+  scheduledAt  DateTime?
+  remarks      String?
+  createdAt    DateTime @default(now())
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  evaluators   PanelEvaluator[]
+  assignments  EvaluationAssignment[]
+}
+
+model PanelEvaluator {
+  id          String   @id @default(uuid())
+  panelId     String
+  evaluatorId String
+  role        String   @default("EVALUATOR")
+  createdAt   DateTime @default(now())
+  panel       EvaluationPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  @@unique([panelId, evaluatorId])
+}
+
+model EvaluationAssignment {
+  id           String   @id @default(uuid())
+  evaluationId String
+  teamId       String
+  panelId      String?
+  createdAt    DateTime @default(now())
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+  panel        EvaluationPanel? @relation(fields: [panelId], references: [id])
+  @@unique([evaluationId, teamId])
+}
+
+model EvaluationResult {
+  id           String   @id @default(uuid())
+  evaluationId String
+  teamId       String
+  marks        Float
+  comments     String?
+  createdAt    DateTime @default(now())
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+  @@unique([evaluationId, teamId])
+}

@@ -46,7 +46,7 @@ export default function CoordinatorSystemHealthPage() {
         <div>
           <h2 className="text-lg font-semibold">System Health</h2>
           <p className="text-sm text-muted-foreground">
-            Live status of FOASIS microservices and databases
+            Live status of the FOASIS backend and database
           </p>
         </div>
         <Button
@@ -81,7 +81,7 @@ export default function CoordinatorSystemHealthPage() {
             {healthyCount} of {services.length} services healthy
           </span>
           <span className="text-sm text-muted-foreground">
-            Gateway: {health.service}
+            Backend: {health.service}
           </span>
         </CardContent>
       </Card>

@@ -98,6 +98,13 @@ export const supervisorService = {
     return res.data;
   },
 
+  getSubmissionDetail: async (submissionId: string) => {
+    const res = await api.get<Submission>(
+      `/submissions/detail/${submissionId}`,
+    );
+    return res.data;
+  },
+
   getTeamSubmissions: async (teamId: string) => {
     const res = await api.get<Submission[]>(
       `/submissions/team/${teamId}`,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ExternalLink, Loader2 } from "lucide-react";
 
@@ -35,12 +36,20 @@ import { Input } from "@/components/ui/input";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getTeamLabel } from "@/hooks/use-team-labels";
+import {
+  isDeepLinkFocused,
+  useDeepLinkFocus,
+} from "@/hooks/use-deep-link-focus";
 import { proposalService } from "@/services/proposal.service";
 import { supervisorService } from "@/services/supervisor.service";
 import type { Submission } from "@/types/student";
+import { cn } from "@/lib/utils";
 
 export default function SupervisorReviewsPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const submissionFocusId = useDeepLinkFocus("submissionId");
+  const deliverableFocusId = searchParams.get("deliverableId");
   const [deliverableId, setDeliverableId] = useState("");
   const [reviewTarget, setReviewTarget] = useState<Submission | null>(null);
   const [status, setStatus] = useState<"APPROVED" | "CHANGES_REQUIRED">(
@@ -48,6 +57,24 @@ export default function SupervisorReviewsPage() {
   );
   const [feedback, setFeedback] = useState("");
   const [grade, setGrade] = useState("");
+
+  const submissionDetailQuery = useQuery({
+    queryKey: ["submissions", "detail", submissionFocusId],
+    queryFn: () => supervisorService.getSubmissionDetail(submissionFocusId!),
+    enabled: !!submissionFocusId,
+  });
+
+  useEffect(() => {
+    if (deliverableFocusId) {
+      setDeliverableId(deliverableFocusId);
+    }
+  }, [deliverableFocusId]);
+
+  useEffect(() => {
+    if (submissionDetailQuery.data?.deliverableId) {
+      setDeliverableId(submissionDetailQuery.data.deliverableId);
+    }
+  }, [submissionDetailQuery.data]);
 
   const deliverablesQuery = useQuery({
     queryKey: ["deliverables", "my"],
@@ -150,7 +177,14 @@ export default function SupervisorReviewsPage() {
             ) : (
               <div className="space-y-3">
                 {submissions.map((s) => (
-                  <Card key={s.id}>
+                  <Card
+                    key={s.id}
+                    id={`focus-${s.id}`}
+                    className={cn(
+                      isDeepLinkFocused(submissionFocusId, s.id) &&
+                        "border-primary ring-2 ring-primary/20",
+                    )}
+                  >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-4">
                         <div>
