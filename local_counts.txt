@@ -1,0 +1,29 @@
+          table_name          | row_count 
+------------------------------+-----------
+ _prisma_migrations           |         1
+ ActivityLog                  |       264
+ Announcement                 |         4
+ Deliverable                  |         8
+ DeliverableDeadlineExtension |         0
+ Evaluation                   |         6
+ EvaluationAssignment         |        30
+ EvaluationPanel              |        10
+ EvaluationResult             |        14
+ GlobalAnnouncement           |        12
+ JoinRequest                  |        10
+ Meeting                      |         4
+ Milestone                    |         3
+ Notification                 |       397
+ Organization                 |         0
+ PanelEvaluator               |         9
+ Proposal                     |        14
+ Submission                   |        11
+ SupervisorInvitation         |        13
+ SupervisorRequest            |        12
+ Task                         |         3
+ Team                         |        18
+ TeamMember                   |        24
+ User                         |        36
+ UserProfile                  |        22
+(25 rows)
+
