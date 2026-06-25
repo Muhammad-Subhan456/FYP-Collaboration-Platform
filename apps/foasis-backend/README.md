@@ -21,7 +21,7 @@ Unified NestJS backend for FOASIS. This app will eventually replace:
 | 5 | Single database data cutover | ✅ Tooling ready (`npm run db:cutover`) |
 | 6 | Decommission microservices | ✅ Done (frontend + docs; legacy apps archived in repo) |
 
-See [docs/MODULAR-MONOLITH-MIGRATION.md](../../docs/MODULAR-MONOLITH-MIGRATION.md), [docs/ROUTE-PARITY.md](./docs/ROUTE-PARITY.md), [docs/DATA-CUTOVER.md](./docs/DATA-CUTOVER.md), [docs/PHASE-6-DECOMMISSION.md](./docs/PHASE-6-DECOMMISSION.md), and [docs/SUPABASE-MIGRATION.md](./docs/SUPABASE-MIGRATION.md).
+See [docs/MODULAR-MONOLITH-MIGRATION.md](../../docs/MODULAR-MONOLITH-MIGRATION.md), [docs/ROUTE-PARITY.md](./docs/ROUTE-PARITY.md), [docs/DATA-CUTOVER.md](./docs/DATA-CUTOVER.md), [docs/PHASE-6-DECOMMISSION.md](./docs/PHASE-6-DECOMMISSION.md), [docs/SUPABASE-MIGRATION.md](./docs/SUPABASE-MIGRATION.md), and [../../docs/DOCKER.md](../../docs/DOCKER.md).
 
 ## Quick start
 

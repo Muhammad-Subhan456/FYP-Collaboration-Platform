@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CreditCard, Loader2, Lock } from "lucide-react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/common/logo";
@@ -23,7 +23,7 @@ import type { SubscriptionPlanId } from "@/constants/subscription-plans";
 import { getErrorMessage } from "@/lib/axios";
 import { organizationService } from "@/services/organization.service";
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planParam = (searchParams.get("plan") ?? "STARTER").toUpperCase() as SubscriptionPlanId;
@@ -165,5 +165,19 @@ export default function CheckoutPage() {
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-muted/30">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <CheckoutPageContent />
+    </Suspense>
   );
 }

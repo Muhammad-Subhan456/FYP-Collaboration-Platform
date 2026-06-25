@@ -1,0 +1,69 @@
+# FOASIS — Docker Compose (frontend + backend; Supabase PostgreSQL external)
+#
+# Prerequisites:
+#   1. Copy apps/foasis-backend/.env.example → apps/foasis-backend/.env
+#   2. Set DATABASE_URL (Supabase Session pooler), JWT_SECRET, etc.
+#   3. docker compose up --build
+#
+# URLs:
+#   Frontend  http://localhost:3007
+#   Backend   http://localhost:3000
+#   Health    http://localhost:3000/health
+
+services:
+  backend:
+    build:
+      context: ./apps/foasis-backend
+      dockerfile: Dockerfile
+    image: foasis-backend:local
+    container_name: foasis-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./apps/foasis-backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_URL: http://localhost:3000
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - foasis_uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+    image: foasis-frontend:local
+    container_name: foasis-frontend
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    environment:
+      NODE_ENV: production
+      PORT: "3007"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  foasis_uploads:
+    name: foasis_uploads
