@@ -177,15 +177,19 @@ export class EvaluationsService {
     }
   }
 
-  async getMyEvaluationsByUserId(authUserId: string) {
-    const team =
-      await this.teamsService.getMyTeam(authUserId);
+  async getMyEvaluationsByUserId(
+    authUserId: string,
+    teamId?: string | null,
+  ) {
+    const resolvedTeamId =
+      teamId ??
+      (await this.teamsService.getMyTeam(authUserId))?.id;
 
-    if (!team?.id) {
+    if (!resolvedTeamId) {
       return [];
     }
 
-    return this.getTeamEvaluations(team.id);
+    return this.getTeamEvaluations(resolvedTeamId);
   }
 
   async getEvaluatorOverview() {

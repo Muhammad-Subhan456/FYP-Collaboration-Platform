@@ -64,6 +64,15 @@ export class TeamsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
+  @Get('my-team/overview')
+  getStudentTeamOverview(@Req() req: any) {
+    return this.teamsService.getStudentTeamOverview(
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Post(':teamId/join')
   requestToJoin(
     @Param('teamId') teamId: string,

@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { UserProfile } from "@/types/profile";
 import type { JoinRequest, Team, TeamMember } from "@/types/student";
 
 export interface CreateTeamInput {
@@ -8,7 +9,21 @@ export interface CreateTeamInput {
   maxMembers: number;
 }
 
+export interface StudentTeamOverview {
+  team: Team | null;
+  members: TeamMember[];
+  joinRequests: JoinRequest[];
+  isLeader: boolean;
+  profiles: Record<string, UserProfile>;
+  browseTeams?: Team[];
+}
+
 export const teamService = {
+  getMyTeamOverview: async () => {
+    const res = await api.get<StudentTeamOverview>("/teams/my-team/overview");
+    return res.data;
+  },
+
   getMyTeam: async () => {
     const res = await api.get<Team | null>("/teams/my-team");
     return res.data;

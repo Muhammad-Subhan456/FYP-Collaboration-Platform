@@ -18,23 +18,37 @@ import {
   resolveNotificationHref,
 } from "@/lib/notification-navigation";
 import { notificationService } from "@/services/notification.service";
+import { studentService } from "@/services/student.service";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/student";
+import type { PaginatedResponse } from "@/types";
 
-export function NotificationList() {
+interface NotificationListProps {
+  fetchNotifications?: (
+    page: number,
+    limit: number,
+  ) => Promise<PaginatedResponse<Notification>>;
+  queryKeyPrefix?: string;
+}
+
+export function NotificationList({
+  fetchNotifications = notificationService.getMyNotifications,
+  queryKeyPrefix = "notifications",
+}: NotificationListProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", "me", page],
-    queryFn: () => notificationService.getMyNotifications(page, 20),
+    queryKey: [queryKeyPrefix, "me", page],
+    queryFn: () => fetchNotifications(page, 20),
   });
 
   const markReadMutation = useMutation({
     mutationFn: notificationService.markAsRead,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
+      queryClient.invalidateQueries({ queryKey: ["student", "notifications"] });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -43,7 +57,8 @@ export function NotificationList() {
     mutationFn: notificationService.markAllAsRead,
     onSuccess: () => {
       toast.success("All notifications marked as read");
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
+      queryClient.invalidateQueries({ queryKey: ["student", "notifications"] });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

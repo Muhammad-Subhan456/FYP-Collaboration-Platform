@@ -1,28 +1,67 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProposalsService } from '../../proposals/proposals.service';
 
 @Injectable()
 export class StatsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly proposalsService: ProposalsService,
   ) {}
 
   private async getSupervisedTeamCount(
     supervisorId: string,
   ): Promise<number> {
-    try {
-      const proposals =
-        await this.proposalsService.getSupervisedProposals(
-          supervisorId,
-        );
+    return this.prisma.proposal.count({
+      where: {
+        assignedSupervisorId: supervisorId,
+        status: {
+          in: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
+        },
+      },
+    });
+  }
 
-      return proposals.length;
-    } catch {
-      return 0;
-    }
+  async getSupervisorStats(
+    supervisorId: string,
+    supervisedTeamCount?: number,
+  ) {
+    const now = new Date();
+
+    const [
+      activeDeliverables,
+      pendingReviews,
+      upcomingMeetings,
+      supervisedTeams,
+    ] = await Promise.all([
+      this.prisma.deliverable.count({
+        where: { supervisorId, isActive: true },
+      }),
+
+      this.prisma.submission.count({
+        where: {
+          status: 'SUBMITTED',
+          deliverable: { supervisorId },
+        },
+      }),
+
+      this.prisma.meeting.count({
+        where: {
+          supervisorId,
+          meetingDate: { gte: now },
+        },
+      }),
+
+      supervisedTeamCount !== undefined
+        ? Promise.resolve(supervisedTeamCount)
+        : this.getSupervisedTeamCount(supervisorId),
+    ]);
+
+    return {
+      activeDeliverables,
+      pendingReviews,
+      upcomingMeetings,
+      supervisedTeams,
+    };
   }
 
   async getCoordinatorStats() {
@@ -54,44 +93,6 @@ export class StatsService {
       upcomingEvaluations,
       totalDeliverables,
       publishedResults,
-    };
-  }
-
-  async getSupervisorStats(supervisorId: string) {
-    const now = new Date();
-
-    const [
-      activeDeliverables,
-      pendingReviews,
-      upcomingMeetings,
-      supervisedTeams,
-    ] = await Promise.all([
-      this.prisma.deliverable.count({
-        where: { supervisorId, isActive: true },
-      }),
-
-      this.prisma.submission.count({
-        where: {
-          status: 'SUBMITTED',
-          deliverable: { supervisorId },
-        },
-      }),
-
-      this.prisma.meeting.count({
-        where: {
-          supervisorId,
-          meetingDate: { gte: now },
-        },
-      }),
-
-      this.getSupervisedTeamCount(supervisorId),
-    ]);
-
-    return {
-      activeDeliverables,
-      pendingReviews,
-      upcomingMeetings,
-      supervisedTeams,
     };
   }
 

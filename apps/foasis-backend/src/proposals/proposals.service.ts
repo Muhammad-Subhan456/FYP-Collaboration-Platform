@@ -110,16 +110,21 @@ export class ProposalsService {
     );
   }
 
-  async getMyProposalByUserId(authUserId: string) {
-    const team =
-      await this.teamsService.getMyTeam(authUserId);
+  async getMyProposalByUserId(
+    authUserId: string,
+    teamId?: string | null,
+  ) {
+    const resolvedTeamId =
+      teamId ??
+      (await this.teamsService.getMyTeam(authUserId))
+        ?.id;
 
-    if (!team?.id) {
+    if (!resolvedTeamId) {
       return null;
     }
 
     return this.prisma.proposal.findUnique({
-      where: { teamId: team.id },
+      where: { teamId: resolvedTeamId },
     });
   }
 
@@ -576,6 +581,29 @@ async getTeamInvitations(authorization: string) {
   });
 }
 
+async getTeamInvitationsByUserId(authUserId: string) {
+  const team =
+    await this.teamsService.getMyTeam(authUserId);
+
+  if (!team?.id) {
+    return [];
+  }
+
+  const proposal =
+    await this.prisma.proposal.findUnique({
+      where: { teamId: team.id },
+    });
+
+  if (!proposal) {
+    return [];
+  }
+
+  return this.prisma.supervisorInvitation.findMany({
+    where: { proposalId: proposal.id },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
 async getMyInvitations(
   proposalId: string,
   authorization: string,
@@ -955,16 +983,15 @@ async getSupervisedProposals(supervisorId: string) {
 }
 
 async getSupervisorReviewQueue(supervisorId: string) {
-  const assigned = await this.prisma.proposal.findMany({
-    where: {
-      assignedSupervisorId: supervisorId,
-      status: 'SUPERVISOR_ASSIGNED',
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  const pendingRequests =
-    await this.prisma.supervisorRequest.findMany({
+  const [assigned, pendingRequests] = await Promise.all([
+    this.prisma.proposal.findMany({
+      where: {
+        assignedSupervisorId: supervisorId,
+        status: 'SUPERVISOR_ASSIGNED',
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    this.prisma.supervisorRequest.findMany({
       where: {
         supervisorId,
         status: 'PENDING',
@@ -977,7 +1004,8 @@ async getSupervisorReviewQueue(supervisorId: string) {
       },
       include: { proposal: true },
       orderBy: { createdAt: 'desc' },
-    });
+    }),
+  ]);
 
   const fromRequests = pendingRequests.map(
     (request) => request.proposal,

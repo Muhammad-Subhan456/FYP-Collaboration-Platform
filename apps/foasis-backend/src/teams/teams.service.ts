@@ -8,12 +8,14 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateTeamDto } from './dto/create-team.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
+import { ProfilesService } from '../users/profiles.service';
 
 @Injectable()
 export class TeamsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationDispatch: NotificationDispatchService,
+    private readonly profilesService: ProfilesService,
   ) {}
 
   async createTeam(
@@ -360,32 +362,15 @@ async getMyTeam(authUserId: string) {
       where: {
         authUserId,
       },
+      include: {
+        team: true,
+      },
     });
 
-  if (!membership) {
-    return null;
-  }
-
-  return this.prisma.team.findUnique({
-    where: {
-      id: membership.teamId,
-    },
-  });
+  return membership?.team ?? null;
 }
 
 async getTeamMembers(teamId: string) {
-  const team = await this.prisma.team.findUnique({
-    where: {
-      id: teamId,
-    },
-  });
-
-  if (!team) {
-    throw new BadRequestException(
-      'Team not found',
-    );
-  }
-
   return this.prisma.teamMember.findMany({
     where: {
       teamId,
@@ -395,15 +380,18 @@ async getTeamMembers(teamId: string) {
 
 async getMyTeamMembers(
   authUserId: string,
+  teamId?: string,
 ) {
-  const membership =
-    await this.prisma.teamMember.findFirst({
-      where: {
-        authUserId,
-      },
-    });
+  const resolvedTeamId =
+    teamId ??
+    (
+      await this.prisma.teamMember.findFirst({
+        where: { authUserId },
+        select: { teamId: true },
+      })
+    )?.teamId;
 
-  if (!membership) {
+  if (!resolvedTeamId) {
     throw new BadRequestException(
       'User does not belong to any team',
     );
@@ -411,9 +399,13 @@ async getMyTeamMembers(
 
   return this.prisma.teamMember.findMany({
     where: {
-      teamId: membership.teamId,
+      teamId: resolvedTeamId,
     },
   });
+}
+
+async getTeamCountForCoordinator() {
+  return this.prisma.team.count();
 }
 
 async getAllTeamsForCoordinator() {
@@ -524,6 +516,51 @@ async updateMemberRole(
   }
 
   return updated;
+}
+
+async getStudentTeamOverview(authUserId: string) {
+  const team = await this.getMyTeam(authUserId);
+
+  if (!team) {
+    const browseTeams = await this.getAllTeams().catch(() => []);
+
+    return {
+      team: null,
+      members: [],
+      joinRequests: [],
+      isLeader: false,
+      profiles: {},
+      browseTeams,
+    };
+  }
+
+  const isLeader = team.leaderId === authUserId;
+
+  const [members, joinRequests] = await Promise.all([
+    this.getTeamMembers(team.id).catch(() => []),
+    isLeader
+      ? this.getMyTeamRequests(authUserId).catch(() => [])
+      : Promise.resolve([]),
+  ]);
+
+  const profileIds = [
+    team.leaderId,
+    ...members.map((member) => member.authUserId),
+    ...joinRequests.map((request) => request.authUserId),
+  ];
+
+  const profiles =
+    await this.profilesService
+      .findManyByAuthUserIds([...new Set(profileIds)])
+      .catch(() => ({}));
+
+  return {
+    team,
+    members,
+    joinRequests,
+    isLeader,
+    profiles,
+  };
 }
 
 

@@ -16,6 +16,7 @@
     "db:validate-data": "ts-node scripts/validate-data-migration.ts",
     "db:cutover": "ts-node scripts/db-cutover.ts",
     "smoke-test": "ts-node scripts/smoke-test.ts",
+    "benchmark": "ts-node scripts/benchmark-endpoints.ts",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix"
   },
   "dependencies": {

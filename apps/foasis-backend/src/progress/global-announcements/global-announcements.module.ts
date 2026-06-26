@@ -10,5 +10,6 @@ import { GlobalAnnouncementsService } from './global-announcements.service';
   imports: [AuthModule, NotificationsModule, ActivityLogsModule],
   controllers: [GlobalAnnouncementsController],
   providers: [GlobalAnnouncementsService],
+  exports: [GlobalAnnouncementsService],
 })
 export class GlobalAnnouncementsModule {}

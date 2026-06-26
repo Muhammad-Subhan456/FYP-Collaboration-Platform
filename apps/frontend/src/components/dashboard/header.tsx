@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useAuth } from "@/providers/auth-provider";
 import type { UserRole } from "@/types";
 
@@ -22,6 +21,7 @@ interface DashboardHeaderProps {
   description?: string;
   role: UserRole;
   onMenuClick?: () => void;
+  unreadCount?: number;
 }
 
 function getNotificationPath(role: UserRole) {
@@ -33,11 +33,9 @@ export function DashboardHeader({
   description,
   role,
   onMenuClick,
+  unreadCount = 0,
 }: DashboardHeaderProps) {
   const { user, profile, logout } = useAuth();
-
-  const { data: unread } = useUnreadNotifications(!!user);
-  const unreadCount = unread?.count ?? 0;
 
   const initials =
     profile?.fullName

@@ -13,6 +13,10 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { TeamsModule } from './teams/teams.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
+import { StudentModule } from './student/student.module';
+import { SupervisorModule } from './supervisor/supervisor.module';
+import { CoordinatorModule } from './coordinator/coordinator.module';
+import { EvaluatorModule } from './evaluator/evaluator.module';
 
 /**
  * FOASIS modular monolith root module.
@@ -32,6 +36,10 @@ import { UsersModule } from './users/users.module';
     UploadsModule,
     MeModule,
     HealthModule,
+    StudentModule,
+    SupervisorModule,
+    CoordinatorModule,
+    EvaluatorModule,
   ],
 })
 export class AppModule {}

@@ -10,5 +10,6 @@ import { MeetingsService } from './meetings.service';
   imports: [ProgressCommonModule, ActivityLogsModule],
   controllers: [MeetingsController],
   providers: [MeetingsService],
+  exports: [MeetingsService],
 })
 export class MeetingsModule {}

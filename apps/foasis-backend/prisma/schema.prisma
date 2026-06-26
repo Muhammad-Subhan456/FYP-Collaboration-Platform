@@ -31,6 +31,8 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([role])
 }
 
 model Organization {
@@ -111,6 +113,7 @@ model Team {
   createdAt   DateTime @default(now())
   members     TeamMember[]
   joinRequests JoinRequest[]
+  proposal    Proposal?
 }
 
 model TeamMember {
@@ -120,6 +123,8 @@ model TeamMember {
   teamRole   String?
   joinedAt   DateTime @default(now())
   team       Team     @relation(fields: [teamId], references: [id])
+
+  @@index([teamId])
 }
 
 model JoinRequest {
@@ -130,6 +135,7 @@ model JoinRequest {
   createdAt  DateTime          @default(now())
   team       Team              @relation(fields: [teamId], references: [id])
   @@unique([teamId, authUserId])
+  @@index([teamId])
 }
 
 // ─── Proposals (from proposal-service) ────────────────────────────────────
@@ -162,8 +168,11 @@ model Proposal {
   reviewedAt           DateTime?
   reviewedById         String?
   createdAt            DateTime       @default(now())
+  team                 Team           @relation(fields: [teamId], references: [id])
   supervisorRequests   SupervisorRequest[]
   supervisorInvitations SupervisorInvitation[]
+
+  @@index([assignedSupervisorId, status])
 }
 
 model SupervisorRequest {
@@ -199,6 +208,9 @@ model Notification {
   route      String?
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
+
+  @@index([authUserId, createdAt(sort: Desc)])
+  @@index([authUserId, isRead])
 }
 
 // ─── Progress (from progress-service) ─────────────────────────────────────
@@ -261,6 +273,8 @@ model Meeting {
   location    String?
   meetingLink String?
   createdAt   DateTime    @default(now())
+
+  @@index([supervisorId, meetingDate])
 }
 
 model Announcement {
@@ -271,6 +285,8 @@ model Announcement {
   type         AnnouncementType @default(GENERAL)
   dueDate      DateTime?
   createdAt    DateTime         @default(now())
+
+  @@index([supervisorId, createdAt(sort: Desc)])
 }
 
 model Deliverable {
@@ -285,6 +301,8 @@ model Deliverable {
   createdAt          DateTime @default(now())
   submissions        Submission[]
   deadlineExtensions DeliverableDeadlineExtension[]
+
+  @@index([supervisorId, isActive, dueDate])
 }
 
 model DeliverableDeadlineExtension {
@@ -310,6 +328,9 @@ model Submission {
   grade         Int?
   submittedAt   DateTime         @default(now())
   deliverable   Deliverable      @relation(fields: [deliverableId], references: [id])
+
+  @@index([teamId, status])
+  @@index([teamId, deliverableId, version(sort: Desc)])
 }
 
 model Milestone {
@@ -321,6 +342,8 @@ model Milestone {
   status      MilestoneStatus @default(PENDING)
   createdAt   DateTime        @default(now())
   tasks       Task[]
+
+  @@index([proposalId])
 }
 
 model Task {
@@ -333,6 +356,8 @@ model Task {
   status      TaskStatus @default(TODO)
   createdAt   DateTime   @default(now())
   milestone   Milestone  @relation(fields: [milestoneId], references: [id])
+
+  @@index([assignedTo, status])
 }
 
 model ActivityLog {
@@ -341,6 +366,8 @@ model ActivityLog {
   title       String
   description String?
   createdAt   DateTime @default(now())
+
+  @@index([authUserId, createdAt(sort: Desc)])
 }
 
 model GlobalAnnouncement {
@@ -396,6 +423,7 @@ model EvaluationAssignment {
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
   panel        EvaluationPanel? @relation(fields: [panelId], references: [id])
   @@unique([evaluationId, teamId])
+  @@index([teamId])
 }
 
 model EvaluationResult {
@@ -407,4 +435,5 @@ model EvaluationResult {
   createdAt    DateTime @default(now())
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
   @@unique([evaluationId, teamId])
+  @@index([teamId, createdAt(sort: Desc)])
 }

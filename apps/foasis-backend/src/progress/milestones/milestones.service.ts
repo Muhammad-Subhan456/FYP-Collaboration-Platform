@@ -87,6 +87,28 @@ export class MilestonesService {
     });
   }
 
+  async getMilestonesWithTasks(
+    proposalId: string,
+    authUserId: string,
+    role: string,
+  ) {
+    await this.proposalAccessService.getProposal(
+      proposalId,
+      authUserId,
+      role,
+    );
+
+    return this.prisma.milestone.findMany({
+      where: { proposalId },
+      include: {
+        tasks: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+      orderBy: { dueDate: 'asc' },
+    });
+  }
+
   async updateMilestoneStatus(
     milestoneId: string,
     supervisorId: string,

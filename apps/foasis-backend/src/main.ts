@@ -5,9 +5,14 @@ import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 import { AppModule } from './app.module';
+import { PerformanceInterceptor } from './common/performance/performance.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  if (process.env.PERF_LOG === 'true') {
+    app.useGlobalInterceptors(new PerformanceInterceptor());
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({

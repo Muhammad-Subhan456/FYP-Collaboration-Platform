@@ -10,5 +10,6 @@ import { MilestonesService } from './milestones.service';
   imports: [ProgressCommonModule, ActivityLogsModule],
   controllers: [MilestonesController],
   providers: [MilestonesService],
+  exports: [MilestonesService],
 })
 export class MilestonesModule {}

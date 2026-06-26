@@ -237,17 +237,16 @@ export class EvaluationResultsService {
   }
 
   async getCoordinatorOverview() {
-    const assignments =
-      await this.prisma.evaluationAssignment.findMany({
+    const [assignments, results] = await Promise.all([
+      this.prisma.evaluationAssignment.findMany({
         include: { evaluation: true },
         orderBy: [
           { evaluation: { date: 'asc' } },
           { teamId: 'asc' },
         ],
-      });
-
-    const results =
-      await this.prisma.evaluationResult.findMany();
+      }),
+      this.prisma.evaluationResult.findMany(),
+    ]);
 
     const resultMap = new Map(
       results.map((result) => [
@@ -281,23 +280,43 @@ export class EvaluationResultsService {
         this.authContext.getUserIdFromAuthorization(
           authorization,
         );
-      const team =
-        await this.teamsService.getMyTeam(authUserId);
 
-      if (!team?.id) {
-        return [];
-      }
-
-      return this.prisma.evaluationResult.findMany({
-        where: {
-          teamId: team.id,
-        },
-        include: {
-          evaluation: true,
-        },
-      });
+      return this.getMyResultsByUserId(authUserId);
     } catch {
       return [];
     }
+  }
+
+  async getMyResultsByUserId(
+    authUserId: string,
+    teamId?: string | null,
+  ) {
+    const resolvedTeamId =
+      teamId ??
+      (await this.teamsService.getMyTeam(authUserId))?.id;
+
+    if (!resolvedTeamId) {
+      return [];
+    }
+
+    return this.getResultsByTeamIds([resolvedTeamId]);
+  }
+
+  async getResultsByTeamIds(teamIds: string[]) {
+    if (!teamIds.length) {
+      return [];
+    }
+
+    return this.prisma.evaluationResult.findMany({
+      where: {
+        teamId: { in: teamIds },
+      },
+      include: {
+        evaluation: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 }

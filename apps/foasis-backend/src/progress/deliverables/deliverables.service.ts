@@ -84,18 +84,25 @@ export class DeliverablesService {
     return this.getDeliverablesForSupervisor(supervisorId);
   }
 
-  async getForMyTeamByUserId(authUserId: string) {
-    const proposal =
-      await this.teamAccessService.getMyProposalByUserId(
-        authUserId,
-      );
+  async getForMyTeamByUserId(
+    authUserId: string,
+    supervisorId?: string | null,
+  ) {
+    const resolvedSupervisorId =
+      supervisorId !== undefined
+        ? supervisorId
+        : (
+            await this.teamAccessService.getMyProposalByUserId(
+              authUserId,
+            )
+          )?.assignedSupervisorId ?? null;
 
     return this.getDeliverablesForSupervisor(
-      proposal?.assignedSupervisorId ?? null,
+      resolvedSupervisorId,
     );
   }
 
-  private async getDeliverablesForSupervisor(
+  getDeliverablesForSupervisor(
     supervisorId: string | null,
   ) {
     if (!supervisorId) {

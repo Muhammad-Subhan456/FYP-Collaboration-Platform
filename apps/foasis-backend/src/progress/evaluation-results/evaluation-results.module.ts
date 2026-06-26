@@ -10,5 +10,6 @@ import { EvaluationResultsService } from './evaluation-results.service';
   imports: [TeamsModule, NotificationsModule],
   controllers: [EvaluationResultsController],
   providers: [EvaluationResultsService],
+  exports: [EvaluationResultsService],
 })
 export class EvaluationResultsModule {}

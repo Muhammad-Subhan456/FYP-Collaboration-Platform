@@ -1,0 +1,18 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+
+import { useAuth } from "@/providers/auth-provider";
+
+export function useStudentPageQuery<T>(
+  page: string,
+  queryFn: () => Promise<T>,
+) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["student", page, user?.userId],
+    queryFn,
+    enabled: !!user?.userId,
+  });
+}

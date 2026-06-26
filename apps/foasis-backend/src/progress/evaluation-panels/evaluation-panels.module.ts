@@ -9,5 +9,6 @@ import { EvaluationPanelsService } from './evaluation-panels.service';
   imports: [NotificationsModule],
   controllers: [EvaluationPanelsController],
   providers: [EvaluationPanelsService],
+  exports: [EvaluationPanelsService],
 })
 export class EvaluationPanelsModule {}

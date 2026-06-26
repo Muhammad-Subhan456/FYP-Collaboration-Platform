@@ -10,5 +10,6 @@ import { AnnouncementsService } from './announcements.service';
   imports: [ProgressCommonModule, ActivityLogsModule],
   controllers: [AnnouncementsController],
   providers: [AnnouncementsService],
+  exports: [AnnouncementsService],
 })
 export class AnnouncementsModule {}

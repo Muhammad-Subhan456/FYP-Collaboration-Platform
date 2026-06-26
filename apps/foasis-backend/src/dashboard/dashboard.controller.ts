@@ -44,6 +44,18 @@ export class DashboardController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
+  @Get('overview')
+  getOverview(
+    @Req() req: { user: { userId: string; role: string } },
+  ) {
+    return this.dashboardService.getOverview(
+      req.user.userId,
+      req.user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get('student')
   getStudentDashboard(

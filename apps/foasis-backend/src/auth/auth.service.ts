@@ -109,26 +109,21 @@ export class AuthService {
 }
 
 async getUserStats() {
-  const totalStudents =
-    await this.prisma.user.count({
-      where: {
-        role: 'STUDENT',
-      },
-    });
-
-  const totalSupervisors =
-    await this.prisma.user.count({
-      where: {
-        role: 'SUPERVISOR',
-      },
-    });
-
-  const totalCoordinators =
-    await this.prisma.user.count({
-      where: {
-        role: 'COORDINATOR',
-      },
-    });
+  const [
+    totalStudents,
+    totalSupervisors,
+    totalCoordinators,
+  ] = await Promise.all([
+    this.prisma.user.count({
+      where: { role: 'STUDENT' },
+    }),
+    this.prisma.user.count({
+      where: { role: 'SUPERVISOR' },
+    }),
+    this.prisma.user.count({
+      where: { role: 'COORDINATOR' },
+    }),
+  ]);
 
   return {
     totalStudents,

@@ -7,6 +7,12 @@ import { UsersModule } from '../users/users.module';
 import { DeliverablesModule } from '../progress/deliverables/deliverables.module';
 import { EvaluationsModule } from '../progress/evaluations/evaluations.module';
 import { StatsModule } from '../progress/stats/stats.module';
+import { AnnouncementsModule } from '../progress/announcements/announcements.module';
+import { MeetingsModule } from '../progress/meetings/meetings.module';
+import { GlobalAnnouncementsModule } from '../progress/global-announcements/global-announcements.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { ActivityLogsModule } from '../progress/activity-logs/activity-logs.module';
+import { StudentContextModule } from '../student/student-context.module';
 
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
@@ -20,8 +26,15 @@ import { DashboardService } from './dashboard.service';
     StatsModule,
     DeliverablesModule,
     EvaluationsModule,
+    AnnouncementsModule,
+    MeetingsModule,
+    GlobalAnnouncementsModule,
+    NotificationsModule,
+    ActivityLogsModule,
+    StudentContextModule,
   ],
   controllers: [DashboardController],
   providers: [DashboardService],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

@@ -92,6 +92,24 @@ export class AnnouncementsService {
         authorization,
       );
 
+    return this.getForSupervisor(supervisorId);
+  }
+
+  async getForMyTeamByUserId(
+    authUserId: string,
+    supervisorId?: string | null,
+  ) {
+    const resolvedSupervisorId =
+      supervisorId !== undefined
+        ? supervisorId
+        : await this.teamAccessService.getAssignedSupervisorIdByUserId(
+            authUserId,
+          );
+
+    return this.getForSupervisor(resolvedSupervisorId);
+  }
+
+  getForSupervisor(supervisorId: string | null) {
     if (!supervisorId) {
       return [];
     }

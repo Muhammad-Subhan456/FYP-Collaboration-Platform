@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 
 import { AuthService } from '../auth/auth.service';
 import { ProfilesService } from '../users/profiles.service';
@@ -7,6 +10,21 @@ import { TeamsService } from '../teams/teams.service';
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
 import { StatsService } from '../progress/stats/stats.service';
+import { AnnouncementsService } from '../progress/announcements/announcements.service';
+import { MeetingsService } from '../progress/meetings/meetings.service';
+import { GlobalAnnouncementsService } from '../progress/global-announcements/global-announcements.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
+import { StudentContextService } from '../student/student-context.service';
+
+const EMPTY_STUDENT_STATS = {
+  pendingSubmissions: 0,
+  upcomingDeliverables: 0,
+  openTasks: 0,
+  upcomingEvaluations: 0,
+};
+
+type DashboardRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR';
 
 @Injectable()
 export class DashboardService {
@@ -18,51 +36,51 @@ export class DashboardService {
     private readonly statsService: StatsService,
     private readonly deliverablesService: DeliverablesService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly announcementsService: AnnouncementsService,
+    private readonly meetingsService: MeetingsService,
+    private readonly globalAnnouncementsService: GlobalAnnouncementsService,
+    private readonly notificationsService: NotificationsService,
+    private readonly activityLogsService: ActivityLogsService,
+    private readonly studentContextService: StudentContextService,
   ) {}
 
   async getDashboard(authUserId: string) {
-    const [profile, team] = await Promise.all([
+    const [profile, ctx] = await Promise.all([
       this.profilesService.getMyProfile(authUserId),
-      this.teamsService.getMyTeam(authUserId),
+      this.studentContextService.load(authUserId),
     ]);
-
-    const proposal =
-      await this.proposalsService.getMyProposalByUserId(
-        authUserId,
-      );
 
     return {
       profile,
-      team,
-      proposal,
+      team: ctx.team,
+      proposal: ctx.proposal,
     };
   }
 
   async getCoordinatorDashboard() {
     const [
       userStats,
-      teams,
+      totalTeams,
       proposalStats,
       progressStats,
     ] = await Promise.all([
       this.authService.getUserStats(),
-      this.teamsService.getAllTeamsForCoordinator(),
+      this.teamsService.getTeamCountForCoordinator(),
       this.proposalsService.getProposalStats(),
       this.statsService.getCoordinatorStats(),
     ]);
 
     return {
       users: userStats,
-      totalTeams: teams.length,
+      totalTeams,
       proposals: proposalStats,
       progress: progressStats,
     };
   }
 
   async getSupervisorDashboard(supervisorId: string) {
-    const [stats, deliverables, requests, supervised] =
+    const [deliverables, requests, supervised] =
       await Promise.all([
-        this.statsService.getSupervisorStats(supervisorId),
         this.deliverablesService.getMyDeliverables(
           supervisorId,
         ),
@@ -74,15 +92,18 @@ export class DashboardService {
         ),
       ]);
 
-    const supervisedTeams = Array.isArray(supervised)
-      ? supervised.length
-      : 0;
+    const supervisedTeams = supervised.length;
+
+    const stats =
+      await this.statsService.getSupervisorStats(
+        supervisorId,
+        supervisedTeams,
+      );
 
     return {
       stats: {
         ...stats,
-        supervisedTeams:
-          supervisedTeams || stats?.supervisedTeams || 0,
+        supervisedTeams,
       },
       deliverables,
       pendingRequests: requests,
@@ -91,49 +112,36 @@ export class DashboardService {
   }
 
   async getStudentDashboard(authUserId: string) {
-    const emptyStats = {
-      pendingSubmissions: 0,
-      upcomingDeliverables: 0,
-      openTasks: 0,
-      upcomingEvaluations: 0,
-    };
+    const { team, proposal, teamId, supervisorId } =
+      await this.studentContextService.load(authUserId);
 
-    const profile =
-      await this.profilesService.getMyProfile(authUserId);
-
-    const team = await this.teamsService
-      .getMyTeam(authUserId)
-      .catch(() => null);
-
-    const proposal =
-      await this.proposalsService
-        .getMyProposalByUserId(authUserId)
-        .catch(() => null);
-
-    let stats = emptyStats;
-    let deliverables: unknown[] = [];
-    let evaluations: unknown[] = [];
-
-    if (team?.id) {
-      const supervisorId =
-        proposal?.assignedSupervisorId ?? null;
-
-      [stats, deliverables, evaluations] = await Promise.all([
-        this.statsService
-          .getStudentStats(
-            team.id,
+    const [profile, stats, deliverables, evaluations] =
+      await Promise.all([
+        this.profilesService.getMyProfile(authUserId),
+        teamId
+          ? this.statsService
+              .getStudentStats(
+                teamId,
+                authUserId,
+                supervisorId,
+              )
+              .catch(() => EMPTY_STUDENT_STATS)
+          : Promise.resolve(EMPTY_STUDENT_STATS),
+        this.deliverablesService
+          .getForMyTeamByUserId(
             authUserId,
             supervisorId,
           )
-          .catch(() => emptyStats),
-        this.deliverablesService
-          .getForMyTeamByUserId(authUserId)
           .catch(() => []),
-        this.evaluationsService
-          .getMyEvaluationsByUserId(authUserId)
-          .catch(() => []),
+        teamId
+          ? this.evaluationsService
+              .getMyEvaluationsByUserId(
+                authUserId,
+                teamId,
+              )
+              .catch(() => [])
+          : Promise.resolve([]),
       ]);
-    }
 
     return {
       profile,
@@ -142,6 +150,248 @@ export class DashboardService {
       stats,
       deliverables,
       evaluations,
+    };
+  }
+
+  async getStudentOverview(authUserId: string) {
+    return {
+      role: 'STUDENT' as const,
+      ...(await this.buildStudentOverview(authUserId)),
+    };
+  }
+
+  async getOverview(
+    authUserId: string,
+    role: string,
+  ) {
+    switch (role as DashboardRole) {
+      case 'STUDENT':
+        return this.getStudentOverview(authUserId);
+      case 'SUPERVISOR':
+        return this.getSupervisorOverview(authUserId);
+      case 'COORDINATOR':
+        return this.getCoordinatorOverview(authUserId);
+      default:
+        throw new ForbiddenException(
+          'Dashboard overview is not available for this role',
+        );
+    }
+  }
+
+  private async getRecentActivity(authUserId: string) {
+    const [notifications, activityLogs] =
+      await Promise.all([
+        this.notificationsService
+          .getMyNotifications(authUserId, 1, 20)
+          .catch(() => ({
+            data: [],
+            total: 0,
+            page: 1,
+            limit: 20,
+          })),
+        this.activityLogsService
+          .getMyLogs(authUserId)
+          .catch(() => []),
+      ]);
+
+    return { notifications, activityLogs };
+  }
+
+  private async buildStudentOverview(authUserId: string) {
+    const { team, proposal, teamId, supervisorId } =
+      await this.studentContextService.load(authUserId);
+
+    const [
+      globalAnnouncements,
+      notifications,
+      activityLogs,
+      stats,
+      deliverables,
+      evaluations,
+      teamMembers,
+      announcements,
+      meetings,
+      supervisor,
+    ] = await Promise.all([
+      this.globalAnnouncementsService
+        .getAnnouncements()
+        .catch(() => []),
+      this.notificationsService
+        .getMyNotifications(authUserId, 1, 20)
+        .catch(() => ({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+        })),
+      this.activityLogsService
+        .getMyLogs(authUserId)
+        .catch(() => []),
+      teamId
+        ? this.statsService
+            .getStudentStats(
+              teamId,
+              authUserId,
+              supervisorId,
+            )
+            .catch(() => EMPTY_STUDENT_STATS)
+        : Promise.resolve(EMPTY_STUDENT_STATS),
+      this.deliverablesService
+        .getForMyTeamByUserId(
+          authUserId,
+          supervisorId,
+        )
+        .catch(() => []),
+      teamId
+        ? this.evaluationsService
+            .getMyEvaluationsByUserId(
+              authUserId,
+              teamId,
+            )
+            .catch(() => [])
+        : Promise.resolve([]),
+      teamId
+        ? this.teamsService
+            .getTeamMembers(teamId)
+            .catch(() => [])
+        : Promise.resolve([]),
+      this.announcementsService
+        .getForMyTeamByUserId(
+          authUserId,
+          supervisorId,
+        )
+        .catch(() => []),
+      this.meetingsService
+        .getForMyTeamByUserId(
+          authUserId,
+          supervisorId,
+        )
+        .catch(() => []),
+      supervisorId
+        ? this.profilesService
+            .findOne(supervisorId)
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      team,
+      proposal,
+      stats,
+      deliverables,
+      evaluations,
+      teamMembers,
+      announcements,
+      globalAnnouncements,
+      meetings,
+      supervisor,
+      recentActivity: {
+        notifications,
+        activityLogs,
+      },
+    };
+  }
+
+  async getSupervisorOverview(supervisorId: string) {
+    const [
+      globalAnnouncements,
+      notifications,
+      activityLogs,
+      deliverables,
+      requests,
+      supervised,
+    ] = await Promise.all([
+      this.globalAnnouncementsService
+        .getAnnouncements()
+        .catch(() => []),
+      this.notificationsService
+        .getMyNotifications(supervisorId, 1, 20)
+        .catch(() => ({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+        })),
+      this.activityLogsService
+        .getMyLogs(supervisorId)
+        .catch(() => []),
+      this.deliverablesService
+        .getMyDeliverables(supervisorId)
+        .catch(() => []),
+      this.proposalsService
+        .getSupervisorRequests(supervisorId)
+        .catch(() => []),
+      this.proposalsService
+        .getSupervisedProposals(supervisorId)
+        .catch(() => []),
+    ]);
+
+    const supervisedTeams = supervised.length;
+
+    const stats =
+      await this.statsService.getSupervisorStats(
+        supervisorId,
+        supervisedTeams,
+      );
+
+    return {
+      role: 'SUPERVISOR' as const,
+      stats: {
+        ...stats,
+        supervisedTeams,
+      },
+      deliverables,
+      pendingRequests: requests,
+      supervisedTeams: supervised,
+      globalAnnouncements,
+      recentActivity: {
+        notifications,
+        activityLogs,
+      },
+    };
+  }
+
+  async getCoordinatorOverview(authUserId: string) {
+    const [
+      globalAnnouncements,
+      notifications,
+      activityLogs,
+      userStats,
+      totalTeams,
+      proposalStats,
+      progressStats,
+    ] = await Promise.all([
+      this.globalAnnouncementsService
+        .getAnnouncements()
+        .catch(() => []),
+      this.notificationsService
+        .getMyNotifications(authUserId, 1, 20)
+        .catch(() => ({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+        })),
+      this.activityLogsService
+        .getMyLogs(authUserId)
+        .catch(() => []),
+      this.authService.getUserStats(),
+      this.teamsService.getTeamCountForCoordinator(),
+      this.proposalsService.getProposalStats(),
+      this.statsService.getCoordinatorStats(),
+    ]);
+
+    return {
+      role: 'COORDINATOR' as const,
+      users: userStats,
+      totalTeams,
+      proposals: proposalStats,
+      progress: progressStats,
+      globalAnnouncements,
+      recentActivity: {
+        notifications,
+        activityLogs,
+      },
     };
   }
 }

@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/shell";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { getNavForRole } from "@/constants/navigation";
 import { getGreeting } from "@/hooks/use-profiles";
 import { useAuth } from "@/providers/auth-provider";
@@ -31,13 +31,13 @@ export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
           : "Oversee the FOASIS program";
 
   return (
-    <DashboardShell
+    <DashboardLayout
       role={role}
       roleLabel={roleLabel}
       title={title}
       description={description}
     >
       {children}
-    </DashboardShell>
+    </DashboardLayout>
   );
 }

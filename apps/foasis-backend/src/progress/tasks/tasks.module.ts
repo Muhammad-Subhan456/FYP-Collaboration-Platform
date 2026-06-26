@@ -8,5 +8,6 @@ import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
   imports: [ActivityLogsModule],
   controllers: [TasksController],
   providers: [TasksService],
+  exports: [TasksService],
 })
 export class TasksModule {}

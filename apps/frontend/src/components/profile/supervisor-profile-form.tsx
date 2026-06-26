@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -23,7 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/axios";
+import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
 import { useAuth } from "@/providers/auth-provider";
+import { supervisorPageService } from "@/services/supervisor-page.service";
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
 
@@ -63,10 +65,10 @@ export function SupervisorProfileForm() {
   const { refreshProfile } = useAuth();
   const [picture, setPicture] = useState<File | null>(null);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["profile", "me"],
-    queryFn: profileService.getMyProfile,
-  });
+  const { data, isLoading, isError, error, refetch } = useSupervisorPageQuery(
+    "profile",
+    supervisorPageService.getProfile,
+  );
 
   const {
     register,

@@ -175,6 +175,38 @@ export class SubmissionsService {
         authorization,
       );
 
+    return this.getMySubmissionsForTeam(
+      team,
+      page,
+      limit,
+    );
+  }
+
+  async getMySubmissionsByUserId(
+    authUserId: string,
+    page = 1,
+    limit = 20,
+    team?: { id: string } | null,
+  ) {
+    const resolvedTeam =
+      team !== undefined
+        ? team
+        : await this.teamAccessService.getMyTeamByUserId(
+            authUserId,
+          );
+
+    return this.getMySubmissionsForTeam(
+      resolvedTeam,
+      page,
+      limit,
+    );
+  }
+
+  private async getMySubmissionsForTeam(
+    team: { id: string } | null,
+    page = 1,
+    limit = 20,
+  ) {
     const pagination = getPaginationParams(
       page,
       limit,
@@ -208,6 +240,29 @@ export class SubmissionsService {
       total,
       pagination.page,
       pagination.limit,
+    );
+  }
+
+  async getSubmissionHistoriesByTeamId(teamId: string) {
+    const submissions =
+      await this.prisma.submission.findMany({
+        where: { teamId },
+        orderBy: [
+          { deliverableId: 'asc' },
+          { version: 'desc' },
+        ],
+      });
+
+    return submissions.reduce(
+      (acc, submission) => {
+        if (!acc[submission.deliverableId]) {
+          acc[submission.deliverableId] = [];
+        }
+
+        acc[submission.deliverableId].push(submission);
+        return acc;
+      },
+      {} as Record<string, typeof submissions>,
     );
   }
 

@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-import { ProposalsModule } from '../../proposals/proposals.module';
 import { ProgressCommonModule } from '../common/common.module';
+import { StudentContextModule } from '../../student/student-context.module';
 
 import { StatsController } from './stats.controller';
 import { StatsService } from './stats.service';
 
 @Module({
-  imports: [ProgressCommonModule, ProposalsModule],
+  imports: [ProgressCommonModule, StudentContextModule],
   controllers: [StatsController],
   providers: [StatsService],
   exports: [StatsService],

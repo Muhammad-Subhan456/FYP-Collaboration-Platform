@@ -95,22 +95,34 @@ export class TeamAccessService {
   async getAssignedSupervisorId(
     authorization: string,
   ): Promise<string | null> {
-    const proposalFromStudent =
-      await this.getMyProposal(authorization);
+    try {
+      const authUserId =
+        this.authContext.getUserIdFromAuthorization(
+          authorization,
+        );
 
-    if (proposalFromStudent?.assignedSupervisorId) {
-      return proposalFromStudent.assignedSupervisorId;
-    }
-
-    const team = await this.getMyTeam(authorization);
-    if (!team?.id) {
+      return this.getAssignedSupervisorIdByUserId(
+        authUserId,
+      );
+    } catch {
       return null;
     }
+  }
 
-    const proposal =
-      await this.getProposalByTeamIdInternal(team.id);
+  async getAssignedSupervisorIdByUserId(
+    authUserId: string,
+    proposal?: {
+      assignedSupervisorId?: string | null;
+    } | null,
+  ): Promise<string | null> {
+    if (proposal !== undefined) {
+      return proposal?.assignedSupervisorId ?? null;
+    }
 
-    return proposal?.assignedSupervisorId ?? null;
+    const proposalFromStudent =
+      await this.getMyProposalByUserId(authUserId);
+
+    return proposalFromStudent?.assignedSupervisorId ?? null;
   }
 
   async notifyTeamMembers(

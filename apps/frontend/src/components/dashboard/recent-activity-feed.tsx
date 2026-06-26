@@ -13,28 +13,38 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { notificationService } from "@/services/notification.service";
 import { progressService } from "@/services/progress.service";
+import type { ActivityLog, Notification } from "@/types/student";
+import type { PaginatedResponse } from "@/types";
 
 interface RecentActivityFeedProps {
   fetchLimit?: number;
   className?: string;
+  recentActivity?: {
+    notifications: PaginatedResponse<Notification>;
+    activityLogs: ActivityLog[];
+  };
 }
 
 export function RecentActivityFeed({
   fetchLimit = 20,
   className,
+  recentActivity,
 }: RecentActivityFeedProps) {
   const notificationsQuery = useQuery({
     queryKey: ["notifications", "recent-activity"],
     queryFn: () => notificationService.getMyNotifications(1, fetchLimit),
+    enabled: !recentActivity,
   });
 
   const activityQuery = useQuery({
     queryKey: ["activity-logs", "my"],
     queryFn: progressService.getMyActivityLogs,
+    enabled: !recentActivity,
   });
 
   const notificationItems =
-    notificationsQuery.data?.data?.map((item) => ({
+    (recentActivity?.notifications.data ??
+      notificationsQuery.data?.data)?.map((item) => ({
       id: `notification-${item.id}`,
       title: item.title,
       description: item.message,
@@ -42,7 +52,7 @@ export function RecentActivityFeed({
     })) ?? [];
 
   const activityItems =
-    activityQuery.data?.map((item) => ({
+    (recentActivity?.activityLogs ?? activityQuery.data)?.map((item) => ({
       id: `activity-${item.id}`,
       title: item.title,
       description: item.description ?? "",
@@ -55,7 +65,8 @@ export function RecentActivityFeed({
   );
 
   const isLoading =
-    notificationsQuery.isLoading || activityQuery.isLoading;
+    !recentActivity &&
+    (notificationsQuery.isLoading || activityQuery.isLoading);
 
   return (
     <Card className={className}>

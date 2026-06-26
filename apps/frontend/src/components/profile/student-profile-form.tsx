@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,6 +26,7 @@ import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
+import { studentService } from "@/services/student.service";
 
 const schema = z.object({
   fullName: z.string().min(2),
@@ -60,12 +61,14 @@ const defaultFormValues: FormData = {
 };
 
 export function StudentProfileForm() {
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, user } = useAuth();
+  const queryClient = useQueryClient();
   const [picture, setPicture] = useState<File | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["profile", "me"],
-    queryFn: profileService.getMyProfile,
+    queryKey: ["student", "profile", user?.userId],
+    queryFn: studentService.getProfile,
+    enabled: !!user?.userId,
   });
 
   const {

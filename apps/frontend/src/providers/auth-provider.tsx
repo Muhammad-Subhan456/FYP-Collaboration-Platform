@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   clearStoredToken,
@@ -43,9 +44,23 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const clearUserQueries = useCallback(() => {
+    queryClient.removeQueries({ queryKey: ["dashboard"] });
+    queryClient.removeQueries({ queryKey: ["student"] });
+    queryClient.removeQueries({ queryKey: ["supervisor"] });
+    queryClient.removeQueries({ queryKey: ["coordinator"] });
+    queryClient.removeQueries({ queryKey: ["evaluator"] });
+    queryClient.removeQueries({ queryKey: ["team"] });
+    queryClient.removeQueries({ queryKey: ["teams"] });
+    queryClient.removeQueries({ queryKey: ["notifications"] });
+    queryClient.removeQueries({ queryKey: ["profiles"] });
+    queryClient.removeQueries({ queryKey: ["activity-logs"] });
+  }, [queryClient]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -102,6 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: payload.email,
         role: payload.role,
       };
+
+      clearUserQueries();
       setUser(authUser);
 
       const existingProfile = await loadProfile();
@@ -112,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       router.push(getDashboardPath(authUser.role));
     },
-    [loadProfile, router],
+    [clearUserQueries, loadProfile, router],
   );
 
   const register = useCallback(
@@ -127,11 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    clearUserQueries();
     clearStoredToken();
     setUser(null);
     setProfile(null);
     router.push("/auth/login");
-  }, [router]);
+  }, [clearUserQueries, router]);
 
   const value = useMemo(
     () => ({

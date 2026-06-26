@@ -26,6 +26,7 @@ import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
+import { coordinatorPageService } from "@/services/coordinator-page.service";
 
 const schema = z.object({
   fullName: z.string().min(2),
@@ -54,12 +55,13 @@ const defaultFormValues: FormData = {
 };
 
 export function CoordinatorProfileForm() {
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, user } = useAuth();
   const [picture, setPicture] = useState<File | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["profile", "me"],
-    queryFn: profileService.getMyProfile,
+    queryKey: ["coordinator", "profile", user?.userId],
+    queryFn: coordinatorPageService.getProfile,
+    enabled: !!user?.userId,
   });
 
   const {

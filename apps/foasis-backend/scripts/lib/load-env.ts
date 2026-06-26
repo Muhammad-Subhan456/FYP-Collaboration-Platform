@@ -8,4 +8,12 @@ export function loadEnv(): void {
   if (existsSync(envPath)) {
     config({ path: envPath });
   }
+
+  if (
+    process.argv.some((arg) =>
+      arg.includes('benchmark-endpoints'),
+    )
+  ) {
+    process.env.PERF_LOG = 'true';
+  }
 }
