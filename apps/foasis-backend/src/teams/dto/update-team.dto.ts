@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export class UpdateTeamDto {
   @IsString()
@@ -9,11 +9,16 @@ export class UpdateTeamDto {
   @MinLength(2)
   domain!: string;
 
-  @IsOptional()
   @IsString()
-  projectTitle?: string;
+  @MinLength(5)
+  projectTitle!: string;
+
+  @IsString()
+  @MinLength(20)
+  projectAbstract!: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @IsString()
-  projectAbstract?: string;
+  proposalPdfUrl?: string | null;
 }

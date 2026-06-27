@@ -225,12 +225,15 @@ export default function StudentDashboardPage() {
             )}
           </CardHeader>
           <CardContent className="min-w-0">
-            {proposal ? (
+            {proposal || team?.projectTitle ? (
               <div className="space-y-2">
-                <p className="truncate font-medium" title={proposal.title}>
-                  {proposal.title}
+                <p
+                  className="truncate font-medium"
+                  title={team?.projectTitle ?? proposal?.title}
+                >
+                  {team?.projectTitle ?? proposal?.title}
                 </p>
-                <StatusBadge status={proposal.status} />
+                <StatusBadge status={proposal?.status ?? "DRAFT"} />
                 {supervisorName && (
                   <p
                     className="text-sm text-muted-foreground break-words"
@@ -245,12 +248,12 @@ export default function StudentDashboardPage() {
               </div>
             ) : (
               <EmptyState
-                title="No proposal"
-                description="Submit a proposal once your team is ready."
+                title="Team profile incomplete"
+                description="Complete your team profile before sending a proposal."
                 action={
                   team ? (
                     <Button size="sm" asChild>
-                      <Link href="/student/proposal">Create Proposal</Link>
+                      <Link href="/student/team">Complete Team Profile</Link>
                     </Button>
                   ) : undefined
                 }

@@ -13,6 +13,7 @@ import { SubmissionsService } from '../progress/submissions/submissions.service'
 import { TasksService } from '../progress/tasks/tasks.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
+import { isTeamProfileComplete } from '../teams/team-profile.util';
 import { ProfilesService } from '../users/profiles.service';
 
 import { StudentContextService } from './student-context.service';
@@ -250,7 +251,7 @@ export class StudentPagesService {
     const ctx =
       await this.studentContextService.load(authUserId);
 
-    if (!ctx.teamId) {
+    if (!ctx.teamId || !ctx.team) {
       return {
         team: null,
         proposal: null,
@@ -259,10 +260,12 @@ export class StudentPagesService {
         requestHistory: [],
         activePendingRequest: null,
         isWorkflowLocked: false,
+        isProfileComplete: false,
         profiles: {},
       };
     }
 
+    const isProfileComplete = isTeamProfileComplete(ctx.team);
     const isWorkflowLocked =
       await this.teamsService.isTeamWorkflowLocked(ctx.teamId);
 
@@ -270,20 +273,22 @@ export class StudentPagesService {
       .expirePendingSupervisorRequests()
       .catch(() => undefined);
 
-    const invitations = ctx.proposal
-      ? await this.proposalsService
-          .getTeamInvitationsByUserId(authUserId)
+    const invitations = await this.proposalsService
+      .getTeamInvitationsByUserId(authUserId)
+      .catch(() => []);
+
+    const canBrowseSupervisors =
+      isProfileComplete &&
+      !isWorkflowLocked &&
+      !ctx.proposal?.assignedSupervisorId &&
+      ctx.proposal?.status !== 'REJECTED' &&
+      ctx.proposal?.status !== 'PENDING_SUPERVISOR';
+
+    const supervisors = canBrowseSupervisors
+      ? await this.authService
+          .listSupervisorsForBrowsing()
           .catch(() => [])
       : [];
-
-    const supervisors =
-      ctx.proposal &&
-      !ctx.proposal.assignedSupervisorId &&
-      !isWorkflowLocked
-        ? await this.authService
-            .listSupervisorsForBrowsing()
-            .catch(() => [])
-        : [];
 
     const requestHistory = ctx.proposal
       ? await this.proposalsService
@@ -321,6 +326,7 @@ export class StudentPagesService {
       requestHistory,
       activePendingRequest,
       isWorkflowLocked,
+      isProfileComplete,
       profiles,
     };
   }

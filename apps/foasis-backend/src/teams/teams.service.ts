@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  forwardRef,
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +12,8 @@ import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
+import { ProposalsService } from '../proposals/proposals.service';
+import { isTeamProfileComplete } from './team-profile.util';
 
 @Injectable()
 export class TeamsService {
@@ -17,6 +21,8 @@ export class TeamsService {
     private readonly prisma: PrismaService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly profilesService: ProfilesService,
+    @Inject(forwardRef(() => ProposalsService))
+    private readonly proposalsService: ProposalsService,
   ) {}
 
   async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
@@ -584,6 +590,7 @@ async getStudentTeamOverview(authUserId: string) {
       .catch(() => ({}));
 
   const isWorkflowLocked = await this.isTeamWorkflowLocked(team.id);
+  const isProfileComplete = isTeamProfileComplete(team);
 
   return {
     team,
@@ -592,6 +599,8 @@ async getStudentTeamOverview(authUserId: string) {
     isLeader,
     profiles,
     isWorkflowLocked,
+    isProfileComplete,
+    canEditProfile: isLeader && !isWorkflowLocked,
     canDeleteTeam: isLeader && !isWorkflowLocked,
     canLeaveTeam: !isLeader && !isWorkflowLocked,
   };
@@ -611,15 +620,25 @@ async getStudentTeamOverview(authUserId: string) {
 
     await this.assertTeamNotLocked(team.id);
 
-    return this.prisma.team.update({
+    const proposalPdfUrl =
+      updateTeamDto.proposalPdfUrl === null
+        ? null
+        : updateTeamDto.proposalPdfUrl?.trim() || null;
+
+    const updated = await this.prisma.team.update({
       where: { id: team.id },
       data: {
         name: updateTeamDto.name.trim(),
         domain: updateTeamDto.domain.trim(),
-        projectTitle: updateTeamDto.projectTitle?.trim() || null,
-        projectAbstract: updateTeamDto.projectAbstract?.trim() || null,
+        projectTitle: updateTeamDto.projectTitle.trim(),
+        projectAbstract: updateTeamDto.projectAbstract.trim(),
+        proposalPdfUrl,
       },
     });
+
+    await this.proposalsService.syncProposalFromTeam(team.id);
+
+    return updated;
   }
 
   async deleteTeam(leaderId: string) {

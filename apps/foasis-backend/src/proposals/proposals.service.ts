@@ -1,13 +1,19 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  forwardRef,
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { TeamsService } from '../teams/teams.service';
+import {
+  getTeamProfileSnapshot,
+  isTeamProfileComplete,
+} from '../teams/team-profile.util';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 import { AuthContextService } from '../common/auth-context.service';
@@ -24,6 +30,7 @@ export class ProposalsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => TeamsService))
     private readonly teamsService: TeamsService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly activityLogsService: ActivityLogsService,
@@ -356,18 +363,121 @@ export class ProposalsService {
     return team;
   }
 
-  private async syncTeamProjectFields(
-    teamId: string,
-    title: string,
-    abstract: string,
-  ) {
-    await this.prisma.team.update({
+  async syncProposalFromTeam(teamId: string) {
+    const team = await this.prisma.team.findUnique({
       where: { id: teamId },
+    });
+
+    if (!team) {
+      return;
+    }
+
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { teamId },
+    });
+
+    if (!proposal) {
+      return;
+    }
+
+    if (
+      proposal.status === 'SUPERVISOR_ASSIGNED' ||
+      proposal.status === 'APPROVED'
+    ) {
+      return;
+    }
+
+    const snapshot = getTeamProfileSnapshot(team);
+    const wasRejected = proposal.status === 'REJECTED';
+
+    await this.prisma.proposal.update({
+      where: { id: proposal.id },
       data: {
-        projectTitle: title,
-        projectAbstract: abstract,
+        title: snapshot.title || proposal.title,
+        domain: snapshot.domain,
+        abstract: snapshot.abstract || proposal.abstract,
+        proposalPdfUrl: snapshot.proposalPdfUrl,
+        ...(wasRejected
+          ? {
+              status: 'DRAFT',
+              reviewFeedback: null,
+              reviewedAt: null,
+              reviewedById: null,
+              assignedSupervisorId: null,
+            }
+          : {}),
       },
     });
+  }
+
+  async ensureProposalForTeam(teamId: string, leaderId: string) {
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId },
+    });
+
+    if (!team) {
+      throw new BadRequestException('Team not found');
+    }
+
+    if (team.leaderId !== leaderId) {
+      throw new ForbiddenException(
+        'Only the team leader can manage the proposal',
+      );
+    }
+
+    if (await this.teamsService.isTeamWorkflowLocked(teamId)) {
+      throw new BadRequestException('Proposal workflow is locked');
+    }
+
+    if (!isTeamProfileComplete(team)) {
+      throw new BadRequestException(
+        'Complete your team profile before sending a proposal',
+      );
+    }
+
+    const snapshot = getTeamProfileSnapshot(team);
+    const existing = await this.prisma.proposal.findUnique({
+      where: { teamId },
+    });
+
+    if (existing) {
+      await this.syncProposalFromTeam(teamId);
+      return this.prisma.proposal.findUniqueOrThrow({
+        where: { teamId },
+      });
+    }
+
+    const proposal = await this.prisma.proposal.create({
+      data: {
+        teamId,
+        teamLeaderAuthUserId: leaderId,
+        title: snapshot.title,
+        domain: snapshot.domain,
+        abstract: snapshot.abstract,
+        proposalPdfUrl: snapshot.proposalPdfUrl!,
+        status: 'DRAFT',
+      },
+    });
+
+    await this.prisma.supervisorInvitation.updateMany({
+      where: {
+        teamId,
+        proposalId: null,
+        status: 'PENDING',
+      },
+      data: { proposalId: proposal.id },
+    });
+
+    await this.notifyTeamMembers(teamId, {
+      title: 'Proposal Ready',
+      message: `Your team proposal "${proposal.title}" is ready to send to supervisors.`,
+      type: 'PROPOSAL_CREATED',
+      entityType: 'PROPOSAL',
+      entityId: proposal.id,
+      route: '/student/proposal',
+    });
+
+    return proposal;
   }
 
   private async resetProposalAfterRequestEnd(proposalId: string) {
@@ -532,85 +642,7 @@ export class ProposalsService {
       );
     }
 
-    if (await this.teamsService.isTeamWorkflowLocked(team.id)) {
-      throw new BadRequestException(
-        'Proposal workflow is locked',
-      );
-    }
-
-    const existingProposal =
-      await this.prisma.proposal.findUnique({
-        where: {
-          teamId: createProposalDto.teamId,
-        },
-      });
-
-    if (existingProposal) {
-      throw new BadRequestException(
-        'Team already has a proposal',
-      );
-    }
-
-    const title =
-      createProposalDto.title.trim() ||
-      team.projectTitle?.trim() ||
-      '';
-    const abstract =
-      createProposalDto.abstract.trim() ||
-      team.projectAbstract?.trim() ||
-      '';
-
-    if (!title || !abstract) {
-      throw new BadRequestException(
-        'Project title and abstract are required',
-      );
-    }
-
-    if (!createProposalDto.proposalPdfUrl?.trim()) {
-      throw new BadRequestException(
-        'Proposal PDF is required',
-      );
-    }
-
-    const proposal = await this.prisma.proposal.create({
-      data: {
-        teamId: createProposalDto.teamId,
-        teamLeaderAuthUserId: authUserId,
-        title,
-        domain: createProposalDto.domain,
-        abstract,
-        proposalPdfUrl: createProposalDto.proposalPdfUrl.trim(),
-        status: 'DRAFT',
-      },
-    });
-
-    await this.syncTeamProjectFields(team.id, title, abstract);
-
-    await this.prisma.supervisorInvitation.updateMany({
-      where: {
-        teamId: team.id,
-        proposalId: null,
-        status: 'PENDING',
-      },
-      data: { proposalId: proposal.id },
-    });
-
-    await this.notifyTeamMembers(team.id, {
-      title: 'Proposal Submitted',
-      message: `Your team submitted the FYP proposal "${proposal.title}".`,
-      type: 'PROPOSAL_SUBMITTED',
-      entityType: 'PROPOSAL',
-      entityId: proposal.id,
-      route: '/student/proposal',
-    });
-
-    await this.activityLogsService.logActivity(
-      authUserId,
-      'Proposal Submitted',
-      `Team "${team.name}" submitted proposal "${proposal.title}".`,
-    );
-
-    return proposal;
+    return this.ensureProposalForTeam(team.id, authUserId);
   }
 
   async getMyProposal(authorization: string) {
@@ -625,6 +657,30 @@ export class ProposalsService {
       return null;
     }
   }
+
+async requestSupervisorForMyTeam(
+  supervisorId: string,
+  authorization: string,
+) {
+  const authUserId =
+    this.authContext.getUserIdFromAuthorization(
+      authorization,
+    );
+
+  await this.assertTeamLeader(authUserId, authorization);
+
+  const teamId = await this.getTeamIdFromAuth(authorization);
+  const proposal = await this.ensureProposalForTeam(
+    teamId,
+    authUserId,
+  );
+
+  return this.requestSupervisor(
+    proposal.id,
+    supervisorId,
+    authorization,
+  );
+}
 
 async requestSupervisor(
   proposalId: string,
@@ -649,34 +705,44 @@ async requestSupervisor(
     );
   }
 
+  const team = await this.prisma.team.findUnique({
+    where: { id: teamId },
+  });
+
+  if (!team || !isTeamProfileComplete(team)) {
+    throw new BadRequestException(
+      'Complete your team profile before requesting a supervisor',
+    );
+  }
+
   if (await this.isSupervisorAtCapacity(supervisorId)) {
     throw new BadRequestException(
       'This supervisor is not accepting new teams',
     );
   }
 
-  const proposal =
+  let proposal =
     await this.prisma.proposal.findUnique({
       where: {
         id: proposalId,
       },
     });
 
-  if (!proposal) {
-    throw new BadRequestException(
-      'Proposal not found',
+  if (!proposal || proposal.teamId !== teamId) {
+    proposal = await this.ensureProposalForTeam(
+      teamId,
+      authUserId,
     );
-  }
-
-  if (proposal.teamId !== teamId) {
-    throw new ForbiddenException(
-      'You can only request supervisors for your own team proposal',
-    );
+  } else {
+    await this.syncProposalFromTeam(teamId);
+    proposal = await this.prisma.proposal.findUniqueOrThrow({
+      where: { id: proposal.id },
+    });
   }
 
   if (!proposal.proposalPdfUrl) {
     throw new BadRequestException(
-      'Upload a proposal PDF before requesting a supervisor',
+      'Upload a proposal PDF on your team page before requesting a supervisor',
     );
   }
 
@@ -695,12 +761,18 @@ async requestSupervisor(
     );
   }
 
+  if (proposal.status === 'REJECTED') {
+    throw new BadRequestException(
+      'Update your team profile after rejection before requesting a supervisor',
+    );
+  }
+
   await this.expirePendingSupervisorRequests();
 
   const pendingRequest =
     await this.prisma.supervisorRequest.findFirst({
       where: {
-        proposalId,
+        proposalId: proposal.id,
         status: 'PENDING',
       },
     });
@@ -718,7 +790,7 @@ async requestSupervisor(
   const request =
     await this.prisma.supervisorRequest.create({
       data: {
-        proposalId,
+        proposalId: proposal.id,
         supervisorId,
         expiresAt,
       },
@@ -726,7 +798,7 @@ async requestSupervisor(
 
   await this.prisma.proposal.update({
     where: {
-      id: proposalId,
+      id: proposal.id,
     },
     data: {
       status: 'PENDING_SUPERVISOR',
@@ -739,7 +811,7 @@ async requestSupervisor(
     message: `A team has requested you to supervise their proposal "${proposal.title}". Respond within 5 minutes.`,
     type: 'SUPERVISOR_REQUEST_RECEIVED',
     entityType: 'PROPOSAL',
-    entityId: proposalId,
+    entityId: proposal.id,
     route: '/supervisor/requests',
   });
 
@@ -1294,14 +1366,15 @@ let proposal =
     : null;
 
 if (!proposal && invitation.teamId) {
-  proposal = await this.prisma.proposal.findUnique({
-    where: { teamId: invitation.teamId },
-  });
+  proposal = await this.ensureProposalForTeam(
+    invitation.teamId,
+    authUserId,
+  );
 }
 
 if (!proposal) {
   throw new BadRequestException(
-    'Create your team proposal before accepting a supervision invitation',
+    'Complete your team profile before accepting a supervision invitation',
   );
 }
 
@@ -1755,10 +1828,10 @@ private async assertSupervisorCanReviewProposal(
 async resubmitProposal(
   authUserId: string,
   authorization: string,
-  dto: {
-    title: string;
-    domain: string;
-    abstract: string;
+  _dto: {
+    title?: string;
+    domain?: string;
+    abstract?: string;
     proposalPdfUrl?: string;
   },
 ) {
@@ -1772,12 +1845,22 @@ async resubmitProposal(
     );
   }
 
+  const team = await this.prisma.team.findUnique({
+    where: { id: teamId },
+  });
+
+  if (!team || !isTeamProfileComplete(team)) {
+    throw new BadRequestException(
+      'Complete your team profile on the team page before resubmitting',
+    );
+  }
+
   const proposal = await this.prisma.proposal.findUnique({
     where: { teamId },
   });
 
   if (!proposal) {
-    throw new BadRequestException('Proposal not found');
+    return this.ensureProposalForTeam(teamId, authUserId);
   }
 
   if (proposal.status !== 'REJECTED') {
@@ -1786,24 +1869,11 @@ async resubmitProposal(
     );
   }
 
-  const updated = await this.prisma.proposal.update({
-    where: { id: proposal.id },
-    data: {
-      title: dto.title,
-      domain: dto.domain,
-      abstract: dto.abstract,
-      ...(dto.proposalPdfUrl
-        ? { proposalPdfUrl: dto.proposalPdfUrl }
-        : {}),
-      status: 'DRAFT',
-      reviewFeedback: null,
-      reviewedAt: null,
-      reviewedById: null,
-      assignedSupervisorId: null,
-    },
-  });
+  await this.syncProposalFromTeam(teamId);
 
-  await this.syncTeamProjectFields(teamId, dto.title, dto.abstract);
+  const updated = await this.prisma.proposal.findUniqueOrThrow({
+    where: { id: proposal.id },
+  });
 
   await this.notifyTeamMembers(proposal.teamId, {
     title: 'Proposal Revised',

@@ -108,6 +108,7 @@ model Team {
   domain          String
   projectTitle    String?
   projectAbstract String?
+  proposalPdfUrl  String?
   maxMembers      Int
   leaderId        String
   isOpen          Boolean  @default(true)

@@ -89,6 +89,7 @@ export interface StudentProposalPageData {
       })
     | null;
   isWorkflowLocked: boolean;
+  isProfileComplete: boolean;
   profiles: Record<string, UserProfile>;
 }
 

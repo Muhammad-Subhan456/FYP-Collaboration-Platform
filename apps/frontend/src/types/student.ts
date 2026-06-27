@@ -26,6 +26,7 @@ export interface Team {
   domain: string;
   projectTitle?: string | null;
   projectAbstract?: string | null;
+  proposalPdfUrl?: string | null;
   maxMembers: number;
   leaderId: string;
   isOpen: boolean;

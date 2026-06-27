@@ -9,7 +9,7 @@ import { ProposalsService } from './proposals.service';
 
 @Module({
   imports: [
-    TeamsModule,
+    forwardRef(() => TeamsModule),
     NotificationsModule,
     forwardRef(() => ActivityLogsModule),
   ],

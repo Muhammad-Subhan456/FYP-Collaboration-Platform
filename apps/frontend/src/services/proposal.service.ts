@@ -24,7 +24,18 @@ export const proposalService = {
     return res.data;
   },
 
-  requestSupervisor: async (proposalId: string, supervisorId: string) => {
+  requestSupervisor: async (supervisorId: string) => {
+    const res = await api.post(
+      "/proposals/my-team/request-supervisor",
+      { supervisorId },
+    );
+    return res.data;
+  },
+
+  requestSupervisorByProposalId: async (
+    proposalId: string,
+    supervisorId: string,
+  ) => {
     const res = await api.post(
       `/proposals/${proposalId}/request-supervisor`,
       { supervisorId },

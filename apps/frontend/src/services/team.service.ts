@@ -18,6 +18,8 @@ export interface StudentTeamOverview {
   profiles: Record<string, UserProfile>;
   browseTeams?: Team[];
   isWorkflowLocked?: boolean;
+  isProfileComplete?: boolean;
+  canEditProfile?: boolean;
   canDeleteTeam?: boolean;
   canLeaveTeam?: boolean;
 }
@@ -58,8 +60,9 @@ export const teamService = {
   updateTeam: async (data: {
     name: string;
     domain: string;
-    projectTitle?: string;
-    projectAbstract?: string;
+    projectTitle: string;
+    projectAbstract: string;
+    proposalPdfUrl?: string | null;
   }) => {
     const res = await api.patch<Team>("/teams/my-team", data);
     return res.data;

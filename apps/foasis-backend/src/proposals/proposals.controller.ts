@@ -57,6 +57,19 @@ export class ProposalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
+  @Post('my-team/request-supervisor')
+  requestSupervisorForMyTeam(
+    @Headers('authorization') authorization: string,
+    @Body() requestSupervisorDto: RequestSupervisorDto,
+  ) {
+    return this.proposalsService.requestSupervisorForMyTeam(
+      requestSupervisorDto.supervisorId,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Post(':proposalId/request-supervisor')
   requestSupervisor(
     @Param('proposalId') proposalId: string,
