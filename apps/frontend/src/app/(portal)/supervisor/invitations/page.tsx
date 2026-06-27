@@ -52,7 +52,7 @@ export default function SupervisorInvitationsPage() {
       setInvitingKey(target.inviteKey);
     },
     onSuccess: (_, target) => {
-      toast.success("Invitation sent");
+      toast.success("Interest expressed");
       setSentInviteKeys((prev) => new Set(prev).add(target.inviteKey));
     },
     onError: (e) => toast.error(getErrorMessage(e)),
@@ -91,9 +91,10 @@ export default function SupervisorInvitationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Invitations</h2>
+        <h2 className="text-lg font-semibold">Browse Teams</h2>
         <p className="text-sm text-muted-foreground">
-          Invite available teams to accept you as their supervisor
+          Express interest in teams you would like to supervise. Teams submit
+          proposals to you — you accept or reject from Proposal Reviews.
         </p>
         {atCapacity && (
           <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
@@ -106,7 +107,7 @@ export default function SupervisorInvitationsPage() {
       <Tabs defaultValue="browse">
         <TabsList>
           <TabsTrigger value="browse">Browse Teams</TabsTrigger>
-          <TabsTrigger value="sent">Sent Invitations</TabsTrigger>
+          <TabsTrigger value="sent">Expressed Interest</TabsTrigger>
         </TabsList>
 
         <TabsContent value="browse" className="space-y-4">
@@ -190,9 +191,9 @@ export default function SupervisorInvitationsPage() {
                             <Send className="h-4 w-4" />
                           )}
                           {alreadySent
-                            ? "Invitation Sent"
+                            ? "Interest Sent"
                             : canSend
-                              ? "Send Invitation"
+                              ? "Show Interest"
                               : "Unavailable"}
                         </Button>
                       </div>

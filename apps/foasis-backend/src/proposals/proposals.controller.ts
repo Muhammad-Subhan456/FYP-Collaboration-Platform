@@ -186,6 +186,21 @@ export class ProposalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
+  @Post('invitations/:invitationId/ignore')
+  ignoreInterest(
+    @Param('invitationId') invitationId: string,
+    @Req() req: any,
+    @Headers('authorization') authorization: string,
+  ) {
+    return this.proposalsService.ignoreInterest(
+      invitationId,
+      req.user.userId,
+      authorization,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Post('invitations/:invitationId/accept')
   acceptInvitation(
     @Param('invitationId') invitationId: string,

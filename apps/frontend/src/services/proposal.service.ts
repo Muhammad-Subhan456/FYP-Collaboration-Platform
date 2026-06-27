@@ -104,16 +104,22 @@ export const proposalService = {
     return res.data;
   },
 
-  acceptInvitation: async (invitationId: string) => {
+  acceptInvitation: async (_invitationId: string) => {
+    throw new Error(
+      "Students cannot accept supervision. Send a proposal instead.",
+    );
+  },
+
+  ignoreInterest: async (invitationId: string) => {
     const res = await api.post(
-      `/proposals/invitations/${invitationId}/accept`,
+      `/proposals/invitations/${invitationId}/ignore`,
     );
     return res.data;
   },
 
   rejectInvitation: async (invitationId: string) => {
     const res = await api.post(
-      `/proposals/invitations/${invitationId}/reject`,
+      `/proposals/invitations/${invitationId}/ignore`,
     );
     return res.data;
   },

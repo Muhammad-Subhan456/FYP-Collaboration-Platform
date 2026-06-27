@@ -71,13 +71,13 @@ export class SupervisorPagesService {
   }
 
   async getRequests(supervisorId: string) {
-    const requests =
+    const proposals =
       await this.proposalsService.getSupervisorRequests(
         supervisorId,
       );
 
-    const profileIds = requests
-      .map((r) => r.proposal?.teamLeaderAuthUserId)
+    const profileIds = proposals
+      .map((p) => p.teamLeaderAuthUserId)
       .filter((id): id is string => !!id);
 
     const profiles =
@@ -87,7 +87,7 @@ export class SupervisorPagesService {
             .catch(() => ({}))
         : {};
 
-    return { requests, profiles };
+    return { proposals, profiles };
   }
 
   async getInvitations(supervisorId: string) {

@@ -47,7 +47,7 @@ export interface SupervisorInvitationsPageData {
 }
 
 export interface SupervisorRequestsPageData {
-  requests: SupervisorRequest[];
+  proposals: Proposal[];
   profiles: Record<string, UserProfile>;
 }
 

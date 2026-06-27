@@ -3,7 +3,8 @@ export type ProposalStatus =
   | "PENDING_SUPERVISOR"
   | "SUPERVISOR_ASSIGNED"
   | "APPROVED"
-  | "REJECTED";
+  | "REJECTED"
+  | "IGNORED";
 
 export type SubmissionStatus =
   | "SUBMITTED"
@@ -59,6 +60,8 @@ export interface Proposal {
   proposalPdfUrl?: string | null;
   status: ProposalStatus;
   assignedSupervisorId?: string | null;
+  pendingSupervisorId?: string | null;
+  pendingExpiresAt?: string | null;
   reviewFeedback?: string | null;
   reviewedAt?: string | null;
   reviewedById?: string | null;

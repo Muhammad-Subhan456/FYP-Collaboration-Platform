@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AlertCircle,
-  Check,
   ExternalLink,
   FileText,
   History,
@@ -62,10 +61,11 @@ export default function StudentProposalPage() {
   const pageData = pageQuery.data;
   const team = pageData?.team ?? null;
   const proposal = pageData?.proposal ?? null;
-  const invitations = pageData?.invitations ?? [];
+  const interests = pageData?.interests ?? pageData?.invitations ?? [];
   const supervisors = pageData?.supervisors ?? [];
   const requestHistory = pageData?.requestHistory ?? [];
-  const activePendingRequest = pageData?.activePendingRequest ?? null;
+  const pendingSupervisorId = pageData?.pendingSupervisorId ?? null;
+  const hasPendingProposal = pageData?.hasPendingProposal ?? false;
   const isWorkflowLocked = pageData?.isWorkflowLocked ?? false;
   const isProfileComplete = pageData?.isProfileComplete ?? false;
   const profiles = pageData?.profiles;
@@ -82,7 +82,7 @@ export default function StudentProposalPage() {
       proposalService.requestSupervisor(supervisorId),
     onSuccess: () => {
       toast.success(
-        "Supervisor request sent! Supervisor has 5 minutes to respond.",
+        "Proposal submitted! The supervisor has 5 minutes to respond.",
       );
       invalidateProposal();
       setSendingSupervisorId(null);
@@ -93,26 +93,11 @@ export default function StudentProposalPage() {
     },
   });
 
-  const acceptInvitationMutation = useMutation({
-    mutationFn: (invitationId: string) =>
-      proposalService.acceptInvitation(invitationId),
+  const ignoreInterestMutation = useMutation({
+    mutationFn: (interestId: string) =>
+      proposalService.ignoreInterest(interestId),
     onSuccess: () => {
-      toast.success("Supervisor invitation accepted!");
-      invalidateProposal();
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      setRespondingId(null);
-    },
-    onError: (e) => {
-      toast.error(getErrorMessage(e));
-      setRespondingId(null);
-    },
-  });
-
-  const rejectInvitationMutation = useMutation({
-    mutationFn: (invitationId: string) =>
-      proposalService.rejectInvitation(invitationId),
-    onSuccess: () => {
-      toast.success("Supervisor invitation declined.");
+      toast.success("Expression of interest dismissed.");
       invalidateProposal();
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       setRespondingId(null);
@@ -132,9 +117,20 @@ export default function StudentProposalPage() {
 
   const workflowStatus = proposal?.status ?? "DRAFT";
 
-  const handleSendRequest = (targetSupervisorId: string) => {
+  const canSubmitProposal =
+    isProfileComplete &&
+    !isWorkflowLocked &&
+    !proposal?.assignedSupervisorId &&
+    !hasPendingProposal;
+
+  const handleSendProposal = (targetSupervisorId: string) => {
     setSendingSupervisorId(targetSupervisorId);
     requestMutation.mutate(targetSupervisorId);
+  };
+
+  const handleIgnoreInterest = (interestId: string) => {
+    setRespondingId(interestId);
+    ignoreInterestMutation.mutate(interestId);
   };
 
   if (pageQuery.isLoading) return <DashboardSkeleton />;
@@ -170,29 +166,6 @@ export default function StudentProposalPage() {
       />
     );
   }
-
-  const canRequestSupervisor =
-    isProfileComplete &&
-    !isWorkflowLocked &&
-    !proposal?.assignedSupervisorId &&
-    workflowStatus !== "APPROVED" &&
-    workflowStatus !== "REJECTED" &&
-    workflowStatus !== "PENDING_SUPERVISOR" &&
-    !activePendingRequest;
-
-  const pendingInvitations = invitations.filter(
-    (inv) => inv.status === "PENDING",
-  );
-
-  const handleAcceptInvitation = (invitationId: string) => {
-    setRespondingId(invitationId);
-    acceptInvitationMutation.mutate(invitationId);
-  };
-
-  const handleRejectInvitation = (invitationId: string) => {
-    setRespondingId(invitationId);
-    rejectInvitationMutation.mutate(invitationId);
-  };
 
   return (
     <div className="space-y-6">
@@ -346,64 +319,71 @@ export default function StudentProposalPage() {
         </Card>
       )}
 
-      {activePendingRequest && (
+      {hasPendingProposal && pendingSupervisorId && (
         <Card className="border-amber-500/30">
           <CardHeader>
-            <CardTitle>Pending Supervision Request</CardTitle>
+            <CardTitle>Proposal Pending Review</CardTitle>
             <CardDescription>
               Waiting for{" "}
-              {getDisplayName(profiles, activePendingRequest.supervisorId)} to
-              respond
-              {activePendingRequest.expiresAt && (
-                <> · expires {formatDate(activePendingRequest.expiresAt)}</>
+              {getDisplayName(profiles, pendingSupervisorId)} to accept or
+              reject your proposal
+              {proposal?.pendingExpiresAt && (
+                <> · expires {formatDate(proposal.pendingExpiresAt)}</>
               )}
             </CardDescription>
           </CardHeader>
         </Card>
       )}
 
-      {(invitations.length > 0 || pendingInvitations.length > 0) &&
-        !isWorkflowLocked && (
+      {interests.length > 0 && !isWorkflowLocked && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Mail className="h-5 w-5" />
-                Supervisor Invitations
+                Supervisor Interest
               </CardTitle>
               <CardDescription>
-                Review invitations from supervisors interested in supervising
-                your team.
+                Supervisors who expressed interest in supervising your project.
+                Send a proposal to proceed — only the supervisor can accept or
+                reject.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {invitations.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No supervisor invitations yet.
-                </p>
-              ) : (
-                invitations.map((invitation) => (
-                  <InvitationRow
-                    key={invitation.id}
-                    invitation={invitation}
-                    supervisorName={getDisplayName(
-                      profiles,
-                      invitation.supervisorId,
-                    )}
-                    supervisorProfile={profiles?.[invitation.supervisorId]}
-                    isResponding={respondingId === invitation.id}
-                    onViewProfile={() =>
-                      setViewProfileId(invitation.supervisorId)
-                    }
-                    onAccept={() => handleAcceptInvitation(invitation.id)}
-                    onReject={() => handleRejectInvitation(invitation.id)}
-                  />
-                ))
-              )}
+              {interests.map((interest) => (
+                <InterestRow
+                  key={interest.id}
+                  interest={interest}
+                  supervisorName={getDisplayName(
+                    profiles,
+                    interest.supervisorId,
+                  )}
+                  supervisorProfile={profiles?.[interest.supervisorId]}
+                  isResponding={respondingId === interest.id}
+                  canSendProposal={canSubmitProposal}
+                  isPendingToAnother={
+                    hasPendingProposal &&
+                    pendingSupervisorId !== interest.supervisorId
+                  }
+                  isPendingToSelf={
+                    hasPendingProposal &&
+                    pendingSupervisorId === interest.supervisorId
+                  }
+                  isSending={sendingSupervisorId === interest.supervisorId}
+                  sendDisabled={requestMutation.isPending}
+                  onViewProfile={() =>
+                    setViewProfileId(interest.supervisorId)
+                  }
+                  onSendProposal={() =>
+                    handleSendProposal(interest.supervisorId)
+                  }
+                  onIgnore={() => handleIgnoreInterest(interest.id)}
+                />
+              ))}
             </CardContent>
           </Card>
         )}
 
-      {canRequestSupervisor && pendingInvitations.length === 0 && (
+      {canSubmitProposal && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -411,8 +391,8 @@ export default function StudentProposalPage() {
               Browse Supervisors
             </CardTitle>
             <CardDescription>
-              Compare supervisor profiles and send a supervision request. Each
-              request expires in 5 minutes if not answered.
+              Compare supervisor profiles and submit your proposal. Each
+              submission expires in 5 minutes if not reviewed.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -430,7 +410,7 @@ export default function StudentProposalPage() {
                     isSending={sendingSupervisorId === supervisor.id}
                     disabled={requestMutation.isPending}
                     onViewProfile={() => setViewProfileId(supervisor.id)}
-                    onSendRequest={() => handleSendRequest(supervisor.id)}
+                    onSendRequest={() => handleSendProposal(supervisor.id)}
                   />
                 ))}
               </div>
@@ -450,16 +430,21 @@ export default function StudentProposalPage() {
   );
 }
 
-function InvitationRow({
-  invitation,
+function InterestRow({
+  interest,
   supervisorName,
   supervisorProfile,
   isResponding,
+  canSendProposal,
+  isPendingToAnother,
+  isPendingToSelf,
+  isSending,
+  sendDisabled,
   onViewProfile,
-  onAccept,
-  onReject,
+  onSendProposal,
+  onIgnore,
 }: {
-  invitation: SupervisorInvitation;
+  interest: SupervisorInvitation;
   supervisorName: string;
   supervisorProfile?: {
     department?: string | null;
@@ -467,20 +452,26 @@ function InvitationRow({
     email?: string | null;
   };
   isResponding: boolean;
+  canSendProposal: boolean;
+  isPendingToAnother: boolean;
+  isPendingToSelf: boolean;
+  isSending: boolean;
+  sendDisabled: boolean;
   onViewProfile: () => void;
-  onAccept: () => void;
-  onReject: () => void;
+  onSendProposal: () => void;
+  onIgnore: () => void;
 }) {
-  const isPending = invitation.status === "PENDING";
-
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">{supervisorName}</span>
-          <StatusBadge status={invitation.status} />
+          <StatusBadge status="PENDING" />
         </div>
+        <p className="text-sm text-muted-foreground">
+          {supervisorName} is interested in supervising your project.
+        </p>
         {supervisorProfile?.designation && (
           <p className="text-sm text-muted-foreground">
             {supervisorProfile.designation}
@@ -490,7 +481,7 @@ function InvitationRow({
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Invited {formatDate(invitation.createdAt)}
+          Expressed interest {formatDate(interest.createdAt)}
         </p>
         <Button
           type="button"
@@ -500,22 +491,38 @@ function InvitationRow({
         >
           View supervisor profile
         </Button>
+        {isPendingToAnother && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Waiting for current proposal outcome.
+          </p>
+        )}
+        {isPendingToSelf && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Proposal submitted — awaiting supervisor response.
+          </p>
+        )}
       </div>
 
-      {isPending ? (
-        <div className="flex shrink-0 gap-2">
-          <Button size="sm" onClick={onAccept} disabled={isResponding}>
-            {isResponding ? (
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {canSendProposal && !isPendingToAnother && !isPendingToSelf && (
+          <Button
+            size="sm"
+            onClick={onSendProposal}
+            disabled={isSending || sendDisabled}
+          >
+            {isSending ? (
               <Loader2 className="animate-spin" />
             ) : (
-              <Check className="h-4 w-4" />
+              <Send className="h-4 w-4" />
             )}
-            Accept
+            Send Proposal
           </Button>
+        )}
+        {!isPendingToSelf && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onReject}
+            onClick={onIgnore}
             disabled={isResponding}
           >
             {isResponding ? (
@@ -523,10 +530,10 @@ function InvitationRow({
             ) : (
               <X className="h-4 w-4" />
             )}
-            Decline
+            Ignore
           </Button>
-        </div>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 }

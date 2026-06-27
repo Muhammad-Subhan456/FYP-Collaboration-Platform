@@ -255,10 +255,12 @@ export class StudentPagesService {
       return {
         team: null,
         proposal: null,
+        interests: [],
         invitations: [],
         supervisors: [],
         requestHistory: [],
-        activePendingRequest: null,
+        pendingSupervisorId: null,
+        hasPendingProposal: false,
         isWorkflowLocked: false,
         isProfileComplete: false,
         profiles: {},
@@ -277,12 +279,16 @@ export class StudentPagesService {
       .getTeamInvitationsByUserId(authUserId)
       .catch(() => []);
 
+    const activeInterests = invitations;
+
+    const hasPendingProposal =
+      ctx.proposal?.status === 'PENDING_SUPERVISOR';
+
     const canBrowseSupervisors =
       isProfileComplete &&
       !isWorkflowLocked &&
-      !ctx.proposal?.assignedSupervisorId &&
-      ctx.proposal?.status !== 'REJECTED' &&
-      ctx.proposal?.status !== 'PENDING_SUPERVISOR';
+      !hasPendingProposal &&
+      !ctx.proposal?.assignedSupervisorId;
 
     const supervisors = canBrowseSupervisors
       ? await this.authService
@@ -296,15 +302,15 @@ export class StudentPagesService {
           .catch(() => [])
       : [];
 
-    const activePendingRequest =
-      requestHistory.find((request) => request.status === 'PENDING') ??
-      null;
+    const pendingSupervisorId =
+      ctx.proposal?.pendingSupervisorId ?? null;
 
     const profileIds = [
       ...(ctx.proposal?.assignedSupervisorId
         ? [ctx.proposal.assignedSupervisorId]
         : []),
-      ...invitations.map(
+      ...(pendingSupervisorId ? [pendingSupervisorId] : []),
+      ...activeInterests.map(
         (invitation) => invitation.supervisorId,
       ),
       ...requestHistory.map((request) => request.supervisorId),
@@ -321,10 +327,12 @@ export class StudentPagesService {
     return {
       team: ctx.team,
       proposal: ctx.proposal,
-      invitations,
+      interests: activeInterests,
+      invitations: activeInterests,
       supervisors,
       requestHistory,
-      activePendingRequest,
+      pendingSupervisorId,
+      hasPendingProposal,
       isWorkflowLocked,
       isProfileComplete,
       profiles,

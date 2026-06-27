@@ -78,16 +78,14 @@ export interface StudentResultsPageData {
 export interface StudentProposalPageData {
   team: Team | null;
   proposal: Proposal | null;
+  interests: SupervisorInvitation[];
   invitations: SupervisorInvitation[];
   supervisors: Supervisor[];
   requestHistory: Array<
     Omit<SupervisorRequest, "proposal"> & { proposal?: SupervisorRequest["proposal"] }
   >;
-  activePendingRequest:
-    | (Omit<SupervisorRequest, "proposal"> & {
-        proposal?: SupervisorRequest["proposal"];
-      })
-    | null;
+  pendingSupervisorId: string | null;
+  hasPendingProposal: boolean;
   isWorkflowLocked: boolean;
   isProfileComplete: boolean;
   profiles: Record<string, UserProfile>;

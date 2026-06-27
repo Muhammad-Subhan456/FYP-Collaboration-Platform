@@ -32,12 +32,18 @@ import { getDisplayName } from "@/hooks/use-profiles";
 import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
 import { proposalService } from "@/services/proposal.service";
 import { supervisorPageService } from "@/services/supervisor-page.service";
-import type { SupervisorRequest } from "@/types/supervisor";
+import type { Proposal } from "@/types/student";
+
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
+function resolveFileUrl(url: string) {
+  return url.startsWith("http") ? url : `${apiBase}${url}`;
+}
 
 export default function SupervisorRequestsPage() {
   const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<{
-    request: SupervisorRequest;
+    proposal: Proposal;
     type: "accept" | "reject";
   } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -47,12 +53,18 @@ export default function SupervisorRequestsPage() {
     supervisorPageService.getRequests,
   );
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["supervisor", "requests"] });
+    queryClient.invalidateQueries({ queryKey: ["supervisor", "teams"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
   const acceptMutation = useMutation({
-    mutationFn: proposalService.acceptSupervisorRequest,
+    mutationFn: (proposalId: string) =>
+      proposalService.approveProposal(proposalId),
     onSuccess: () => {
-      toast.success("Request accepted");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "requests"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Proposal accepted — you are now assigned as supervisor");
+      invalidate();
       setConfirmAction(null);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
@@ -60,15 +72,15 @@ export default function SupervisorRequestsPage() {
 
   const rejectMutation = useMutation({
     mutationFn: ({
-      requestId,
+      proposalId,
       reason,
     }: {
-      requestId: string;
+      proposalId: string;
       reason: string;
-    }) => proposalService.rejectSupervisorRequest(requestId, reason),
+    }) => proposalService.rejectProposal(proposalId, reason),
     onSuccess: () => {
-      toast.success("Request rejected");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "requests"] });
+      toast.success("Proposal rejected");
+      invalidate();
       setConfirmAction(null);
       setRejectionReason("");
     },
@@ -86,14 +98,14 @@ export default function SupervisorRequestsPage() {
     );
   }
 
-  const requests = pageQuery.data?.requests ?? [];
+  const proposals = pageQuery.data?.proposals ?? [];
   const profiles = pageQuery.data?.profiles;
   const isPending = acceptMutation.isPending || rejectMutation.isPending;
 
   const handleConfirm = () => {
     if (!confirmAction) return;
     if (confirmAction.type === "accept") {
-      acceptMutation.mutate(confirmAction.request.id);
+      acceptMutation.mutate(confirmAction.proposal.id);
       return;
     }
     if (!rejectionReason.trim()) {
@@ -101,7 +113,7 @@ export default function SupervisorRequestsPage() {
       return;
     }
     rejectMutation.mutate({
-      requestId: confirmAction.request.id,
+      proposalId: confirmAction.proposal.id,
       reason: rejectionReason.trim(),
     });
   };
@@ -109,42 +121,41 @@ export default function SupervisorRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Supervision Requests</h2>
+        <h2 className="text-lg font-semibold">Proposal Reviews</h2>
         <p className="text-sm text-muted-foreground">
-          Review proposals from students who requested you as supervisor
+          Accept or reject proposals submitted to you. You are the sole authority
+          for supervision assignment.
         </p>
       </div>
 
-      {requests.length === 0 ? (
+      {proposals.length === 0 ? (
         <EmptyState
-          title="No pending requests"
-          description="When students request you as their supervisor, they will appear here."
+          title="No pending proposals"
+          description="When a team submits a proposal to you, it will appear here for review."
         />
       ) : (
         <div className="space-y-4">
-          {requests.map((request) => {
-            const leaderId = request.proposal.teamLeaderAuthUserId;
+          {proposals.map((proposal) => {
+            const leaderId = proposal.teamLeaderAuthUserId;
             return (
-              <Card key={request.id}>
+              <Card key={proposal.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <CardTitle>{request.proposal.title}</CardTitle>
-                      <CardDescription>
-                        {request.proposal.domain}
-                      </CardDescription>
+                      <CardTitle>{proposal.title}</CardTitle>
+                      <CardDescription>{proposal.domain}</CardDescription>
                     </div>
-                    <StatusBadge status={request.status} />
+                    <StatusBadge status={proposal.status} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    {request.proposal.abstract}
+                    {proposal.abstract}
                   </p>
-                  {request.proposal.proposalPdfUrl && (
+                  {proposal.proposalPdfUrl && (
                     <Button variant="outline" size="sm" asChild>
                       <a
-                        href={request.proposal.proposalPdfUrl}
+                        href={resolveFileUrl(proposal.proposalPdfUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -156,14 +167,13 @@ export default function SupervisorRequestsPage() {
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     {leaderId && (
                       <span>
-                        Team leader:{" "}
-                        {getDisplayName(profiles, leaderId)}
+                        Team leader: {getDisplayName(profiles, leaderId)}
                       </span>
                     )}
-                    <span>Requested {formatDate(request.createdAt)}</span>
-                    {request.expiresAt && (
+                    <span>Submitted {formatDate(proposal.createdAt)}</span>
+                    {proposal.pendingExpiresAt && (
                       <span className="text-amber-600 dark:text-amber-400">
-                        Expires {formatDate(request.expiresAt)}
+                        Expires {formatDate(proposal.pendingExpiresAt)}
                       </span>
                     )}
                   </div>
@@ -171,21 +181,21 @@ export default function SupervisorRequestsPage() {
                     <Button
                       size="sm"
                       onClick={() =>
-                        setConfirmAction({ request, type: "accept" })
+                        setConfirmAction({ proposal, type: "accept" })
                       }
                     >
                       <Check className="h-4 w-4" />
-                      Accept
+                      Accept Proposal
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        setConfirmAction({ request, type: "reject" })
+                        setConfirmAction({ proposal, type: "reject" })
                       }
                     >
                       <X className="h-4 w-4" />
-                      Reject
+                      Reject Proposal
                     </Button>
                   </div>
                 </CardContent>
@@ -208,13 +218,13 @@ export default function SupervisorRequestsPage() {
           <DialogHeader>
             <DialogTitle>
               {confirmAction?.type === "accept"
-                ? "Accept supervision request?"
-                : "Reject supervision request?"}
+                ? "Accept this proposal?"
+                : "Reject this proposal?"}
             </DialogTitle>
             <DialogDescription>
               {confirmAction?.type === "accept"
-                ? `You will become the supervisor for "${confirmAction?.request.proposal.title}".`
-                : `Provide a reason for declining "${confirmAction?.request.proposal.title}".`}
+                ? `You will become the supervisor for "${confirmAction?.proposal.title}". This action is final.`
+                : `Provide feedback for declining "${confirmAction?.proposal.title}". The team may submit to another supervisor.`}
             </DialogDescription>
           </DialogHeader>
           {confirmAction?.type === "reject" && (
@@ -225,7 +235,7 @@ export default function SupervisorRequestsPage() {
                 rows={3}
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Explain why you cannot supervise this project..."
+                placeholder="Explain why this proposal cannot be accepted..."
               />
             </div>
           )}
