@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateTeamDto } from './dto/create-team.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 
@@ -596,7 +597,32 @@ async getStudentTeamOverview(authUserId: string) {
   };
 }
 
-async deleteTeam(leaderId: string) {
+  async updateTeam(
+    leaderId: string,
+    updateTeamDto: UpdateTeamDto,
+  ) {
+    const team = await this.prisma.team.findFirst({
+      where: { leaderId },
+    });
+
+    if (!team) {
+      throw new BadRequestException('You are not leading any team');
+    }
+
+    await this.assertTeamNotLocked(team.id);
+
+    return this.prisma.team.update({
+      where: { id: team.id },
+      data: {
+        name: updateTeamDto.name.trim(),
+        domain: updateTeamDto.domain.trim(),
+        projectTitle: updateTeamDto.projectTitle?.trim() || null,
+        projectAbstract: updateTeamDto.projectAbstract?.trim() || null,
+      },
+    });
+  }
+
+  async deleteTeam(leaderId: string) {
   const team = await this.prisma.team.findFirst({
     where: { leaderId },
   });

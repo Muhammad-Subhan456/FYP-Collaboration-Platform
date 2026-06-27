@@ -91,20 +91,25 @@ export class SupervisorPagesService {
   }
 
   async getInvitations(supervisorId: string) {
-    const [availableProposals, invitations] =
+    const [browseTargets, invitations, atCapacity] =
       await Promise.all([
-        this.proposalsService.getAllProposals(),
+        this.proposalsService.getInvitationBrowseTargets(
+          supervisorId,
+        ),
         this.proposalsService.getSupervisorInvitations(
+          supervisorId,
+        ),
+        this.proposalsService.isSupervisorAtCapacity(
           supervisorId,
         ),
       ]);
 
     const profileIds = [
-      ...availableProposals.map(
-        (p) => p.teamLeaderAuthUserId,
+      ...browseTargets.map(
+        (target) => target.teamLeaderAuthUserId,
       ),
       ...invitations.map(
-        (i) => i.proposal.teamLeaderAuthUserId,
+        (i) => i.proposal?.teamLeaderAuthUserId,
       ),
     ].filter((id): id is string => !!id);
 
@@ -116,16 +121,11 @@ export class SupervisorPagesService {
         : {};
 
     return {
-      availableProposals,
+      browseTargets,
       invitations,
       profiles,
+      atCapacity,
     };
-  }
-
-  getProposals(supervisorId: string) {
-    return this.proposalsService.getSupervisorReviewQueue(
-      supervisorId,
-    );
   }
 
   async getTeams(supervisorId: string) {

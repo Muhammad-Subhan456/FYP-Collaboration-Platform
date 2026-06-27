@@ -83,13 +83,6 @@ export class SupervisorController {
     );
   }
 
-  @Get('proposals')
-  getProposals(@Req() req: { user: { userId: string } }) {
-    return this.supervisorPagesService.getProposals(
-      req.user.userId,
-    );
-  }
-
   @Get('reviews')
   getReviews(
     @Req() req: { user: { userId: string } },

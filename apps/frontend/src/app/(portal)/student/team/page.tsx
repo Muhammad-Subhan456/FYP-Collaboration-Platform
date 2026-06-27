@@ -55,7 +55,15 @@ const createTeamSchema = z.object({
   maxMembers: z.number().min(2).max(6),
 });
 
+const editTeamSchema = z.object({
+  name: z.string().min(2, "Team name is required"),
+  domain: z.string().min(2, "Domain is required"),
+  projectTitle: z.string().optional(),
+  projectAbstract: z.string().optional(),
+});
+
 type CreateTeamForm = z.infer<typeof createTeamSchema>;
+type EditTeamForm = z.infer<typeof editTeamSchema>;
 
 export default function StudentTeamPage() {
   const { user } = useAuth();
@@ -65,6 +73,11 @@ export default function StudentTeamPage() {
   const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
   const [roleDrafts, setRoleDrafts] = useState<Record<string, string>>({});
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [joiningTeamId, setJoiningTeamId] = useState<string | null>(null);
+  const [joinedTeamIds, setJoinedTeamIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [isEditingTeam, setIsEditingTeam] = useState(false);
 
   const overviewQuery = useQuery({
     queryKey: ["student", "team", user?.userId],
@@ -106,11 +119,40 @@ export default function StudentTeamPage() {
 
   const joinMutation = useMutation({
     mutationFn: teamService.requestToJoin,
-    onSuccess: () => {
+    onMutate: (teamId) => {
+      setJoiningTeamId(teamId);
+    },
+    onSuccess: (_, teamId) => {
       toast.success("Join request sent!");
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setJoinedTeamIds((prev) => new Set(prev).add(teamId));
     },
     onError: (e) => toast.error(getErrorMessage(e)),
+    onSettled: () => {
+      setJoiningTeamId(null);
+    },
+  });
+
+  const updateTeamMutation = useMutation({
+    mutationFn: teamService.updateTeam,
+    onSuccess: () => {
+      toast.success("Team updated");
+      setIsEditingTeam(false);
+      invalidateTeam();
+      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const editTeamForm = useForm<EditTeamForm>({
+    resolver: zodResolver(editTeamSchema),
+    values: overviewQuery.data?.team
+      ? {
+          name: overviewQuery.data.team.name,
+          domain: overviewQuery.data.team.domain,
+          projectTitle: overviewQuery.data.team.projectTitle ?? "",
+          projectAbstract: overviewQuery.data.team.projectAbstract ?? "",
+        }
+      : undefined,
   });
 
   const approveMutation = useMutation({
@@ -208,7 +250,7 @@ export default function StudentTeamPage() {
         />
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
@@ -216,10 +258,69 @@ export default function StudentTeamPage() {
                 </CardTitle>
                 <CardDescription>{team.domain}</CardDescription>
               </div>
-              <StatusBadge status={team.isOpen ? "ACTIVE" : "INACTIVE"} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={team.isOpen ? "ACTIVE" : "INACTIVE"} />
+                {isLeader && !isWorkflowLocked && !isEditingTeam && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingTeam(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit Team
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {isEditingTeam && isLeader && !isWorkflowLocked ? (
+              <form
+                onSubmit={editTeamForm.handleSubmit((data) =>
+                  updateTeamMutation.mutate(data),
+                )}
+                className="space-y-4 rounded-lg border p-4"
+              >
+                <div className="space-y-2">
+                  <Label>Team Name</Label>
+                  <Input {...editTeamForm.register("name")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Domain</Label>
+                  <Input {...editTeamForm.register("domain")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Project Title</Label>
+                  <Input {...editTeamForm.register("projectTitle")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Project Abstract</Label>
+                  <Textarea
+                    rows={3}
+                    {...editTeamForm.register("projectAbstract")}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    disabled={updateTeamMutation.isPending}
+                  >
+                    {updateTeamMutation.isPending && (
+                      <Loader2 className="animate-spin" />
+                    )}
+                    Save Changes
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsEditingTeam(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
             {team.projectTitle && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground">
@@ -298,6 +399,8 @@ export default function StudentTeamPage() {
                 </Button>
               )}
             </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -354,7 +457,7 @@ export default function StudentTeamPage() {
                         <Eye className="h-4 w-4" />
                         View Profile
                       </Button>
-                      {isLeader && m.authUserId !== team.leaderId && (
+                      {isLeader && !isWorkflowLocked && m.authUserId !== team.leaderId && (
                         isEditing ? (
                           <>
                             <Input
@@ -577,12 +680,16 @@ export default function StudentTeamPage() {
                       <Button
                         size="sm"
                         onClick={() => joinMutation.mutate(t.id)}
-                        disabled={joinMutation.isPending}
+                        disabled={
+                          joiningTeamId === t.id || joinedTeamIds.has(t.id)
+                        }
                       >
-                        {joinMutation.isPending && (
+                        {joiningTeamId === t.id && (
                           <Loader2 className="animate-spin" />
                         )}
-                        Request to Join
+                        {joinedTeamIds.has(t.id)
+                          ? "Request Sent"
+                          : "Request to Join"}
                       </Button>
                     </div>
                   </div>

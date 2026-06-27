@@ -147,6 +147,19 @@ export class ProposalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
+  @Post('teams/:teamId/invite')
+  inviteTeam(
+    @Param('teamId') teamId: string,
+    @Req() req: any,
+  ) {
+    return this.proposalsService.inviteTeam(
+      teamId,
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Post(':proposalId/invite')
   inviteProposal(
     @Param('proposalId') proposalId: string,

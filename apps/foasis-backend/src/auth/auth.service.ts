@@ -8,6 +8,7 @@ import {
   buildRoleNotification,
 } from '../common/helpers/notification-payload';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
+import { SUPERVISOR_MAX_ACCEPTED_TEAMS } from '../proposals/supervisor-capacity.constants';
 
 @Injectable()
 export class AuthService {
@@ -194,7 +195,7 @@ async listSupervisorsForBrowsing() {
     ]),
   );
 
-  const maxTeams = Number(process.env.SUPERVISOR_MAX_TEAMS ?? 5);
+  const maxTeams = SUPERVISOR_MAX_ACCEPTED_TEAMS;
 
   return supervisors.map((supervisor) => {
     const profile = profileByUserId.get(supervisor.id);

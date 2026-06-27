@@ -35,7 +35,7 @@ const TYPE_FALLBACK_ROUTES: Record<string, string> = {
   PROPOSAL_REJECTED: "/student/proposal",
   PROPOSAL_SUBMITTED: "/student/proposal",
   PROPOSAL_RESUBMITTED: "/student/proposal",
-  SUPERVISOR_REQUEST_RECEIVED: "/supervisor/proposals",
+  SUPERVISOR_REQUEST_RECEIVED: "/supervisor/requests",
   PROFILE_COMPLETED: "/student/dashboard",
   INVITATION_ACCEPTED: "/supervisor/teams",
   INVITATION_REJECTED: "/supervisor/invitations",

@@ -76,6 +76,11 @@ export const proposalService = {
     return res.data;
   },
 
+  inviteTeam: async (teamId: string) => {
+    const res = await api.post(`/proposals/teams/${teamId}/invite`);
+    return res.data;
+  },
+
   getSupervisedProposals: async () => {
     const res = await api.get<Proposal[]>("/proposals/supervised");
     return res.data;

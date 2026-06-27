@@ -55,6 +55,16 @@ export const teamService = {
     return res.data;
   },
 
+  updateTeam: async (data: {
+    name: string;
+    domain: string;
+    projectTitle?: string;
+    projectAbstract?: string;
+  }) => {
+    const res = await api.patch<Team>("/teams/my-team", data);
+    return res.data;
+  },
+
   requestToJoin: async (teamId: string) => {
     const res = await api.post<JoinRequest>(`/teams/${teamId}/join`);
     return res.data;

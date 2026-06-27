@@ -21,11 +21,12 @@ export interface SupervisorRequest {
 
 export interface SupervisorInvitation {
   id: string;
-  proposalId: string;
+  proposalId?: string | null;
+  teamId?: string | null;
   supervisorId: string;
   status: RequestStatus;
   createdAt: string;
-  proposal: Proposal;
+  proposal?: Proposal | null;
 }
 
 export interface ReviewSubmissionInput {

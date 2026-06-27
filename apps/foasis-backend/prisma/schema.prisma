@@ -196,12 +196,15 @@ model SupervisorRequest {
 
 model SupervisorInvitation {
   id           String        @id @default(uuid())
-  proposalId   String
+  proposalId   String?
+  teamId       String?
   supervisorId String
   status       RequestStatus @default(PENDING)
   createdAt    DateTime      @default(now())
-  proposal     Proposal      @relation(fields: [proposalId], references: [id])
-  @@unique([proposalId, supervisorId])
+  proposal     Proposal?     @relation(fields: [proposalId], references: [id])
+
+  @@index([proposalId, supervisorId])
+  @@index([teamId, supervisorId])
 }
 
 // ─── Notifications (from notification-service) ────────────────────────────

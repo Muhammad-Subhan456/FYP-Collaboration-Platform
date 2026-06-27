@@ -24,10 +24,26 @@ export interface SupervisorTeamsPageData {
   profiles: Record<string, UserProfile>;
 }
 
+export interface InvitationBrowseTarget {
+  inviteKey: string;
+  kind: "team" | "proposal";
+  teamId: string;
+  proposalId?: string | null;
+  teamName: string;
+  domain: string;
+  title?: string | null;
+  abstract?: string | null;
+  teamLeaderAuthUserId?: string | null;
+  availability: "AVAILABLE" | "UNAVAILABLE";
+  canInvite: boolean;
+  invitationSent: boolean;
+}
+
 export interface SupervisorInvitationsPageData {
-  availableProposals: Proposal[];
+  browseTargets: InvitationBrowseTarget[];
   invitations: SupervisorInvitation[];
   profiles: Record<string, UserProfile>;
+  atCapacity: boolean;
 }
 
 export interface SupervisorRequestsPageData {
@@ -107,11 +123,6 @@ export const supervisorPageService = {
     const res = await api.get<SupervisorInvitationsPageData>(
       "/supervisor/invitations",
     );
-    return res.data;
-  },
-
-  getProposals: async () => {
-    const res = await api.get<Proposal[]>("/supervisor/proposals");
     return res.data;
   },
 

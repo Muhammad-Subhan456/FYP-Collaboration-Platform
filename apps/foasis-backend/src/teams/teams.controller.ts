@@ -17,6 +17,7 @@ import { InternalOrJwtAuthGuard } from '../common/guards/internal-or-jwt-auth.gu
 
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamsService } from './teams.service';
 
 @Controller('teams')
@@ -114,6 +115,19 @@ export class TeamsController {
     return this.teamsService.rejectRequest(
       requestId,
       req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Patch('my-team')
+  updateTeam(
+    @Req() req: any,
+    @Body() updateTeamDto: UpdateTeamDto,
+  ) {
+    return this.teamsService.updateTeam(
+      req.user.userId,
+      updateTeamDto,
     );
   }
 
