@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Check, FileText, Loader2, X } from "lucide-react";
+import { Check, ExternalLink, FileText, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -121,6 +121,18 @@ export default function SupervisorProposalsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">{proposal.abstract}</p>
+                {proposal.proposalPdfUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a
+                      href={proposal.proposalPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      View Proposal PDF
+                    </a>
+                  </Button>
+                )}
                 {proposal.teamLeaderAuthUserId && (
                   <p className="text-sm text-muted-foreground">
                     Team leader:{" "}

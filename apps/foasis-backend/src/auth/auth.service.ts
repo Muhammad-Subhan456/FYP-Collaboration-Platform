@@ -149,6 +149,74 @@ async listSupervisors() {
   });
 }
 
+async listSupervisorsForBrowsing() {
+  const supervisors = await this.prisma.user.findMany({
+    where: {
+      role: 'SUPERVISOR',
+      isActive: true,
+    },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+    orderBy: { fullName: 'asc' },
+  });
+
+  if (supervisors.length === 0) {
+    return [];
+  }
+
+  const supervisorIds = supervisors.map((s) => s.id);
+
+  const [profiles, supervisedCounts] = await Promise.all([
+    this.prisma.userProfile.findMany({
+      where: { authUserId: { in: supervisorIds } },
+    }),
+    this.prisma.proposal.groupBy({
+      by: ['assignedSupervisorId'],
+      where: {
+        assignedSupervisorId: { in: supervisorIds },
+        status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const profileByUserId = new Map(
+    profiles.map((profile) => [profile.authUserId, profile]),
+  );
+
+  const countBySupervisorId = new Map(
+    supervisedCounts.map((row) => [
+      row.assignedSupervisorId!,
+      row._count._all,
+    ]),
+  );
+
+  const maxTeams = Number(process.env.SUPERVISOR_MAX_TEAMS ?? 5);
+
+  return supervisors.map((supervisor) => {
+    const profile = profileByUserId.get(supervisor.id);
+    const supervisedTeamCount =
+      countBySupervisorId.get(supervisor.id) ?? 0;
+
+    return {
+      id: supervisor.id,
+      fullName: supervisor.fullName,
+      email: supervisor.email,
+      profilePicture: profile?.profilePicture ?? null,
+      department: profile?.department ?? null,
+      designation: profile?.designation ?? null,
+      researchAreas: profile?.researchAreas ?? [],
+      biography: profile?.biography ?? null,
+      officeHours: profile?.officeHours ?? null,
+      supervisedTeamCount,
+      isAvailable: supervisedTeamCount < maxTeams,
+    };
+  });
+}
+
 async listAllUsers() {
   return this.prisma.user.findMany({
     orderBy: { createdAt: 'desc' },

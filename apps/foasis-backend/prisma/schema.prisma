@@ -103,17 +103,18 @@ enum JoinRequestStatus {
 }
 
 model Team {
-  id          String   @id @default(uuid())
-  name        String
-  domain      String
-  description String?
-  maxMembers  Int
-  leaderId    String
-  isOpen      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  members     TeamMember[]
-  joinRequests JoinRequest[]
-  proposal    Proposal?
+  id              String   @id @default(uuid())
+  name            String
+  domain          String
+  projectTitle    String?
+  projectAbstract String?
+  maxMembers      Int
+  leaderId        String
+  isOpen          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  members         TeamMember[]
+  joinRequests    JoinRequest[]
+  proposal        Proposal?
 }
 
 model TeamMember {
@@ -152,6 +153,7 @@ enum RequestStatus {
   PENDING
   ACCEPTED
   REJECTED
+  IGNORED
   CANCELLED
 }
 
@@ -162,6 +164,7 @@ model Proposal {
   title                String
   domain               String
   abstract             String
+  proposalPdfUrl       String?
   status               ProposalStatus @default(DRAFT)
   assignedSupervisorId String?
   reviewFeedback       String?
@@ -176,13 +179,19 @@ model Proposal {
 }
 
 model SupervisorRequest {
-  id           String        @id @default(uuid())
-  proposalId   String
-  supervisorId String
-  status       RequestStatus @default(PENDING)
-  createdAt    DateTime      @default(now())
-  proposal     Proposal      @relation(fields: [proposalId], references: [id])
-  @@unique([proposalId, supervisorId])
+  id              String        @id @default(uuid())
+  proposalId      String
+  supervisorId    String
+  status          RequestStatus @default(PENDING)
+  rejectionReason String?
+  expiresAt       DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  proposal        Proposal      @relation(fields: [proposalId], references: [id])
+
+  @@index([proposalId, status])
+  @@index([status, expiresAt])
+  @@index([proposalId, supervisorId])
 }
 
 model SupervisorInvitation {

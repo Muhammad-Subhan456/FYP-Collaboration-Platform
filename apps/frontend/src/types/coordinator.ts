@@ -61,7 +61,8 @@ export interface CoordinatorUserTeamContext {
     id: string;
     name: string;
     domain: string;
-    description?: string | null;
+    projectTitle?: string | null;
+    projectAbstract?: string | null;
     maxMembers: number;
     leaderId: string;
     isOpen: boolean;

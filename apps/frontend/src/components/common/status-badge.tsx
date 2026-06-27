@@ -11,6 +11,7 @@ const statusStyles: Record<string, string> = {
   CHANGES_REQUIRED: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   PENDING: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   ACCEPTED: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  IGNORED: "bg-slate-500/15 text-slate-600",
   CANCELLED: "bg-slate-500/15 text-slate-600",
   ACTIVE: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   INACTIVE: "bg-slate-500/15 text-slate-600",

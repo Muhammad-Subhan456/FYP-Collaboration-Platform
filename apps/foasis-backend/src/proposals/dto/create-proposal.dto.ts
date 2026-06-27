@@ -12,4 +12,7 @@ export class CreateProposalDto {
 
   @IsString()
   abstract!: string;
+
+  @IsString()
+  proposalPdfUrl!: string;
 }

@@ -1,4 +1,4 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 
 export class ResubmitProposalDto {
   @IsString()
@@ -12,4 +12,8 @@ export class ResubmitProposalDto {
   @IsString()
   @MinLength(20)
   abstract!: string;
+
+  @IsOptional()
+  @IsString()
+  proposalPdfUrl?: string;
 }

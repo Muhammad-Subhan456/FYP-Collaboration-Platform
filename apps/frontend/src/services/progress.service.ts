@@ -109,4 +109,17 @@ export const uploadService = {
     });
     return res.data;
   },
+
+  uploadProposalPdf: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await api.post<UploadResponse>(
+      "/uploads?type=proposal-pdf",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
+    return res.data;
+  },
 };

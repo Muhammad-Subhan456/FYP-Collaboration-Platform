@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, ExternalLink, Loader2, X } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
@@ -24,6 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
@@ -38,6 +40,7 @@ export default function SupervisorRequestsPage() {
     request: SupervisorRequest;
     type: "accept" | "reject";
   } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const pageQuery = useSupervisorPageQuery(
     "requests",
@@ -56,11 +59,18 @@ export default function SupervisorRequestsPage() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: proposalService.rejectSupervisorRequest,
+    mutationFn: ({
+      requestId,
+      reason,
+    }: {
+      requestId: string;
+      reason: string;
+    }) => proposalService.rejectSupervisorRequest(requestId, reason),
     onSuccess: () => {
       toast.success("Request rejected");
       queryClient.invalidateQueries({ queryKey: ["supervisor", "requests"] });
       setConfirmAction(null);
+      setRejectionReason("");
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -84,9 +94,16 @@ export default function SupervisorRequestsPage() {
     if (!confirmAction) return;
     if (confirmAction.type === "accept") {
       acceptMutation.mutate(confirmAction.request.id);
-    } else {
-      rejectMutation.mutate(confirmAction.request.id);
+      return;
     }
+    if (!rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
+    rejectMutation.mutate({
+      requestId: confirmAction.request.id,
+      reason: rejectionReason.trim(),
+    });
   };
 
   return (
@@ -124,6 +141,18 @@ export default function SupervisorRequestsPage() {
                   <p className="text-sm text-muted-foreground">
                     {request.proposal.abstract}
                   </p>
+                  {request.proposal.proposalPdfUrl && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a
+                        href={request.proposal.proposalPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        View Proposal PDF
+                      </a>
+                    </Button>
+                  )}
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     {leaderId && (
                       <span>
@@ -132,6 +161,11 @@ export default function SupervisorRequestsPage() {
                       </span>
                     )}
                     <span>Requested {formatDate(request.createdAt)}</span>
+                    {request.expiresAt && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        Expires {formatDate(request.expiresAt)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -163,7 +197,12 @@ export default function SupervisorRequestsPage() {
 
       <Dialog
         open={!!confirmAction}
-        onOpenChange={(open) => !open && setConfirmAction(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmAction(null);
+            setRejectionReason("");
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -175,9 +214,21 @@ export default function SupervisorRequestsPage() {
             <DialogDescription>
               {confirmAction?.type === "accept"
                 ? `You will become the supervisor for "${confirmAction?.request.proposal.title}".`
-                : `The team will be notified that you declined "${confirmAction?.request.proposal.title}".`}
+                : `Provide a reason for declining "${confirmAction?.request.proposal.title}".`}
             </DialogDescription>
           </DialogHeader>
+          {confirmAction?.type === "reject" && (
+            <div className="space-y-2">
+              <Label htmlFor="rejection-reason">Rejection reason</Label>
+              <Textarea
+                id="rejection-reason"
+                rows={3}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explain why you cannot supervise this project..."
+              />
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

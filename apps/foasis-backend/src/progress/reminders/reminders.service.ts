@@ -32,6 +32,24 @@ export class RemindersService {
     }
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async expireSupervisorRequests() {
+    try {
+      const result =
+        await this.proposalsService.expirePendingSupervisorRequests();
+
+      if (result.expired > 0) {
+        this.logger.log(
+          `Expired ${result.expired} supervisor request(s)`,
+        );
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to expire supervisor requests: ${error.message}`,
+      );
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async sendDeadlineReminders() {
     const now = new Date();

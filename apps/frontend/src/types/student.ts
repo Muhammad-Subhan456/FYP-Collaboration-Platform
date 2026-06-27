@@ -24,7 +24,8 @@ export interface Team {
   id: string;
   name: string;
   domain: string;
-  description?: string | null;
+  projectTitle?: string | null;
+  projectAbstract?: string | null;
   maxMembers: number;
   leaderId: string;
   isOpen: boolean;
@@ -54,6 +55,7 @@ export interface Proposal {
   title: string;
   domain: string;
   abstract: string;
+  proposalPdfUrl?: string | null;
   status: ProposalStatus;
   assignedSupervisorId?: string | null;
   reviewFeedback?: string | null;
@@ -66,6 +68,14 @@ export interface Supervisor {
   id: string;
   fullName: string;
   email: string;
+  profilePicture?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  researchAreas?: string[];
+  biography?: string | null;
+  officeHours?: string | null;
+  supervisedTeamCount?: number;
+  isAvailable?: boolean;
 }
 
 export interface Deliverable {

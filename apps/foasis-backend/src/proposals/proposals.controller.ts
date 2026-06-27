@@ -20,6 +20,7 @@ import { CreateProposalDto } from './dto/create-proposal.dto';
 import { ProposalsService } from './proposals.service';
 import { RequestSupervisorDto } from './dto/request-supervisor.dto';
 import { RejectProposalDto } from './dto/reject-proposal.dto';
+import { RejectRequestDto } from './dto/reject-request.dto';
 import { ResubmitProposalDto } from './dto/resubmit-proposal.dto';
 
 @Controller('proposals')
@@ -110,10 +111,12 @@ export class ProposalsController {
   rejectRequest(
     @Param('requestId') requestId: string,
     @Req() req: any,
+    @Body() dto: RejectRequestDto,
   ) {
     return this.proposalsService.rejectRequest(
       requestId,
       req.user.userId,
+      dto.reason,
     );
   }
 

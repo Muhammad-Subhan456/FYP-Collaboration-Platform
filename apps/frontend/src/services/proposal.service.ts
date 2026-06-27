@@ -10,6 +10,7 @@ export interface CreateProposalInput {
   title: string;
   domain: string;
   abstract: string;
+  proposalPdfUrl: string;
 }
 
 export const proposalService = {
@@ -50,9 +51,10 @@ export const proposalService = {
     return res.data;
   },
 
-  rejectSupervisorRequest: async (requestId: string) => {
+  rejectSupervisorRequest: async (requestId: string, reason: string) => {
     const res = await api.post(
       `/proposals/requests/${requestId}/reject`,
+      { reason },
     );
     return res.data;
   },
@@ -143,6 +145,7 @@ export const proposalService = {
     title: string;
     domain: string;
     abstract: string;
+    proposalPdfUrl?: string;
   }) => {
     const res = await api.patch<Proposal>(
       "/proposals/my-proposal/resubmit",

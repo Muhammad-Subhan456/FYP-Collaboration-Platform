@@ -81,7 +81,8 @@ export default function CoordinatorTeamsPage() {
     return (
       team.name.toLowerCase().includes(q) ||
       team.domain.toLowerCase().includes(q) ||
-      (team.description?.toLowerCase().includes(q) ?? false)
+      (team.projectTitle?.toLowerCase().includes(q) ?? false) ||
+      (team.projectAbstract?.toLowerCase().includes(q) ?? false)
     );
   });
 
@@ -142,8 +143,11 @@ export default function CoordinatorTeamsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {team.description && (
-                    <p className="text-sm text-muted-foreground">{team.description}</p>
+                  {team.projectTitle && (
+                    <p className="text-sm font-medium">{team.projectTitle}</p>
+                  )}
+                  {team.projectAbstract && (
+                    <p className="text-sm text-muted-foreground">{team.projectAbstract}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
                     Created {formatDate(team.createdAt)}

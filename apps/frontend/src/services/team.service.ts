@@ -5,7 +5,8 @@ import type { JoinRequest, Team, TeamMember } from "@/types/student";
 export interface CreateTeamInput {
   name: string;
   domain: string;
-  description?: string;
+  projectTitle?: string;
+  projectAbstract?: string;
   maxMembers: number;
 }
 
@@ -16,6 +17,9 @@ export interface StudentTeamOverview {
   isLeader: boolean;
   profiles: Record<string, UserProfile>;
   browseTeams?: Team[];
+  isWorkflowLocked?: boolean;
+  canDeleteTeam?: boolean;
+  canLeaveTeam?: boolean;
 }
 
 export const teamService = {
@@ -81,6 +85,16 @@ export const teamService = {
       `/teams/my-team/members/${memberId}/role`,
       { teamRole: teamRole.trim() || null },
     );
+    return res.data;
+  },
+
+  leaveTeam: async () => {
+    const res = await api.post("/teams/my-team/leave");
+    return res.data;
+  },
+
+  deleteTeam: async () => {
+    const res = await api.post("/teams/my-team/delete");
     return res.data;
   },
 };

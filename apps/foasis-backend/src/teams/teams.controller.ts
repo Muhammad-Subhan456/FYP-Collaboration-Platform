@@ -119,6 +119,20 @@ export class TeamsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
+  @Post('my-team/leave')
+  leaveTeam(@Req() req: any) {
+    return this.teamsService.leaveTeam(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Post('my-team/delete')
+  deleteTeam(@Req() req: any) {
+    return this.teamsService.deleteTeam(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Patch('my-team/members/:memberId/role')
   updateMemberRole(
     @Req() req: any,

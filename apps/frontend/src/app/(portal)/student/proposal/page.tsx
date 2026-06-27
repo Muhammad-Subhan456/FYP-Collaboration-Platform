@@ -8,7 +8,9 @@ import { z } from "zod";
 import { toast } from "sonner";
 import {
   Check,
+  ExternalLink,
   FileText,
+  History,
   Loader2,
   Mail,
   Send,
@@ -19,6 +21,7 @@ import {
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { StatusBadge } from "@/components/common/status-badge";
+import { SupervisorBrowseCard } from "@/components/proposal/supervisor-browse-card";
 
 import { SupervisorProfileModal } from "@/components/profile/supervisor-profile-modal";
 import { Button } from "@/components/ui/button";
@@ -32,22 +35,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
 import { useStudentPageQuery } from "@/hooks/use-student-page";
 import { proposalService } from "@/services/proposal.service";
+import { uploadService } from "@/services/progress.service";
 import { studentService } from "@/services/student.service";
 import { useAuth } from "@/providers/auth-provider";
 import type { SupervisorInvitation } from "@/types/supervisor";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const proposalSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -60,14 +57,30 @@ type ProposalForm = z.infer<typeof proposalSchema>;
 export default function StudentProposalPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [selectedSupervisor, setSelectedSupervisor] = useState("");
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [sendingSupervisorId, setSendingSupervisorId] = useState<string | null>(
+    null,
+  );
+  const [proposalPdfUrl, setProposalPdfUrl] = useState<string | null>(null);
+  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const pageQuery = useStudentPageQuery(
     "proposal",
     studentService.getProposal,
   );
+
+  const pageData = pageQuery.data;
+  const team = pageData?.team ?? null;
+  const proposal = pageData?.proposal ?? null;
+  const invitations = pageData?.invitations ?? [];
+  const supervisors = pageData?.supervisors ?? [];
+  const requestHistory = pageData?.requestHistory ?? [];
+  const activePendingRequest = pageData?.activePendingRequest ?? null;
+  const isWorkflowLocked = pageData?.isWorkflowLocked ?? false;
+  const profiles = pageData?.profiles;
 
   const {
     register,
@@ -75,14 +88,14 @@ export default function StudentProposalPage() {
     formState: { errors },
   } = useForm<ProposalForm>({
     resolver: zodResolver(proposalSchema),
+    values: team
+      ? {
+          title: team.projectTitle ?? "",
+          domain: team.domain ?? "",
+          abstract: team.projectAbstract ?? "",
+        }
+      : undefined,
   });
-
-  const pageData = pageQuery.data;
-  const team = pageData?.team ?? null;
-  const proposal = pageData?.proposal ?? null;
-  const invitations = pageData?.invitations ?? [];
-  const supervisors = pageData?.supervisors ?? [];
-  const profiles = pageData?.profiles;
 
   const resubmitForm = useForm<ProposalForm>({
     resolver: zodResolver(proposalSchema),
@@ -100,10 +113,12 @@ export default function StudentProposalPage() {
       proposalService.createProposal({
         ...data,
         teamId: team!.id,
+        proposalPdfUrl: proposalPdfUrl!,
       }),
     onSuccess: () => {
       toast.success("Proposal created!");
       queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
+      queryClient.invalidateQueries({ queryKey: ["student", "team"] });
       queryClient.invalidateQueries({ queryKey: ["proposal"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
@@ -111,18 +126,19 @@ export default function StudentProposalPage() {
   });
 
   const requestMutation = useMutation({
-    mutationFn: () =>
-      proposalService.requestSupervisor(
-        proposal!.id,
-        selectedSupervisor,
-      ),
+    mutationFn: (supervisorId: string) =>
+      proposalService.requestSupervisor(proposal!.id, supervisorId),
     onSuccess: () => {
-      toast.success("Supervisor request sent!");
+      toast.success("Supervisor request sent! Supervisor has 5 minutes to respond.");
       queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
       queryClient.invalidateQueries({ queryKey: ["proposal"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setSendingSupervisorId(null);
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
+    onError: (e) => {
+      toast.error(getErrorMessage(e));
+      setSendingSupervisorId(null);
+    },
   });
 
   const acceptInvitationMutation = useMutation({
@@ -176,6 +192,29 @@ export default function StudentProposalPage() {
 
   const isTeamLeader = !!user && !!team && team.leaderId === user.userId;
 
+  const handlePdfUpload = async (file: File) => {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Only PDF files are allowed");
+      return;
+    }
+    setUploadingPdf(true);
+    try {
+      const uploaded = await uploadService.uploadProposalPdf(file);
+      setProposalPdfUrl(uploaded.fileUrl);
+      setPdfFileName(file.name);
+      toast.success("Proposal PDF uploaded");
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setUploadingPdf(false);
+    }
+  };
+
+  const handleSendRequest = (supervisorId: string) => {
+    setSendingSupervisorId(supervisorId);
+    requestMutation.mutate(supervisorId);
+  };
+
   if (pageQuery.isLoading) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
@@ -202,6 +241,15 @@ export default function StudentProposalPage() {
   }
 
   if (!proposal) {
+    if (!isTeamLeader) {
+      return (
+        <EmptyState
+          title="Awaiting team leader"
+          description="Only the team leader can create the FYP proposal."
+        />
+      );
+    }
+
     return (
       <Card className="max-w-2xl">
         <CardHeader>
@@ -210,12 +258,19 @@ export default function StudentProposalPage() {
             Create Proposal
           </CardTitle>
           <CardDescription>
-            Submit your FYP project proposal for your team
+            Submit your FYP project proposal for your team. Fields from team
+            creation are prefilled when available.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form
-            onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+            onSubmit={handleSubmit((data) => {
+              if (!proposalPdfUrl) {
+                toast.error("Please upload a proposal PDF");
+                return;
+              }
+              createMutation.mutate(data);
+            })}
             className="space-y-4"
           >
             <div className="space-y-2">
@@ -252,7 +307,40 @@ export default function StudentProposalPage() {
                 <p className="text-sm text-destructive">{errors.abstract.message}</p>
               )}
             </div>
-            <Button type="submit" disabled={createMutation.isPending}>
+            <div className="space-y-2">
+              <Label htmlFor="proposal-pdf">Proposal PDF (required)</Label>
+              <input
+                ref={pdfInputRef}
+                id="proposal-pdf"
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handlePdfUpload(file);
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploadingPdf}
+                  onClick={() => pdfInputRef.current?.click()}
+                >
+                  {uploadingPdf && <Loader2 className="animate-spin" />}
+                  {pdfFileName ? "Replace PDF" : "Upload PDF"}
+                </Button>
+                {pdfFileName && (
+                  <span className="text-sm text-muted-foreground">
+                    {pdfFileName}
+                  </span>
+                )}
+              </div>
+            </div>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || uploadingPdf || !proposalPdfUrl}
+            >
               {createMutation.isPending && <Loader2 className="animate-spin" />}
               Submit Proposal
             </Button>
@@ -263,9 +351,12 @@ export default function StudentProposalPage() {
   }
 
   const canRequestSupervisor =
+    isTeamLeader &&
+    !isWorkflowLocked &&
     !proposal.assignedSupervisorId &&
     proposal.status !== "APPROVED" &&
-    proposal.status !== "REJECTED";
+    proposal.status !== "REJECTED" &&
+    !activePendingRequest;
 
   const pendingInvitations = invitations.filter(
     (inv) => inv.status === "PENDING",
@@ -301,6 +392,23 @@ export default function StudentProposalPage() {
           <p className="text-xs text-muted-foreground">
             Created {formatDate(proposal.createdAt)}
           </p>
+          {proposal.proposalPdfUrl && (
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={proposal.proposalPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View Proposal PDF
+              </a>
+            </Button>
+          )}
+          {isWorkflowLocked && (
+            <p className="text-sm text-amber-600 dark:text-amber-400">
+              Proposal workflow is locked after supervisor acceptance.
+            </p>
+          )}
           {supervisorName && (
             <p className="text-sm text-emerald-600 dark:text-emerald-400">
               Supervisor: {supervisorName}
@@ -382,7 +490,70 @@ export default function StudentProposalPage() {
         </Card>
       )}
 
-      {(invitations.length > 0 || pendingInvitations.length > 0) && (
+      {requestHistory.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Proposal Request History
+            </CardTitle>
+            <CardDescription>
+              Previous supervision requests sent by your team
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {requestHistory.map((request) => (
+              <div
+                key={request.id}
+                className="flex flex-col gap-2 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      {getDisplayName(profiles, request.supervisorId)}
+                    </span>
+                    <StatusBadge status={request.status} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Sent {formatDate(request.createdAt)}
+                    {request.status === "IGNORED" && request.resolvedAt && (
+                      <> · Ignored {formatDate(request.resolvedAt)}</>
+                    )}
+                  </p>
+                  {request.status === "REJECTED" && request.rejectionReason && (
+                    <p className="mt-1 text-muted-foreground">
+                      Reason: {request.rejectionReason}
+                    </p>
+                  )}
+                </div>
+                {request.status === "PENDING" && request.expiresAt && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Expires {formatDate(request.expiresAt)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {activePendingRequest && (
+        <Card className="border-amber-500/30">
+          <CardHeader>
+            <CardTitle>Pending Supervision Request</CardTitle>
+            <CardDescription>
+              Waiting for{" "}
+              {getDisplayName(profiles, activePendingRequest.supervisorId)} to
+              respond
+              {activePendingRequest.expiresAt && (
+                <> · expires {formatDate(activePendingRequest.expiresAt)}</>
+              )}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {(invitations.length > 0 || pendingInvitations.length > 0) && !isWorkflowLocked && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -429,37 +600,33 @@ export default function StudentProposalPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
-              Request Supervisor
+              Browse Supervisors
             </CardTitle>
             <CardDescription>
-              Select a supervisor and send a supervision request
+              Compare supervisor profiles and send a supervision request. Each
+              request expires in 5 minutes if not answered.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Select
-              value={selectedSupervisor}
-              onValueChange={setSelectedSupervisor}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a supervisor" />
-              </SelectTrigger>
-              <SelectContent>
-                {supervisors.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.fullName} — {s.email}
-                  </SelectItem>
+          <CardContent>
+            {supervisors.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No supervisors available right now.
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {supervisors.map((supervisor) => (
+                  <SupervisorBrowseCard
+                    key={supervisor.id}
+                    supervisor={supervisor}
+                    profile={profiles?.[supervisor.id]}
+                    isSending={sendingSupervisorId === supervisor.id}
+                    disabled={requestMutation.isPending}
+                    onViewProfile={() => setViewProfileId(supervisor.id)}
+                    onSendRequest={() => handleSendRequest(supervisor.id)}
+                  />
                 ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() => requestMutation.mutate()}
-              disabled={!selectedSupervisor || requestMutation.isPending}
-            >
-              {requestMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Send Request
-            </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

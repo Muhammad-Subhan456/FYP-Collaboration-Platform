@@ -286,8 +286,11 @@ function TeamSection({ detail }: { detail: CoordinatorUserDetail }) {
       <div className="rounded-lg border p-4 text-sm">
         <p className="font-medium">{team.team.name}</p>
         <p className="text-muted-foreground">{team.team.domain}</p>
-        {team.team.description && (
-          <p className="mt-2 text-muted-foreground">{team.team.description}</p>
+        {team.team.projectTitle && (
+          <p className="mt-2 font-medium">{team.team.projectTitle}</p>
+        )}
+        {team.team.projectAbstract && (
+          <p className="mt-1 text-muted-foreground">{team.team.projectAbstract}</p>
         )}
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Row

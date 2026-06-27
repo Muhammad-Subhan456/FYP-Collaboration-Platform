@@ -4,6 +4,7 @@ export type RequestStatus =
   | "PENDING"
   | "ACCEPTED"
   | "REJECTED"
+  | "IGNORED"
   | "CANCELLED";
 
 export interface SupervisorRequest {
@@ -11,6 +12,9 @@ export interface SupervisorRequest {
   proposalId: string;
   supervisorId: string;
   status: RequestStatus;
+  rejectionReason?: string | null;
+  expiresAt?: string | null;
+  resolvedAt?: string | null;
   createdAt: string;
   proposal: Proposal;
 }

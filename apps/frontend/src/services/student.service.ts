@@ -2,7 +2,10 @@ import api from "@/lib/axios";
 import type { PaginatedResponse } from "@/types";
 import type { UserProfile } from "@/types/profile";
 import type { Supervisor } from "@/types/student";
-import type { SupervisorInvitation } from "@/types/supervisor";
+import type {
+  SupervisorInvitation,
+  SupervisorRequest,
+} from "@/types/supervisor";
 import type {
   Announcement,
   Deliverable,
@@ -77,6 +80,15 @@ export interface StudentProposalPageData {
   proposal: Proposal | null;
   invitations: SupervisorInvitation[];
   supervisors: Supervisor[];
+  requestHistory: Array<
+    Omit<SupervisorRequest, "proposal"> & { proposal?: SupervisorRequest["proposal"] }
+  >;
+  activePendingRequest:
+    | (Omit<SupervisorRequest, "proposal"> & {
+        proposal?: SupervisorRequest["proposal"];
+      })
+    | null;
+  isWorkflowLocked: boolean;
   profiles: Record<string, UserProfile>;
 }
 

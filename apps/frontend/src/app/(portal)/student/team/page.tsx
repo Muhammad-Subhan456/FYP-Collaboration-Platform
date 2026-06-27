@@ -10,8 +10,10 @@ import {
   Check,
   Eye,
   Loader2,
+  LogOut,
   Pencil,
   Search,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -48,7 +50,8 @@ import type { UserProfile } from "@/types/profile";
 const createTeamSchema = z.object({
   name: z.string().min(2, "Team name is required"),
   domain: z.string().min(2, "Domain is required"),
-  description: z.string().optional(),
+  projectTitle: z.string().optional(),
+  projectAbstract: z.string().optional(),
   maxMembers: z.number().min(2).max(6),
 });
 
@@ -144,6 +147,26 @@ export default function StudentTeamPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const deleteTeamMutation = useMutation({
+    mutationFn: teamService.deleteTeam,
+    onSuccess: () => {
+      toast.success("Team deleted");
+      invalidateTeam();
+      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const leaveTeamMutation = useMutation({
+    mutationFn: teamService.leaveTeam,
+    onSuccess: () => {
+      toast.success("You have left the team");
+      invalidateTeam();
+      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   if (overviewQuery.isLoading) return <DashboardSkeleton />;
 
   if (overviewQuery.isError) {
@@ -168,6 +191,9 @@ export default function StudentTeamPage() {
   const team = overview.team;
   const profiles = overview.profiles;
   const isLeader = overview.isLeader;
+  const canDeleteTeam = overview.canDeleteTeam ?? false;
+  const canLeaveTeam = overview.canLeaveTeam ?? false;
+  const isWorkflowLocked = overview.isWorkflowLocked ?? false;
 
   if (team) {
     const members = overview.members;
@@ -194,10 +220,25 @@ export default function StudentTeamPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {team.description && (
-              <p className="text-sm text-muted-foreground">{team.description}</p>
+            {team.projectTitle && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Project title
+                </p>
+                <p className="text-sm">{team.projectTitle}</p>
+              </div>
             )}
-            <div className="flex gap-6 text-sm">
+            {team.projectAbstract && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Project abstract
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {team.projectAbstract}
+                </p>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-6 text-sm">
               <span>
                 <strong>{members.length}</strong> / {team.maxMembers} members
               </span>
@@ -206,6 +247,55 @@ export default function StudentTeamPage() {
               </span>
               {isLeader && (
                 <span className="font-medium text-primary">You are the leader</span>
+              )}
+            </div>
+            {isWorkflowLocked && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Team composition is locked after supervisor acceptance.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {canDeleteTeam && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deleteTeamMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Delete this team? All members will be removed.",
+                      )
+                    ) {
+                      deleteTeamMutation.mutate();
+                    }
+                  }}
+                >
+                  {deleteTeamMutation.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete Team
+                </Button>
+              )}
+              {canLeaveTeam && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={leaveTeamMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm("Leave this team?")) {
+                      leaveTeamMutation.mutate();
+                    }
+                  }}
+                >
+                  {leaveTeamMutation.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <LogOut className="h-4 w-4" />
+                  )}
+                  Leave Team
+                </Button>
               )}
             </div>
           </CardContent>
@@ -323,7 +413,7 @@ export default function StudentTeamPage() {
           </CardContent>
         </Card>
 
-        {isLeader && (
+        {isLeader && !isWorkflowLocked && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -470,9 +560,14 @@ export default function StudentTeamPage() {
                       </div>
                       <StatusBadge status="ACTIVE" />
                     </div>
-                    {t.description && (
-                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                        {t.description}
+                    {t.projectTitle && (
+                      <p className="mt-2 line-clamp-1 text-sm font-medium">
+                        {t.projectTitle}
+                      </p>
+                    )}
+                    {t.projectAbstract && (
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {t.projectAbstract}
                       </p>
                     )}
                     <div className="mt-3 flex items-center justify-between">
@@ -535,11 +630,20 @@ export default function StudentTeamPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
+                <Label htmlFor="projectTitle">Project Title (optional)</Label>
+                <Input
+                  id="projectTitle"
+                  placeholder="Early project title for your FYP"
+                  {...register("projectTitle")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="projectAbstract">Project Abstract (optional)</Label>
                 <Textarea
-                  id="description"
-                  placeholder="Brief description of your team..."
-                  {...register("description")}
+                  id="projectAbstract"
+                  rows={3}
+                  placeholder="Brief summary to reuse when creating your proposal"
+                  {...register("projectAbstract")}
                 />
               </div>
               <div className="space-y-2">

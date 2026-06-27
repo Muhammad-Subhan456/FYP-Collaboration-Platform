@@ -14,7 +14,11 @@ export class CreateTeamDto {
 
   @IsOptional()
   @IsString()
-  description?: string;
+  projectTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  projectAbstract?: string;
 
   @IsInt()
   @Min(2)

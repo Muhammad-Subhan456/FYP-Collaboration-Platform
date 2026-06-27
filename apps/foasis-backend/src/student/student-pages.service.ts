@@ -256,22 +256,44 @@ export class StudentPagesService {
         proposal: null,
         invitations: [],
         supervisors: [],
+        requestHistory: [],
+        activePendingRequest: null,
+        isWorkflowLocked: false,
         profiles: {},
       };
     }
 
-    const [invitations, supervisors] = await Promise.all([
-      ctx.proposal
-        ? this.proposalsService
-            .getTeamInvitationsByUserId(authUserId)
-            .catch(() => [])
-        : Promise.resolve([]),
+    const isWorkflowLocked =
+      await this.teamsService.isTeamWorkflowLocked(ctx.teamId);
+
+    await this.proposalsService
+      .expirePendingSupervisorRequests()
+      .catch(() => undefined);
+
+    const invitations = ctx.proposal
+      ? await this.proposalsService
+          .getTeamInvitationsByUserId(authUserId)
+          .catch(() => [])
+      : [];
+
+    const supervisors =
       ctx.proposal &&
       !ctx.proposal.assignedSupervisorId &&
-      ctx.proposal.status !== 'APPROVED'
-        ? this.authService.listSupervisors().catch(() => [])
-        : Promise.resolve([]),
-    ]);
+      !isWorkflowLocked
+        ? await this.authService
+            .listSupervisorsForBrowsing()
+            .catch(() => [])
+        : [];
+
+    const requestHistory = ctx.proposal
+      ? await this.proposalsService
+          .getRequestHistoryForProposal(ctx.proposal.id)
+          .catch(() => [])
+      : [];
+
+    const activePendingRequest =
+      requestHistory.find((request) => request.status === 'PENDING') ??
+      null;
 
     const profileIds = [
       ...(ctx.proposal?.assignedSupervisorId
@@ -280,6 +302,8 @@ export class StudentPagesService {
       ...invitations.map(
         (invitation) => invitation.supervisorId,
       ),
+      ...requestHistory.map((request) => request.supervisorId),
+      ...supervisors.map((supervisor) => supervisor.id),
     ];
 
     const profiles =
@@ -294,6 +318,9 @@ export class StudentPagesService {
       proposal: ctx.proposal,
       invitations,
       supervisors,
+      requestHistory,
+      activePendingRequest,
+      isWorkflowLocked,
       profiles,
     };
   }

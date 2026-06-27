@@ -18,6 +18,26 @@ export class TeamsService {
     private readonly profilesService: ProfilesService,
   ) {}
 
+  async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { teamId },
+      select: { status: true },
+    });
+
+    return (
+      proposal?.status === 'SUPERVISOR_ASSIGNED' ||
+      proposal?.status === 'APPROVED'
+    );
+  }
+
+  private async assertTeamNotLocked(teamId: string) {
+    if (await this.isTeamWorkflowLocked(teamId)) {
+      throw new BadRequestException(
+        'Team workflow is locked after supervisor acceptance',
+      );
+    }
+  }
+
   async createTeam(
     leaderId: string,
     createTeamDto: CreateTeamDto,
@@ -41,8 +61,9 @@ export class TeamsService {
         data: {
           name: createTeamDto.name,
           domain: createTeamDto.domain,
-          description:
-            createTeamDto.description,
+          projectTitle: createTeamDto.projectTitle?.trim() || null,
+          projectAbstract:
+            createTeamDto.projectAbstract?.trim() || null,
           maxMembers:
             createTeamDto.maxMembers,
           leaderId,
@@ -109,6 +130,8 @@ async requestToJoin(
       'Team not found',
     );
   }
+
+  await this.assertTeamNotLocked(teamId);
 
   const currentMembers =
     await this.prisma.teamMember.count({
@@ -221,6 +244,9 @@ if (team.leaderId !== leaderId) {
     'Not your team',
   );
 }
+
+await this.assertTeamNotLocked(team.id);
+
 const currentMembers =
   await this.prisma.teamMember.count({
     where: {
@@ -461,6 +487,8 @@ async updateMemberRole(
     );
   }
 
+  await this.assertTeamNotLocked(team.id);
+
   const member =
     await this.prisma.teamMember.findUnique({
       where: { id: memberId },
@@ -554,15 +582,127 @@ async getStudentTeamOverview(authUserId: string) {
       .findManyByAuthUserIds([...new Set(profileIds)])
       .catch(() => ({}));
 
+  const isWorkflowLocked = await this.isTeamWorkflowLocked(team.id);
+
   return {
     team,
     members,
     joinRequests,
     isLeader,
     profiles,
+    isWorkflowLocked,
+    canDeleteTeam: isLeader && !isWorkflowLocked,
+    canLeaveTeam: !isLeader && !isWorkflowLocked,
   };
 }
 
+async deleteTeam(leaderId: string) {
+  const team = await this.prisma.team.findFirst({
+    where: { leaderId },
+  });
+
+  if (!team) {
+    throw new BadRequestException('You are not leading any team');
+  }
+
+  await this.assertTeamNotLocked(team.id);
+
+  const memberIds = (
+    await this.prisma.teamMember.findMany({
+      where: { teamId: team.id },
+      select: { authUserId: true },
+    })
+  ).map((member) => member.authUserId);
+
+  const proposal = await this.prisma.proposal.findUnique({
+    where: { teamId: team.id },
+    select: { id: true },
+  });
+
+  await this.prisma.$transaction(async (tx) => {
+    if (proposal) {
+      await tx.supervisorRequest.deleteMany({
+        where: { proposalId: proposal.id },
+      });
+      await tx.supervisorInvitation.deleteMany({
+        where: { proposalId: proposal.id },
+      });
+      await tx.proposal.delete({ where: { id: proposal.id } });
+    }
+
+    await tx.joinRequest.deleteMany({ where: { teamId: team.id } });
+    await tx.teamMember.deleteMany({ where: { teamId: team.id } });
+    await tx.team.delete({ where: { id: team.id } });
+  });
+
+  await Promise.allSettled(
+    memberIds
+      .filter((id) => id !== leaderId)
+      .map((authUserId) =>
+        this.notificationDispatch.send({
+          authUserId,
+          title: 'Team Disbanded',
+          message: `Team "${team.name}" has been deleted by the leader.`,
+          type: 'TEAM_DELETED',
+          entityType: 'TEAM',
+          entityId: team.id,
+          route: '/student/team',
+        }),
+      ),
+  );
+
+  return { message: 'Team deleted successfully' };
+}
+
+async leaveTeam(authUserId: string) {
+  const membership = await this.prisma.teamMember.findUnique({
+    where: { authUserId },
+    include: { team: true },
+  });
+
+  if (!membership?.team) {
+    throw new BadRequestException('You are not in a team');
+  }
+
+  if (membership.team.leaderId === authUserId) {
+    throw new BadRequestException(
+      'Team leaders must delete the team instead of leaving',
+    );
+  }
+
+  await this.assertTeamNotLocked(membership.teamId);
+
+  await this.prisma.teamMember.delete({
+    where: { id: membership.id },
+  });
+
+  const memberCount = await this.prisma.teamMember.count({
+    where: { teamId: membership.teamId },
+  });
+
+  if (memberCount < membership.team.maxMembers) {
+    await this.prisma.team.update({
+      where: { id: membership.teamId },
+      data: { isOpen: true },
+    });
+  }
+
+  try {
+    await this.notificationDispatch.send({
+      authUserId: membership.team.leaderId,
+      title: 'Member Left Team',
+      message: `A member has left team "${membership.team.name}".`,
+      type: 'TEAM_MEMBER_LEFT',
+      entityType: 'TEAM',
+      entityId: membership.teamId,
+      route: '/student/team',
+    });
+  } catch {
+    // non-blocking
+  }
+
+  return { message: 'You have left the team' };
+}
 
 
 }
