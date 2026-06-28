@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -91,5 +92,18 @@ export class DeliverablesController {
         req.user.userId,
         dto,
       );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Delete(':id')
+  deleteDeliverable(
+    @Req() req: any,
+    @Param('id') id: string,
+  ) {
+    return this.deliverablesService.deleteDeliverable(
+      id,
+      req.user.userId,
+    );
   }
 }

@@ -11,6 +11,7 @@ import { MeetingsService } from '../progress/meetings/meetings.service';
 import { MilestonesService } from '../progress/milestones/milestones.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
 import { TasksService } from '../progress/tasks/tasks.service';
+import { WorkStreamService } from '../progress/work-stream/work-stream.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
 import { isTeamProfileComplete } from '../teams/team-profile.util';
@@ -36,6 +37,7 @@ export class StudentPagesService {
     private readonly proposalsService: ProposalsService,
     private readonly authService: AuthService,
     private readonly notificationsService: NotificationsService,
+    private readonly workStreamService: WorkStreamService,
   ) {}
 
   getDashboard(authUserId: string) {
@@ -44,6 +46,19 @@ export class StudentPagesService {
 
   getTeam(authUserId: string) {
     return this.teamsService.getStudentTeamOverview(authUserId);
+  }
+
+  async getWorkStream(authUserId: string) {
+    const ctx =
+      await this.studentContextService.load(authUserId);
+
+    return this.workStreamService.getStudentWorkStream(
+      authUserId,
+      ctx.team
+        ? { id: ctx.team.id, name: ctx.team.name }
+        : null,
+      ctx.supervisorId,
+    );
   }
 
   async getDeliverables(authUserId: string) {

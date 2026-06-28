@@ -20,6 +20,8 @@ export interface CreateDeliverableInput {
   type: DeliverableType;
   dueDate: string;
   attachmentUrl?: string;
+  teamIds?: string[];
+  attachments?: { fileUrl: string; fileName: string }[];
 }
 
 export interface CreateAnnouncementInput {
@@ -27,6 +29,16 @@ export interface CreateAnnouncementInput {
   message: string;
   type?: string;
   dueDate?: string;
+  teamIds?: string[];
+  attachments?: { fileUrl: string; fileName: string }[];
+}
+
+export interface UpdateAnnouncementInput {
+  title?: string;
+  message?: string;
+  type?: string;
+  dueDate?: string;
+  attachments?: { fileUrl: string; fileName: string }[];
 }
 
 export interface CreateMeetingInput {
@@ -66,7 +78,15 @@ export const supervisorService = {
 
   updateDeliverable: async (
     id: string,
-    data: { isActive?: boolean },
+    data: {
+      isActive?: boolean;
+      submissionsOpen?: boolean;
+      title?: string;
+      description?: string;
+      type?: DeliverableType;
+      dueDate?: string;
+      attachments?: { fileUrl: string; fileName: string }[];
+    },
   ) => {
     const res = await api.patch<Deliverable>(
       `/deliverables/${id}`,
@@ -129,7 +149,31 @@ export const supervisorService = {
   },
 
   createAnnouncement: async (data: CreateAnnouncementInput) => {
-    const res = await api.post<Announcement>("/announcements", data);
+    const res = await api.post<Announcement | Announcement[]>(
+      "/announcements",
+      data,
+    );
+    return res.data;
+  },
+
+  updateAnnouncement: async (
+    id: string,
+    data: UpdateAnnouncementInput,
+  ) => {
+    const res = await api.patch<Announcement>(
+      `/announcements/${id}`,
+      data,
+    );
+    return res.data;
+  },
+
+  deleteAnnouncement: async (id: string) => {
+    const res = await api.delete(`/announcements/${id}`);
+    return res.data;
+  },
+
+  deleteDeliverable: async (id: string) => {
+    const res = await api.delete(`/deliverables/${id}`);
     return res.data;
   },
 

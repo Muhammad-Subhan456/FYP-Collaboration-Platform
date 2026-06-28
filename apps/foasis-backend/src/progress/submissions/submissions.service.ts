@@ -86,6 +86,21 @@ export class SubmissionsService {
       );
     }
 
+    if (!deliverable.submissionsOpen) {
+      throw new BadRequestException(
+        'Submissions are closed for this deliverable',
+      );
+    }
+
+    if (
+      deliverable.teamId &&
+      deliverable.teamId !== team.id
+    ) {
+      throw new ForbiddenException(
+        'This deliverable is not assigned to your team',
+      );
+    }
+
     const assignedSupervisorId =
       await this.teamAccessService.getAssignedSupervisorId(
         authorization,
@@ -158,7 +173,7 @@ export class SubmissionsService {
         type: 'NEW_SUBMISSION',
         entityType: 'SUBMISSION',
         entityId: submission.id,
-        route: '/supervisor/reviews',
+        route: '/supervisor/work-stream',
       },
     );
 
@@ -371,7 +386,7 @@ export class SubmissionsService {
         type: 'SUBMISSION_REVIEWED',
         entityType: 'SUBMISSION',
         entityId: submission.id,
-        route: '/student/submissions',
+        route: '/student/work-stream',
       },
     );
 

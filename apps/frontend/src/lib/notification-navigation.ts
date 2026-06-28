@@ -45,22 +45,22 @@ const TYPE_FALLBACK_ROUTES: Record<string, string> = {
   TEAM_ROLE_ASSIGNED: "/student/team",
   TEAM_ROLE_UPDATED: "/student/team",
   TEAM_ROLE_REMOVED: "/student/team",
-  DELIVERABLE_CREATED: "/student/submissions",
-  DELIVERABLE_DEADLINE_EXTENDED: "/student/submissions",
-  NEW_SUBMISSION: "/supervisor/reviews",
-  SUBMISSION_REVIEWED: "/student/submissions",
+  DELIVERABLE_CREATED: "/student/work-stream",
+  DELIVERABLE_DEADLINE_EXTENDED: "/student/work-stream",
+  NEW_SUBMISSION: "/supervisor/work-stream",
+  SUBMISSION_REVIEWED: "/student/work-stream",
   EVALUATION_ASSIGNED: "/student/evaluations",
   EVALUATION_PANEL_ASSIGNED: "/supervisor/evaluations",
   RESULT_PUBLISHED: "/student/results",
   RESULT_UPDATED: "/student/results",
   MEETING_CREATED: "/student/meetings",
-  ANNOUNCEMENT_PUBLISHED: "/student/announcements",
+  ANNOUNCEMENT_PUBLISHED: "/student/work-stream",
   MILESTONE_CREATED: "/student/milestones",
   MILESTONE_UPDATED: "/student/milestones",
-  GLOBAL_ANNOUNCEMENT: "/student/announcements",
+  GLOBAL_ANNOUNCEMENT: "/student/work-stream",
   ROLE_UPDATED: "/student/dashboard",
   ACCOUNT_STATUS_UPDATED: "/student/dashboard",
-  DEADLINE_REMINDER: "/student/submissions",
+  DEADLINE_REMINDER: "/student/work-stream",
 };
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
@@ -131,7 +131,7 @@ export function resolveNotificationHref(
   }
 
   if (route === "/supervisor/submissions") {
-    route = "/supervisor/reviews";
+    route = "/supervisor/work-stream";
   }
 
   return appendEntityQuery(

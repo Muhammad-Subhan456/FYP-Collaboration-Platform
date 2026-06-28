@@ -43,7 +43,7 @@ export class GlobalAnnouncementsService {
           case 'SUPERVISOR':
             return '/supervisor/dashboard';
           default:
-            return '/student/announcements';
+            return '/student/work-stream';
         }
       };
 

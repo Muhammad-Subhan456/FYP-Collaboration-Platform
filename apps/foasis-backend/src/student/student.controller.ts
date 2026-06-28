@@ -32,6 +32,13 @@ export class StudentController {
     return this.studentPagesService.getTeam(req.user.userId);
   }
 
+  @Get('work-stream')
+  getWorkStream(@Req() req: { user: { userId: string } }) {
+    return this.studentPagesService.getWorkStream(
+      req.user.userId,
+    );
+  }
+
   @Get('deliverables')
   getDeliverables(@Req() req: { user: { userId: string } }) {
     return this.studentPagesService.getDeliverables(

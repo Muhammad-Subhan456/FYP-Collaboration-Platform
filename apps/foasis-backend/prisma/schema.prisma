@@ -297,6 +297,7 @@ model Meeting {
 model Announcement {
   id           String           @id @default(uuid())
   supervisorId String
+  teamId       String?
   title        String
   message      String
   type         AnnouncementType @default(GENERAL)
@@ -304,22 +305,26 @@ model Announcement {
   createdAt    DateTime         @default(now())
 
   @@index([supervisorId, createdAt(sort: Desc)])
+  @@index([teamId, createdAt(sort: Desc)])
 }
 
 model Deliverable {
   id                 String   @id @default(uuid())
   supervisorId       String
+  teamId             String?
   title              String
   description        String
   type               DeliverableType
   dueDate            DateTime
   attachmentUrl      String?
   isActive           Boolean  @default(true)
+  submissionsOpen    Boolean  @default(true)
   createdAt          DateTime @default(now())
   submissions        Submission[]
   deadlineExtensions DeliverableDeadlineExtension[]
 
   @@index([supervisorId, isActive, dueDate])
+  @@index([teamId, dueDate])
 }
 
 model DeliverableDeadlineExtension {
@@ -348,6 +353,35 @@ model Submission {
 
   @@index([teamId, status])
   @@index([teamId, deliverableId, version(sort: Desc)])
+}
+
+enum WorkStreamEntityType {
+  ANNOUNCEMENT
+  DELIVERABLE
+}
+
+model WorkStreamComment {
+  id         String               @id @default(uuid())
+  entityType WorkStreamEntityType
+  entityId   String
+  teamId     String
+  authUserId String
+  body       String
+  createdAt  DateTime             @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}
+
+model WorkStreamAttachment {
+  id         String               @id @default(uuid())
+  entityType WorkStreamEntityType
+  entityId   String
+  teamId     String
+  fileUrl    String
+  fileName   String
+  createdAt  DateTime             @default(now())
+
+  @@index([entityType, entityId])
 }
 
 model Milestone {

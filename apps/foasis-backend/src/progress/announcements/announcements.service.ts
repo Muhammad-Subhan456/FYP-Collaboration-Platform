@@ -1,13 +1,18 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
+import { WorkStreamEntityType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 import { TeamAccessService } from '../common/team-access.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { WorkStreamService } from '../work-stream/work-stream.service';
 
 @Injectable()
 export class AnnouncementsService {
@@ -15,6 +20,7 @@ export class AnnouncementsService {
     private readonly prisma: PrismaService,
     private readonly teamAccessService: TeamAccessService,
     private readonly activityLogsService: ActivityLogsService,
+    private readonly workStreamService: WorkStreamService,
   ) {}
 
   private parseOptionalDate(
@@ -39,6 +45,12 @@ export class AnnouncementsService {
     return parsed;
   }
 
+  private teamVisibilityWhere(teamId: string) {
+    return {
+      OR: [{ teamId }, { teamId: null }],
+    };
+  }
+
   async createAnnouncement(
     supervisorId: string,
     dto: CreateAnnouncementDto,
@@ -47,36 +59,157 @@ export class AnnouncementsService {
       dto.dueDate,
     );
 
-    const announcement =
-      await this.prisma.announcement.create({
-        data: {
-          supervisorId,
-          title: dto.title,
-          message: dto.message,
-          type: (dto.type as any) ?? 'GENERAL',
-          ...(dueDate && { dueDate }),
+    const teamIds =
+      await this.workStreamService.resolveTeamIdsForSupervisor(
+        supervisorId,
+        dto.teamIds,
+      );
+
+    if (teamIds.length === 0) {
+      throw new BadRequestException(
+        'No supervised teams available for this announcement',
+      );
+    }
+
+    const created: Awaited<
+      ReturnType<typeof this.prisma.announcement.create>
+    >[] = [];
+
+    for (const teamId of teamIds) {
+      const announcement =
+        await this.prisma.announcement.create({
+          data: {
+            supervisorId,
+            teamId,
+            title: dto.title,
+            message: dto.message,
+            type: (dto.type as any) ?? 'GENERAL',
+            ...(dueDate && { dueDate }),
+          },
+        });
+
+      await this.workStreamService.saveAttachments(
+        WorkStreamEntityType.ANNOUNCEMENT,
+        announcement.id,
+        teamId,
+        dto.attachments,
+      );
+
+      await this.teamAccessService.notifyTeamMembers(
+        teamId,
+        {
+          title: 'FOASIS Team Announcement',
+          message: `${announcement.title}: ${announcement.message}`,
+          type: 'ANNOUNCEMENT_PUBLISHED',
+          entityType: 'ANNOUNCEMENT',
+          entityId: announcement.id,
+          route: '/student/work-stream',
         },
-      });
+      );
+
+      created.push(announcement);
+    }
 
     await this.activityLogsService.logActivity(
       supervisorId,
       'Announcement Published',
-      announcement.title,
+      dto.title,
     );
 
-    await this.teamAccessService.notifySupervisedTeamMembers(
-      supervisorId,
-      {
-        title: 'FOASIS Team Announcement',
-        message: `${announcement.title}: ${announcement.message}`,
-        type: 'ANNOUNCEMENT_PUBLISHED',
-        entityType: 'ANNOUNCEMENT',
-        entityId: announcement.id,
-        route: '/student/announcements',
+    return created.length === 1 ? created[0] : created;
+  }
+
+  async updateAnnouncement(
+    announcementId: string,
+    supervisorId: string,
+    dto: UpdateAnnouncementDto,
+  ) {
+    const announcement =
+      await this.prisma.announcement.findUnique({
+        where: { id: announcementId },
+      });
+
+    if (!announcement) {
+      throw new NotFoundException('Announcement not found');
+    }
+
+    if (announcement.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only update your own announcements',
+      );
+    }
+
+    const dueDate =
+      dto.dueDate !== undefined
+        ? this.parseOptionalDate(dto.dueDate)
+        : undefined;
+
+    const updated = await this.prisma.announcement.update({
+      where: { id: announcementId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.message !== undefined && {
+          message: dto.message,
+        }),
+        ...(dto.type !== undefined && {
+          type: dto.type as any,
+        }),
+        ...(dto.dueDate !== undefined && {
+          dueDate: dueDate ?? null,
+        }),
       },
-    );
+    });
 
-    return announcement;
+    if (dto.attachments !== undefined) {
+      await this.workStreamService.replaceAttachments(
+        WorkStreamEntityType.ANNOUNCEMENT,
+        announcementId,
+        announcement.teamId ?? supervisorId,
+        dto.attachments,
+      );
+    }
+
+    return updated;
+  }
+
+  async deleteAnnouncement(
+    announcementId: string,
+    supervisorId: string,
+  ) {
+    const announcement =
+      await this.prisma.announcement.findUnique({
+        where: { id: announcementId },
+      });
+
+    if (!announcement) {
+      throw new NotFoundException('Announcement not found');
+    }
+
+    if (announcement.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only delete your own announcements',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.workStreamComment.deleteMany({
+        where: {
+          entityType: WorkStreamEntityType.ANNOUNCEMENT,
+          entityId: announcementId,
+        },
+      }),
+      this.prisma.workStreamAttachment.deleteMany({
+        where: {
+          entityType: WorkStreamEntityType.ANNOUNCEMENT,
+          entityId: announcementId,
+        },
+      }),
+      this.prisma.announcement.delete({
+        where: { id: announcementId },
+      }),
+    ]);
+
+    return { success: true };
   }
 
   async getMyAnnouncements(supervisorId: string) {
@@ -92,12 +225,19 @@ export class AnnouncementsService {
         authorization,
       );
 
-    return this.getForSupervisor(supervisorId);
+    const team =
+      await this.teamAccessService.getMyTeam(authorization);
+
+    return this.getForSupervisor(
+      supervisorId,
+      team?.id ?? null,
+    );
   }
 
   async getForMyTeamByUserId(
     authUserId: string,
     supervisorId?: string | null,
+    teamId?: string | null,
   ) {
     const resolvedSupervisorId =
       supervisorId !== undefined
@@ -106,16 +246,36 @@ export class AnnouncementsService {
             authUserId,
           );
 
-    return this.getForSupervisor(resolvedSupervisorId);
+    const resolvedTeamId =
+      teamId !== undefined
+        ? teamId
+        : (
+            await this.teamAccessService.getMyTeamByUserId(
+              authUserId,
+            )
+          )?.id ?? null;
+
+    return this.getForSupervisor(
+      resolvedSupervisorId,
+      resolvedTeamId,
+    );
   }
 
-  getForSupervisor(supervisorId: string | null) {
+  getForSupervisor(
+    supervisorId: string | null,
+    teamId: string | null = null,
+  ) {
     if (!supervisorId) {
       return [];
     }
 
     return this.prisma.announcement.findMany({
-      where: { supervisorId },
+      where: {
+        supervisorId,
+        ...(teamId
+          ? this.teamVisibilityWhere(teamId)
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

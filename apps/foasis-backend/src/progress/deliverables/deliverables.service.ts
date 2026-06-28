@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
+import { WorkStreamEntityType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -12,6 +14,7 @@ import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { TeamAccessService } from '../common/team-access.service';
 import type { NotificationContext } from '../common/team-access.service';
+import { WorkStreamService } from '../work-stream/work-stream.service';
 
 @Injectable()
 export class DeliverablesService {
@@ -19,14 +22,21 @@ export class DeliverablesService {
     private readonly prisma: PrismaService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly teamAccessService: TeamAccessService,
+    private readonly workStreamService: WorkStreamService,
   ) {}
 
-  private async notifySupervisedTeams(
-    supervisorId: string,
+  private teamVisibilityWhere(teamId: string) {
+    return {
+      OR: [{ teamId }, { teamId: null }],
+    };
+  }
+
+  private async notifyTeam(
+    teamId: string,
     context: NotificationContext,
   ) {
-    await this.teamAccessService.notifySupervisedTeamMembers(
-      supervisorId,
+    await this.teamAccessService.notifyTeamMembers(
+      teamId,
       context,
     );
   }
@@ -35,37 +45,62 @@ export class DeliverablesService {
     supervisorId: string,
     dto: CreateDeliverableDto,
   ) {
-    const deliverable =
-      await this.prisma.deliverable.create({
-        data: {
-          supervisorId,
-          title: dto.title,
-          description: dto.description,
-          type: dto.type,
-          dueDate: new Date(dto.dueDate),
-          attachmentUrl: dto.attachmentUrl,
-        },
-      });
+    const teamIds =
+      await this.workStreamService.resolveTeamIdsForSupervisor(
+        supervisorId,
+        dto.teamIds,
+      );
 
-    await this.activityLogsService.logActivity(
-      supervisorId,
-      'Deliverable Created',
-      deliverable.title,
-    );
+    if (teamIds.length === 0) {
+      throw new BadRequestException(
+        'No supervised teams available for this deliverable',
+      );
+    }
 
-    await this.notifySupervisedTeams(
-      supervisorId,
-      {
+    const created: Awaited<
+      ReturnType<typeof this.prisma.deliverable.create>
+    >[] = [];
+
+    for (const teamId of teamIds) {
+      const deliverable =
+        await this.prisma.deliverable.create({
+          data: {
+            supervisorId,
+            teamId,
+            title: dto.title,
+            description: dto.description,
+            type: dto.type,
+            dueDate: new Date(dto.dueDate),
+            attachmentUrl: dto.attachmentUrl,
+          },
+        });
+
+      await this.workStreamService.saveAttachments(
+        WorkStreamEntityType.DELIVERABLE,
+        deliverable.id,
+        teamId,
+        dto.attachments,
+      );
+
+      await this.notifyTeam(teamId, {
         title: 'New Deliverable Assigned',
         message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
         type: 'DELIVERABLE_CREATED',
         entityType: 'DELIVERABLE',
         entityId: deliverable.id,
-        route: '/student/submissions',
-      },
+        route: '/student/work-stream',
+      });
+
+      created.push(deliverable);
+    }
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Deliverable Created',
+      dto.title,
     );
 
-    return deliverable;
+    return created.length === 1 ? created[0] : created;
   }
 
   async getMyDeliverables(supervisorId: string) {
@@ -81,12 +116,19 @@ export class DeliverablesService {
         authorization,
       );
 
-    return this.getDeliverablesForSupervisor(supervisorId);
+    const team =
+      await this.teamAccessService.getMyTeam(authorization);
+
+    return this.getDeliverablesForSupervisor(
+      supervisorId,
+      team?.id ?? null,
+    );
   }
 
   async getForMyTeamByUserId(
     authUserId: string,
     supervisorId?: string | null,
+    teamId?: string | null,
   ) {
     const resolvedSupervisorId =
       supervisorId !== undefined
@@ -97,13 +139,24 @@ export class DeliverablesService {
             )
           )?.assignedSupervisorId ?? null;
 
+    const resolvedTeamId =
+      teamId !== undefined
+        ? teamId
+        : (
+            await this.teamAccessService.getMyTeamByUserId(
+              authUserId,
+            )
+          )?.id ?? null;
+
     return this.getDeliverablesForSupervisor(
       resolvedSupervisorId,
+      resolvedTeamId,
     );
   }
 
   getDeliverablesForSupervisor(
     supervisorId: string | null,
+    teamId: string | null = null,
   ) {
     if (!supervisorId) {
       return [];
@@ -113,6 +166,9 @@ export class DeliverablesService {
       where: {
         supervisorId,
         isActive: true,
+        ...(teamId
+          ? this.teamVisibilityWhere(teamId)
+          : {}),
       },
       orderBy: { dueDate: 'asc' },
     });
@@ -129,9 +185,7 @@ export class DeliverablesService {
       });
 
     if (!deliverable) {
-      throw new BadRequestException(
-        'Deliverable not found',
-      );
+      throw new NotFoundException('Deliverable not found');
     }
 
     if (deliverable.supervisorId !== supervisorId) {
@@ -140,14 +194,89 @@ export class DeliverablesService {
       );
     }
 
-    return this.prisma.deliverable.update({
+    const updated = await this.prisma.deliverable.update({
       where: { id: deliverableId },
       data: {
         ...(dto.isActive !== undefined && {
           isActive: dto.isActive,
         }),
+        ...(dto.submissionsOpen !== undefined && {
+          submissionsOpen: dto.submissionsOpen,
+        }),
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && {
+          description: dto.description,
+        }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.dueDate !== undefined && {
+          dueDate: new Date(dto.dueDate),
+        }),
       },
     });
+
+    if (dto.attachments !== undefined) {
+      await this.workStreamService.replaceAttachments(
+        WorkStreamEntityType.DELIVERABLE,
+        deliverableId,
+        deliverable.teamId ?? supervisorId,
+        dto.attachments,
+      );
+    }
+
+    return updated;
+  }
+
+  async deleteDeliverable(
+    deliverableId: string,
+    supervisorId: string,
+  ) {
+    const deliverable =
+      await this.prisma.deliverable.findUnique({
+        where: { id: deliverableId },
+      });
+
+    if (!deliverable) {
+      throw new NotFoundException('Deliverable not found');
+    }
+
+    if (deliverable.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only delete your own deliverables',
+      );
+    }
+
+    const submissionCount =
+      await this.prisma.submission.count({
+        where: { deliverableId },
+      });
+
+    if (submissionCount > 0) {
+      await this.prisma.deliverable.update({
+        where: { id: deliverableId },
+        data: { isActive: false, submissionsOpen: false },
+      });
+      return { softDeleted: true };
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.workStreamComment.deleteMany({
+        where: {
+          entityType: WorkStreamEntityType.DELIVERABLE,
+          entityId: deliverableId,
+        },
+      }),
+      this.prisma.workStreamAttachment.deleteMany({
+        where: {
+          entityType: WorkStreamEntityType.DELIVERABLE,
+          entityId: deliverableId,
+        },
+      }),
+      this.prisma.deliverable.delete({
+        where: { id: deliverableId },
+      }),
+    ]);
+
+    return { success: true };
   }
 
   async extendDeadline(
@@ -174,12 +303,6 @@ export class DeliverablesService {
 
     const newDueDate = new Date(dto.newDueDate);
     const previousDueDate = deliverable.dueDate;
-
-    if (newDueDate <= previousDueDate) {
-      throw new BadRequestException(
-        'New deadline must be after the current deadline',
-      );
-    }
 
     const [updated, extension] =
       await this.prisma.$transaction([
@@ -211,17 +334,16 @@ export class DeliverablesService {
       `${deliverable.title}: ${dateLabel(previousDueDate)} → ${dateLabel(newDueDate)}`,
     );
 
-    await this.notifySupervisedTeams(
-      supervisorId,
-      {
+    if (deliverable.teamId) {
+      await this.notifyTeam(deliverable.teamId, {
         title: 'Deliverable Deadline Extended',
         message: `The deadline for "${deliverable.title}" has been extended to ${dateLabel(newDueDate)}.`,
         type: 'DELIVERABLE_DEADLINE_EXTENDED',
         entityType: 'DELIVERABLE',
         entityId: deliverable.id,
-        route: '/student/submissions',
-      },
-    );
+        route: '/student/work-stream',
+      });
+    }
 
     return { deliverable: updated, extension };
   }

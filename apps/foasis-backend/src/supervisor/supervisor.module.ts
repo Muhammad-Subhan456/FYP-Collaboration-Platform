@@ -9,6 +9,7 @@ import { EvaluationResultsModule } from '../progress/evaluation-results/evaluati
 import { MeetingsModule } from '../progress/meetings/meetings.module';
 import { MilestonesModule } from '../progress/milestones/milestones.module';
 import { SubmissionsModule } from '../progress/submissions/submissions.module';
+import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { TeamsModule } from '../teams/teams.module';
 import { UsersModule } from '../users/users.module';
@@ -30,6 +31,7 @@ import { SupervisorPagesService } from './supervisor-pages.service';
     TeamsModule,
     UsersModule,
     NotificationsModule,
+    WorkStreamModule,
   ],
   controllers: [SupervisorController],
   providers: [SupervisorPagesService],

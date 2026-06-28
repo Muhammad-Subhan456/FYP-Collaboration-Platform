@@ -147,4 +147,16 @@ export const supervisorPageService = {
     );
     return res.data;
   },
+
+  getWorkStream: async (teamIds?: string[]) => {
+    const res = await api.get<
+      import("@/types/work-stream").SupervisorWorkStreamPageData
+    >("/supervisor/work-stream", {
+      params:
+        teamIds && teamIds.length > 0
+          ? { teamIds: teamIds.join(",") }
+          : undefined,
+    });
+    return res.data;
+  },
 };

@@ -85,12 +85,14 @@ export interface Supervisor {
 export interface Deliverable {
   id: string;
   supervisorId: string;
+  teamId?: string | null;
   title: string;
   description: string;
   type: DeliverableType;
   dueDate: string;
   attachmentUrl?: string | null;
   isActive: boolean;
+  submissionsOpen?: boolean;
   createdAt: string;
 }
 
@@ -151,6 +153,7 @@ export interface Notification {
 export interface Announcement {
   id: string;
   supervisorId: string;
+  teamId?: string | null;
   title: string;
   message: string;
   type: string;

@@ -28,6 +28,21 @@ export class SupervisorController {
     );
   }
 
+  @Get('work-stream')
+  getWorkStream(
+    @Req() req: { user: { userId: string } },
+    @Query('teamIds') teamIds?: string,
+  ) {
+    const parsedTeamIds = teamIds
+      ? teamIds.split(',').filter(Boolean)
+      : undefined;
+
+    return this.supervisorPagesService.getWorkStream(
+      req.user.userId,
+      parsedTeamIds,
+    );
+  }
+
   @Get('deliverables')
   getDeliverables(@Req() req: { user: { userId: string } }) {
     return this.supervisorPagesService.getDeliverables(

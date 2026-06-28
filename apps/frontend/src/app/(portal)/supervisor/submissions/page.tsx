@@ -21,5 +21,5 @@ export default async function SupervisorSubmissionsRedirect({
   }
 
   const qs = query.toString();
-  redirect(`/supervisor/reviews${qs ? `?${qs}` : ""}`);
+  redirect(`/supervisor/work-stream${qs ? `?${qs}` : ""}`);
 }

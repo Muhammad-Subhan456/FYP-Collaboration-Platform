@@ -169,6 +169,13 @@ export const studentService = {
     const res = await api.get<StudentProposalPageData>("/student/proposal");
     return res.data;
   },
+
+  getWorkStream: async () => {
+    const res = await api.get<import("@/types/work-stream").StudentWorkStreamPageData>(
+      "/student/work-stream",
+    );
+    return res.data;
+  },
 };
 
 export type { DashboardOverview };

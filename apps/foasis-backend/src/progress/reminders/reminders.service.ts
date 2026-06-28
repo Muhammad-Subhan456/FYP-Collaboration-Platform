@@ -76,7 +76,7 @@ export class RemindersService {
         type: 'DEADLINE_REMINDER',
         entityType: 'DELIVERABLE',
         entityId: deliverable.id,
-        route: '/supervisor/reviews',
+        route: '/supervisor/work-stream',
       });
 
       try {
@@ -99,7 +99,7 @@ export class RemindersService {
               type: 'DEADLINE_REMINDER',
               entityType: 'DELIVERABLE',
               entityId: deliverable.id,
-              route: '/student/submissions',
+              route: '/student/work-stream',
             });
           }
         }

@@ -1,9 +1,14 @@
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+import { WorkStreamAttachmentDto } from '../../work-stream/dto/work-stream-attachment.dto';
 
 export enum DeliverableType {
   SRS = 'SRS',
@@ -30,4 +35,15 @@ export class CreateDeliverableDto {
   @IsOptional()
   @IsString()
   attachmentUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  teamIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkStreamAttachmentDto)
+  attachments?: WorkStreamAttachmentDto[];
 }

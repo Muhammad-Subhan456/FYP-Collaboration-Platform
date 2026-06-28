@@ -1,37 +1,26 @@
 import {
-  IsBoolean,
+  IsArray,
   IsDateString,
-  IsEnum,
   IsOptional,
   IsString,
-  IsArray,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { DeliverableType } from './create-deliverable.dto';
 import { WorkStreamAttachmentDto } from '../../work-stream/dto/work-stream-attachment.dto';
 
-export class UpdateDeliverableDto {
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  submissionsOpen?: boolean;
-
+export class UpdateAnnouncementDto {
   @IsOptional()
   @IsString()
   title?: string;
 
   @IsOptional()
   @IsString()
-  description?: string;
+  message?: string;
 
   @IsOptional()
-  @IsEnum(DeliverableType)
-  type?: DeliverableType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsDateString()

@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
+  Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -14,6 +17,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 @Controller('announcements')
 export class AnnouncementsController {
@@ -34,6 +38,34 @@ export class AnnouncementsController {
         req.user.userId,
         dto,
       );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Patch(':id')
+  updateAnnouncement(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateAnnouncementDto,
+  ) {
+    return this.announcementsService.updateAnnouncement(
+      id,
+      req.user.userId,
+      dto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Delete(':id')
+  deleteAnnouncement(
+    @Req() req: any,
+    @Param('id') id: string,
+  ) {
+    return this.announcementsService.deleteAnnouncement(
+      id,
+      req.user.userId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

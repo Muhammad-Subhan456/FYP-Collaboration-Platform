@@ -11,6 +11,7 @@ import { MeetingsModule } from '../progress/meetings/meetings.module';
 import { MilestonesModule } from '../progress/milestones/milestones.module';
 import { SubmissionsModule } from '../progress/submissions/submissions.module';
 import { TasksModule } from '../progress/tasks/tasks.module';
+import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { TeamsModule } from '../teams/teams.module';
 import { UsersModule } from '../users/users.module';
@@ -36,6 +37,7 @@ import { StudentContextModule } from './student-context.module';
     EvaluationsModule,
     EvaluationResultsModule,
     NotificationsModule,
+    WorkStreamModule,
   ],
   controllers: [StudentController],
   providers: [StudentPagesService],

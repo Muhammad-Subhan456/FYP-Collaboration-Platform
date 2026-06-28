@@ -10,6 +10,7 @@ import { MeetingsService } from '../progress/meetings/meetings.service';
 import { MilestonesService } from '../progress/milestones/milestones.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
+import { WorkStreamService } from '../progress/work-stream/work-stream.service';
 import { TeamsService } from '../teams/teams.service';
 import { ProfilesService } from '../users/profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,6 +31,7 @@ export class SupervisorPagesService {
     private readonly profilesService: ProfilesService,
     private readonly notificationsService: NotificationsService,
     private readonly prisma: PrismaService,
+    private readonly workStreamService: WorkStreamService,
   ) {}
 
   getDashboard(supervisorId: string) {
@@ -41,6 +43,16 @@ export class SupervisorPagesService {
   getDeliverables(supervisorId: string) {
     return this.deliverablesService.getMyDeliverables(
       supervisorId,
+    );
+  }
+
+  getWorkStream(
+    supervisorId: string,
+    teamIds?: string[],
+  ) {
+    return this.workStreamService.getSupervisorWorkStream(
+      supervisorId,
+      teamIds,
     );
   }
 
