@@ -1,6 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useBrowseTeamsQuery,
+  useStudentTeamQuery,
+  isStudentQueryPending,
+} from "@/queries/student";
+import {
+  useStudentTeamMutations,
+} from "@/mutations/student";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,8 +47,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
-import { teamService } from "@/services/team.service";
-import { studentService } from "@/services/student.service";
 import { uploadService } from "@/services/progress.service";
 import { getDisplayName } from "@/hooks/use-profiles";
 import {
@@ -78,7 +83,6 @@ type EditTeamForm = z.infer<typeof editTeamSchema>;
 
 export default function StudentTeamPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const [searchDomain, setSearchDomain] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
@@ -94,17 +98,23 @@ export default function StudentTeamPage() {
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
-  const overviewQuery = useQuery({
-    queryKey: ["student", "team", user?.userId],
-    queryFn: studentService.getTeam,
-    enabled: !!user?.userId,
-  });
+  const overviewQuery = useStudentTeamQuery();
 
-  const browseQuery = useQuery({
-    queryKey: ["teams", "browse", activeSearch],
-    queryFn: () => teamService.searchTeams(activeSearch),
-    enabled: !overviewQuery.data?.team && !!activeSearch,
-  });
+  const browseQuery = useBrowseTeamsQuery(
+    activeSearch,
+    !overviewQuery.data?.team && !!activeSearch,
+  );
+
+  const {
+    createMutation,
+    joinMutation,
+    updateTeamMutation,
+    approveMutation,
+    rejectMutation,
+    roleMutation,
+    deleteTeamMutation,
+    leaveTeamMutation,
+  } = useStudentTeamMutations();
 
   const {
     register,
@@ -114,48 +124,6 @@ export default function StudentTeamPage() {
   } = useForm<CreateTeamForm>({
     resolver: zodResolver(createTeamSchema),
     defaultValues: { maxMembers: 4 },
-  });
-
-  const invalidateTeam = () => {
-    queryClient.invalidateQueries({ queryKey: ["student", "team"] });
-    queryClient.invalidateQueries({ queryKey: ["team"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  };
-
-  const createMutation = useMutation({
-    mutationFn: teamService.createTeam,
-    onSuccess: () => {
-      toast.success("Team created successfully!");
-      reset();
-      invalidateTeam();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const joinMutation = useMutation({
-    mutationFn: teamService.requestToJoin,
-    onMutate: (teamId) => {
-      setJoiningTeamId(teamId);
-    },
-    onSuccess: (_, teamId) => {
-      toast.success("Join request sent!");
-      setJoinedTeamIds((prev) => new Set(prev).add(teamId));
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-    onSettled: () => {
-      setJoiningTeamId(null);
-    },
-  });
-
-  const updateTeamMutation = useMutation({
-    mutationFn: teamService.updateTeam,
-    onSuccess: () => {
-      toast.success("Team updated");
-      setIsEditingTeam(false);
-      invalidateTeam();
-      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const editTeamForm = useForm<EditTeamForm>({
@@ -200,61 +168,7 @@ export default function StudentTeamPage() {
     }
   };
 
-  const approveMutation = useMutation({
-    mutationFn: teamService.approveRequest,
-    onSuccess: () => {
-      toast.success("Request approved");
-      invalidateTeam();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: teamService.rejectRequest,
-    onSuccess: () => {
-      toast.success("Request rejected");
-      invalidateTeam();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const roleMutation = useMutation({
-    mutationFn: ({
-      memberId,
-      teamRole,
-    }: {
-      memberId: string;
-      teamRole: string;
-    }) => teamService.updateMemberRole(memberId, teamRole),
-    onSuccess: () => {
-      toast.success("Team role updated");
-      setEditingMemberId(null);
-      invalidateTeam();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const deleteTeamMutation = useMutation({
-    mutationFn: teamService.deleteTeam,
-    onSuccess: () => {
-      toast.success("Team deleted");
-      invalidateTeam();
-      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const leaveTeamMutation = useMutation({
-    mutationFn: teamService.leaveTeam,
-    onSuccess: () => {
-      toast.success("You have left the team");
-      invalidateTeam();
-      queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  if (overviewQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(overviewQuery)) return <DashboardSkeleton />;
 
   if (overviewQuery.isError) {
     return (
@@ -329,10 +243,13 @@ export default function StudentTeamPage() {
                     toast.error("Please upload a proposal PDF");
                     return;
                   }
-                  updateTeamMutation.mutate({
-                    ...data,
-                    proposalPdfUrl: editPdfUrl,
-                  });
+                  updateTeamMutation.mutate(
+                    {
+                      ...data,
+                      proposalPdfUrl: editPdfUrl,
+                    },
+                    { onSuccess: () => setIsEditingTeam(false) },
+                  );
                 })}
                 className="space-y-4 rounded-lg border p-4"
               >
@@ -629,10 +546,13 @@ export default function StudentTeamPage() {
                               size="sm"
                               disabled={roleMutation.isPending}
                               onClick={() =>
-                                roleMutation.mutate({
-                                  memberId: m.id,
-                                  teamRole: draftRole,
-                                })
+                                roleMutation.mutate(
+                                  {
+                                    memberId: m.id,
+                                    teamRole: draftRole,
+                                  },
+                                  { onSuccess: () => setEditingMemberId(null) },
+                                )
                               }
                             >
                               Save
@@ -833,7 +753,18 @@ export default function StudentTeamPage() {
                       </span>
                       <Button
                         size="sm"
-                        onClick={() => joinMutation.mutate(t.id)}
+                        onClick={() => {
+                          setJoiningTeamId(t.id);
+                          joinMutation.mutate(t.id, {
+                            onSuccess: () => {
+                              toast.success("Join request sent!");
+                              setJoinedTeamIds((prev) =>
+                                new Set(prev).add(t.id),
+                              );
+                            },
+                            onSettled: () => setJoiningTeamId(null),
+                          });
+                        }}
                         disabled={
                           joiningTeamId === t.id || joinedTeamIds.has(t.id)
                         }
@@ -869,7 +800,9 @@ export default function StudentTeamPage() {
           </CardHeader>
           <CardContent>
             <form
-              onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+              onSubmit={handleSubmit((data) =>
+                createMutation.mutate(data, { onSuccess: () => reset() }),
+              )}
               className="space-y-4"
             >
               <div className="space-y-2">

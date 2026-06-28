@@ -15,17 +15,15 @@ import {
 } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorSystemHealthQuery,
+} from "@/queries/coordinator";
 
 export default function CoordinatorSystemHealthPage() {
-  const pageQuery = useCoordinatorPageQuery(
-    "system-health",
-    coordinatorPageService.getSystemHealth,
-    { refetchInterval: 30_000 },
-  );
+  const pageQuery = useCoordinatorSystemHealthQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

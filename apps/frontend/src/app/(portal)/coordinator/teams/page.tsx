@@ -17,8 +17,10 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorTeamsQuery,
+} from "@/queries/coordinator";
 import type { TeamMember } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
 
@@ -54,12 +56,9 @@ export default function CoordinatorTeamsPage() {
   const [search, setSearch] = useState("");
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
-  const pageQuery = useCoordinatorPageQuery(
-    "teams",
-    coordinatorPageService.getTeams,
-  );
+  const pageQuery = useCoordinatorTeamsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

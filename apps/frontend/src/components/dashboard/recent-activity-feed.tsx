@@ -11,8 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
-import { notificationService } from "@/services/notification.service";
-import { progressService } from "@/services/progress.service";
+import { useRecentActivityFeedQuery } from "@/queries/shared";
 import type { ActivityLog, Notification } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
 
@@ -30,17 +29,10 @@ export function RecentActivityFeed({
   className,
   recentActivity,
 }: RecentActivityFeedProps) {
-  const notificationsQuery = useQuery({
-    queryKey: ["notifications", "recent-activity"],
-    queryFn: () => notificationService.getMyNotifications(1, fetchLimit),
-    enabled: !recentActivity,
-  });
-
-  const activityQuery = useQuery({
-    queryKey: ["activity-logs", "my"],
-    queryFn: progressService.getMyActivityLogs,
-    enabled: !recentActivity,
-  });
+  const { notificationsQuery, activityQuery } = useRecentActivityFeedQuery(
+    fetchLimit,
+    !recentActivity,
+  );
 
   const notificationItems =
     (recentActivity?.notifications.data ??

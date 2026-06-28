@@ -27,7 +27,7 @@ import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed"
 import { ScrollableFeed } from "@/components/common/scrollable-feed";
 import { formatDate, formatDateTime, pluralize } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
+import { useStudentDashboardQuery } from "@/queries/student";
 
 function formatProposalStatus(status?: string | null) {
   if (!status) return "None";
@@ -79,7 +79,7 @@ export default function StudentDashboardPage() {
     isError,
     error,
     refetch,
-  } = useDashboardOverview("STUDENT");
+  } = useStudentDashboardQuery();
 
   if (isResolving) return <DashboardSkeleton />;
 

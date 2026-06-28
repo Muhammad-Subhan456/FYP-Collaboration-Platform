@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Calendar, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -19,9 +18,11 @@ import {
 } from "@/components/ui/card";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { supervisorPageService } from "@/services/supervisor-page.service";
-import { supervisorService } from "@/services/supervisor.service";
+import { useSupervisorEvaluationResultMutation } from "@/mutations/supervisor";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorEvaluationsQuery,
+} from "@/queries/supervisor";
 import type { EvaluationResult } from "@/types/student";
 
 function TeamMarksForm({
@@ -35,26 +36,12 @@ function TeamMarksForm({
   teamName: string;
   existingResult?: EvaluationResult;
 }) {
-  const queryClient = useQueryClient();
   const [marks, setMarks] = useState(
     existingResult ? String(existingResult.marks) : "",
   );
   const [comments, setComments] = useState(existingResult?.comments ?? "");
 
-  const submitMutation = useMutation({
-    mutationFn: (data: { marks: number; comments?: string }) =>
-      existingResult
-        ? supervisorService.updateEvaluationResult(existingResult.id, data)
-        : supervisorService.submitEvaluationResult(evaluationId, {
-            teamId,
-            ...data,
-          }),
-    onSuccess: () => {
-      toast.success(existingResult ? "Marks updated" : "Marks submitted");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "evaluations"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  const submitMutation = useSupervisorEvaluationResultMutation();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +51,9 @@ function TeamMarksForm({
       return;
     }
     submitMutation.mutate({
+      existingResultId: existingResult?.id,
+      evaluationId,
+      teamId,
       marks: marksNum,
       comments: comments.trim() || undefined,
     });
@@ -107,12 +97,9 @@ function TeamMarksForm({
 }
 
 export default function SupervisorEvaluationsPage() {
-  const pageQuery = useSupervisorPageQuery(
-    "evaluations",
-    supervisorPageService.getEvaluations,
-  );
+  const pageQuery = useSupervisorEvaluationsQuery();
 
-  if (pageQuery.isLoading) {
+  if (isSupervisorQueryInitialLoading(pageQuery)) {
     return <DashboardSkeleton />;
   }
 

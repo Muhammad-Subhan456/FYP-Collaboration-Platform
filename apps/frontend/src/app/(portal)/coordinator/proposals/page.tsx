@@ -31,8 +31,10 @@ import {
 import { formatDate, formatProposalStatus } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorProposalsQuery,
+} from "@/queries/coordinator";
 import type { Proposal, ProposalStatus } from "@/types/student";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
@@ -49,12 +51,9 @@ export default function CoordinatorProposalsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [viewProposal, setViewProposal] = useState<Proposal | null>(null);
 
-  const pageQuery = useCoordinatorPageQuery(
-    "proposals",
-    coordinatorPageService.getProposals,
-  );
+  const pageQuery = useCoordinatorProposalsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

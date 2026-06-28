@@ -23,18 +23,17 @@ import {
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorResultsQuery,
+} from "@/queries/coordinator";
 import { cn } from "@/lib/utils";
 
 export default function CoordinatorResultsPage() {
   const [search, setSearch] = useState("");
   const [evaluationFilter, setEvaluationFilter] = useState("all");
 
-  const pageQuery = useCoordinatorPageQuery(
-    "results",
-    coordinatorPageService.getResults,
-  );
+  const pageQuery = useCoordinatorResultsQuery();
 
   const teamNameById = useMemo(
     () =>
@@ -68,7 +67,7 @@ export default function CoordinatorResultsPage() {
     });
   }, [pageQuery.data?.overview, evaluationFilter, search, teamNameById]);
 
-  if (pageQuery.isLoading) {
+  if (isCoordinatorQueryInitialLoading(pageQuery)) {
     return <DashboardSkeleton />;
   }
 

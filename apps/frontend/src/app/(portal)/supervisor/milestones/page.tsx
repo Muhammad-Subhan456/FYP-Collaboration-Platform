@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ChevronDown,
@@ -42,9 +41,16 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { supervisorPageService } from "@/services/supervisor-page.service";
-import { supervisorService } from "@/services/supervisor.service";
+import {
+  useSupervisorCreateMilestoneMutation,
+  useSupervisorCreateTaskMutation,
+  useSupervisorUpdateMilestoneStatusMutation,
+  useSupervisorUpdateTaskStatusMutation,
+} from "@/mutations/supervisor";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorMilestonesQuery,
+} from "@/queries/supervisor";
 import type { MilestoneWithTasks } from "@/services/student.service";
 import type { MilestoneStatus, Task, TaskStatus } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
@@ -68,41 +74,23 @@ function MilestoneTasks({
   teamMemberIds: string[];
   profiles: Record<string, UserProfile>;
 }) {
-  const queryClient = useQueryClient();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
 
-  const createTaskMutation = useMutation({
-    mutationFn: supervisorService.createTask,
+  const createTaskMutation = useSupervisorCreateTaskMutation({
     onSuccess: () => {
-      toast.success("Task created");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "milestones"] });
       setTaskDialogOpen(false);
       setTaskTitle("");
       setTaskDescription("");
       setAssignedTo("");
       setTaskDueDate("");
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
-  const updateTaskMutation = useMutation({
-    mutationFn: ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: TaskStatus;
-    }) => supervisorService.updateTaskStatus(taskId, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  const updateTaskMutation = useSupervisorUpdateTaskStatusMutation();
 
   return (
     <div className="space-y-3 border-t pt-3">
@@ -254,7 +242,6 @@ function MilestoneTasks({
 }
 
 export default function SupervisorMilestonesPage() {
-  const queryClient = useQueryClient();
   const [selectedProposalId, setSelectedProposalId] = useState("");
   const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(
     null,
@@ -264,10 +251,29 @@ export default function SupervisorMilestonesPage() {
   const [milestoneDescription, setMilestoneDescription] = useState("");
   const [milestoneDueDate, setMilestoneDueDate] = useState("");
 
-  const pageQuery = useSupervisorPageQuery(
-    "milestones",
-    supervisorPageService.getMilestones,
-  );
+  const pageQuery = useSupervisorMilestonesQuery();
+
+  const createMilestoneMutation = useSupervisorCreateMilestoneMutation({
+    onSuccess: () => {
+      setMilestoneDialogOpen(false);
+      setMilestoneTitle("");
+      setMilestoneDescription("");
+      setMilestoneDueDate("");
+    },
+  });
+
+  const updateMilestoneMutation = useSupervisorUpdateMilestoneStatusMutation();
+
+  if (isSupervisorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
+
+  if (pageQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(pageQuery.error)}
+        onRetry={() => pageQuery.refetch()}
+      />
+    );
+  }
 
   const proposals = pageQuery.data?.proposals ?? [];
   const membersByTeamId = pageQuery.data?.membersByTeamId ?? {};
@@ -286,47 +292,6 @@ export default function SupervisorMilestonesPage() {
     (selectedProposal?.teamId
       ? membersByTeamId[selectedProposal.teamId]?.map((m) => m.authUserId)
       : undefined) ?? [];
-
-  const createMilestoneMutation = useMutation({
-    mutationFn: supervisorService.createMilestone,
-    onSuccess: () => {
-      toast.success("Milestone created");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
-      setMilestoneDialogOpen(false);
-      setMilestoneTitle("");
-      setMilestoneDescription("");
-      setMilestoneDueDate("");
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const updateMilestoneMutation = useMutation({
-    mutationFn: ({
-      milestoneId,
-      status,
-    }: {
-      milestoneId: string;
-      status: MilestoneStatus;
-    }) => supervisorService.updateMilestoneStatus(milestoneId, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "notifications"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
-
-  if (pageQuery.isError) {
-    return (
-      <ErrorState
-        message={getErrorMessage(pageQuery.error)}
-        onRetry={() => pageQuery.refetch()}
-      />
-    );
-  }
 
   if (proposals.length === 0) {
     return (

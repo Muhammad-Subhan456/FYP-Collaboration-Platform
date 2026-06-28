@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
+import { portalPageQueryOptions, queryKeys } from "@/lib/react-query";
 import { profileService } from "@/services/profile.service";
 import { proposalService } from "@/services/proposal.service";
 import type { UserProfile } from "@/types/profile";
@@ -29,13 +30,15 @@ export function SupervisorProfileModal({
   onOpenChange,
 }: SupervisorProfileModalProps) {
   const profileQuery = useQuery({
-    queryKey: ["profile", supervisorId],
+    ...portalPageQueryOptions,
+    queryKey: queryKeys.profiles.byId(supervisorId!),
     queryFn: () => profileService.getProfileById(supervisorId!),
     enabled: open && !!supervisorId,
   });
 
   const overviewQuery = useQuery({
-    queryKey: ["supervisor-overview", supervisorId],
+    ...portalPageQueryOptions,
+    queryKey: queryKeys.supervisor.overview(supervisorId!),
     queryFn: () => proposalService.getSupervisorOverview(supervisorId!),
     enabled: open && !!supervisorId,
   });

@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckSquare, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useStudentTaskStatusMutation } from "@/mutations/student";
+import { useStudentTasksQuery, isStudentQueryPending } from "@/queries/student";
 
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -25,37 +24,16 @@ import {
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { progressService } from "@/services/progress.service";
-import { studentService } from "@/services/student.service";
+import { CheckSquare, Loader2 } from "lucide-react";
 import type { Task, TaskStatus } from "@/types/student";
 
 const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 
 export default function StudentTasksPage() {
-  const queryClient = useQueryClient();
+  const pageQuery = useStudentTasksQuery();
+  const updateMutation = useStudentTaskStatusMutation();
 
-  const pageQuery = useStudentPageQuery("tasks", studentService.getTasks);
-
-  const updateMutation = useMutation({
-    mutationFn: ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: TaskStatus;
-    }) => progressService.updateTaskStatus(taskId, status),
-    onSuccess: () => {
-      toast.success("Task status updated");
-      queryClient.invalidateQueries({ queryKey: ["student", "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["student", "milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

@@ -1,10 +1,13 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useUpdateCoordinatorProfileMutation } from "@/mutations/coordinator";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorProfileQuery,
+} from "@/queries/coordinator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -22,11 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
 import { uploadService } from "@/services/progress.service";
-import { profileService } from "@/services/profile.service";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
 
 const schema = z.object({
   fullName: z.string().min(2),
@@ -55,13 +55,16 @@ const defaultFormValues: FormData = {
 };
 
 export function CoordinatorProfileForm() {
-  const { refreshProfile, user } = useAuth();
+  const { refreshProfile } = useAuth();
   const [picture, setPicture] = useState<File | null>(null);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["coordinator", "profile", user?.userId],
-    queryFn: coordinatorPageService.getProfile,
-    enabled: !!user?.userId,
+  const profileQuery = useCoordinatorProfileQuery();
+  const { data, isError, error, refetch } = profileQuery;
+
+  const mutation = useUpdateCoordinatorProfileMutation({
+    onSuccess: async () => {
+      await refreshProfile();
+    },
   });
 
   const {
@@ -94,17 +97,7 @@ export function CoordinatorProfileForm() {
     }
   }, [data, reset]);
 
-  const mutation = useMutation({
-    mutationFn: profileService.updateMyProfile,
-    onSuccess: async () => {
-      await refreshProfile();
-      toast.success("Profile updated");
-      refetch();
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  if (isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(profileQuery)) return <DashboardSkeleton />;
 
   if (isError || !data) {
     return (
@@ -197,24 +190,17 @@ export function CoordinatorProfileForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="coordinatorRole">Coordinator role</Label>
-            <Input
-              id="coordinatorRole"
-              placeholder="FYP Coordinator, Program Lead..."
-              {...register("coordinatorRole")}
-            />
+            <Input id="coordinatorRole" {...register("coordinatorRole")} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="officeLocation">Office location</Label>
-            <Input id="officeLocation" {...register("officeLocation")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="contactInformation">Contact information</Label>
-            <Textarea
-              id="contactInformation"
-              rows={2}
-              placeholder="Phone, extension, preferred contact hours..."
-              {...register("contactInformation")}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="officeLocation">Office location</Label>
+              <Input id="officeLocation" {...register("officeLocation")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contactInformation">Contact information</Label>
+              <Input id="contactInformation" {...register("contactInformation")} />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="biography">Biography</Label>

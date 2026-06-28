@@ -3,17 +3,16 @@
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { ErrorState } from "@/components/common/state-blocks";
 import { CoordinatorCharts } from "@/components/dashboard/coordinator-charts";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorAnalyticsQuery,
+} from "@/queries/coordinator";
 import { getErrorMessage } from "@/lib/axios";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
 
 export default function CoordinatorAnalyticsPage() {
-  const pageQuery = useCoordinatorPageQuery(
-    "analytics",
-    coordinatorPageService.getAnalytics,
-  );
+  const pageQuery = useCoordinatorAnalyticsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

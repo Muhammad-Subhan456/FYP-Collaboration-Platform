@@ -1,8 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Loader2, Search, Send } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -22,46 +20,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { proposalService } from "@/services/proposal.service";
+import { useSupervisorInviteMutation } from "@/mutations/supervisor";
+import type { InvitationBrowseTarget } from "@/services/supervisor-page.service";
 import {
-  supervisorPageService,
-  type InvitationBrowseTarget,
-} from "@/services/supervisor-page.service";
+  isSupervisorQueryInitialLoading,
+  useSupervisorInvitationsQuery,
+} from "@/queries/supervisor";
 
 export default function SupervisorInvitationsPage() {
   const [search, setSearch] = useState("");
   const [invitingKey, setInvitingKey] = useState<string | null>(null);
-  const [sentInviteKeys, setSentInviteKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
 
-  const pageQuery = useSupervisorPageQuery(
-    "invitations",
-    supervisorPageService.getInvitations,
-  );
+  const pageQuery = useSupervisorInvitationsQuery();
+  const inviteMutation = useSupervisorInviteMutation();
 
-  const inviteMutation = useMutation({
-    mutationFn: async (target: InvitationBrowseTarget) => {
-      if (target.kind === "proposal" && target.proposalId) {
-        return proposalService.inviteProposal(target.proposalId);
-      }
-      return proposalService.inviteTeam(target.teamId);
-    },
-    onMutate: (target) => {
-      setInvitingKey(target.inviteKey);
-    },
-    onSuccess: (_, target) => {
-      toast.success("Interest expressed");
-      setSentInviteKeys((prev) => new Set(prev).add(target.inviteKey));
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-    onSettled: () => {
-      setInvitingKey(null);
-    },
-  });
-
-  if (pageQuery.isLoading) {
+  if (isSupervisorQueryInitialLoading(pageQuery)) {
     return <DashboardSkeleton />;
   }
 
@@ -87,6 +60,13 @@ export default function SupervisorInvitationsPage() {
       (target.title?.toLowerCase().includes(q) ?? false)
     );
   });
+
+  const handleInvite = (target: InvitationBrowseTarget) => {
+    setInvitingKey(target.inviteKey);
+    inviteMutation.mutate(target, {
+      onSettled: () => setInvitingKey(null),
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -131,9 +111,7 @@ export default function SupervisorInvitationsPage() {
               {filteredTargets.map((target) => {
                 const leaderId = target.teamLeaderAuthUserId;
                 const isSending = invitingKey === target.inviteKey;
-                const alreadySent =
-                  target.invitationSent ||
-                  sentInviteKeys.has(target.inviteKey);
+                const alreadySent = target.invitationSent;
                 const canSend =
                   target.canInvite && !alreadySent && !atCapacity;
 
@@ -183,7 +161,7 @@ export default function SupervisorInvitationsPage() {
                         <Button
                           size="sm"
                           disabled={!canSend || isSending}
-                          onClick={() => inviteMutation.mutate(target)}
+                          onClick={() => handleInvite(target)}
                         >
                           {isSending ? (
                             <Loader2 className="animate-spin" />

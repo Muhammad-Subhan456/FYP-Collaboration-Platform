@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Calendar, Loader2, MapPin, Plus, Video } from "lucide-react";
 import { toast } from "sonner";
@@ -35,9 +34,11 @@ import {
 } from "@/components/ui/select";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { supervisorPageService } from "@/services/supervisor-page.service";
-import { supervisorService } from "@/services/supervisor.service";
+import { useSupervisorCreateMeetingMutation } from "@/mutations/supervisor";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorMeetingsQuery,
+} from "@/queries/supervisor";
 
 const MEETING_TYPES = [
   "WEEKLY",
@@ -48,7 +49,6 @@ const MEETING_TYPES = [
 ] as const;
 
 export default function SupervisorMeetingsPage() {
-  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -57,24 +57,7 @@ export default function SupervisorMeetingsPage() {
   const [location, setLocation] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
 
-  const meetingsQuery = useSupervisorPageQuery(
-    "meetings",
-    supervisorPageService.getMeetings,
-  );
-
-  const createMutation = useMutation({
-    mutationFn: supervisorService.createMeeting,
-    onSuccess: () => {
-      toast.success("Meeting scheduled");
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "meetings"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["supervisor", "notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
-      setDialogOpen(false);
-      resetForm();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  const meetingsQuery = useSupervisorMeetingsQuery();
 
   const resetForm = () => {
     setTitle("");
@@ -85,7 +68,14 @@ export default function SupervisorMeetingsPage() {
     setMeetingLink("");
   };
 
-  if (meetingsQuery.isLoading) return <DashboardSkeleton />;
+  const createMutation = useSupervisorCreateMeetingMutation({
+    onSuccess: () => {
+      setDialogOpen(false);
+      resetForm();
+    },
+  });
+
+  if (isSupervisorQueryInitialLoading(meetingsQuery)) return <DashboardSkeleton />;
 
   if (meetingsQuery.isError) {
     return (

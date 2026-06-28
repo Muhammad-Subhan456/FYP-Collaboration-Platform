@@ -14,13 +14,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useAuth } from "@/providers/auth-provider";
+import { openMobileMenu } from "@/store/slices/ui-slice";
+import { useAppDispatch } from "@/store/hooks";
 import type { UserRole } from "@/types";
 
 interface DashboardHeaderProps {
   title: string;
   description?: string;
   role: UserRole;
-  onMenuClick?: () => void;
   unreadCount?: number;
 }
 
@@ -32,9 +33,9 @@ export function DashboardHeader({
   title,
   description,
   role,
-  onMenuClick,
   unreadCount = 0,
 }: DashboardHeaderProps) {
+  const dispatch = useAppDispatch();
   const { user, profile, logout } = useAuth();
 
   const initials =
@@ -52,7 +53,7 @@ export function DashboardHeader({
           variant="ghost"
           size="icon"
           className="lg:hidden"
-          onClick={onMenuClick}
+          onClick={() => dispatch(openMobileMenu())}
         >
           <Menu className="h-5 w-5" />
         </Button>

@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/axios";
-import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
+import { useCoordinatorDashboardQuery } from "@/queries/coordinator";
 import { pluralize } from "@/lib/format";
 
 function KpiCard({
@@ -50,7 +50,7 @@ export default function CoordinatorDashboardPage() {
     isError,
     error,
     refetch,
-  } = useDashboardOverview("COORDINATOR");
+  } = useCoordinatorDashboardQuery();
 
   if (isResolving) return <DashboardSkeleton />;
 

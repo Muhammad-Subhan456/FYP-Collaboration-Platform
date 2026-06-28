@@ -21,19 +21,15 @@ import {
   isDeepLinkFocused,
   useDeepLinkFocus,
 } from "@/hooks/use-deep-link-focus";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { studentService } from "@/services/student.service";
+import { useStudentMeetingsQuery, isStudentQueryPending } from "@/queries/student";
 import { cn } from "@/lib/utils";
 
 export default function StudentMeetingsPage() {
   const meetingFocusId = useDeepLinkFocus("meetingId");
 
-  const pageQuery = useStudentPageQuery(
-    "meetings",
-    studentService.getMeetings,
-  );
+  const pageQuery = useStudentMeetingsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

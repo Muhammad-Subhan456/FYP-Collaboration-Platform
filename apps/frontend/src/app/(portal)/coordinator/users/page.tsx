@@ -1,8 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Loader2, Shield, ShieldOff, UserCheck, UserMinus, Eye } from "lucide-react";
 
 import { CoordinatorUserProfileDialog } from "@/components/coordinator/coordinator-user-profile-dialog";
@@ -30,14 +28,15 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { authService } from "@/services/auth.service";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
+import { useCoordinatorUserMutations } from "@/mutations/coordinator";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorUsersQuery,
+} from "@/queries/coordinator";
 import type { AuthUserRecord } from "@/types/profile";
 import type { UserRole } from "@/types";
 
 export default function CoordinatorUsersPage() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [confirmAction, setConfirmAction] = useState<{
@@ -46,34 +45,10 @@ export default function CoordinatorUsersPage() {
   } | null>(null);
   const [viewUser, setViewUser] = useState<AuthUserRecord | null>(null);
 
-  const usersQuery = useCoordinatorPageQuery(
-    "users",
-    coordinatorPageService.getUsers,
-  );
+  const usersQuery = useCoordinatorUsersQuery();
+  const { roleMutation, statusMutation } = useCoordinatorUserMutations();
 
-  const roleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: UserRole }) =>
-      authService.updateUserRole(userId, role),
-    onSuccess: () => {
-      toast.success("User role updated");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "users"] });
-      setConfirmAction(null);
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const statusMutation = useMutation({
-    mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
-      authService.updateUserStatus(userId, isActive),
-    onSuccess: () => {
-      toast.success("User status updated");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "users"] });
-      setConfirmAction(null);
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  if (usersQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(usersQuery)) return <DashboardSkeleton />;
   if (usersQuery.isError) {
     return (
       <ErrorState
@@ -95,15 +70,30 @@ export default function CoordinatorUsersPage() {
     if (!confirmAction) return;
     const { user, type } = confirmAction;
     if (type === "promote-supervisor") {
-      roleMutation.mutate({ userId: user.id, role: "SUPERVISOR" });
+      roleMutation.mutate(
+        { userId: user.id, role: "SUPERVISOR" },
+        { onSuccess: () => setConfirmAction(null) },
+      );
     } else if (type === "demote-student") {
-      roleMutation.mutate({ userId: user.id, role: "STUDENT" });
+      roleMutation.mutate(
+        { userId: user.id, role: "STUDENT" },
+        { onSuccess: () => setConfirmAction(null) },
+      );
     } else if (type === "promote-coordinator") {
-      roleMutation.mutate({ userId: user.id, role: "COORDINATOR" });
+      roleMutation.mutate(
+        { userId: user.id, role: "COORDINATOR" },
+        { onSuccess: () => setConfirmAction(null) },
+      );
     } else if (type === "disable") {
-      statusMutation.mutate({ userId: user.id, isActive: false });
+      statusMutation.mutate(
+        { userId: user.id, isActive: false },
+        { onSuccess: () => setConfirmAction(null) },
+      );
     } else if (type === "enable") {
-      statusMutation.mutate({ userId: user.id, isActive: true });
+      statusMutation.mutate(
+        { userId: user.id, isActive: true },
+        { onSuccess: () => setConfirmAction(null) },
+      );
     }
   };
 

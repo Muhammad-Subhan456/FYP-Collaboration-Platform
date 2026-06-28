@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { UserCheck } from "lucide-react";
 
 import {
@@ -11,18 +10,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
-import { coordinatorService } from "@/services/coordinator.service";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorAllTeamsQuery,
+  useCoordinatorEvaluatorOverviewQuery,
+} from "@/queries/coordinator";
 
 export function EvaluatorOverviewCard() {
-  const overviewQuery = useQuery({
-    queryKey: ["coordinator", "evaluator-overview"],
-    queryFn: coordinatorService.getEvaluatorOverview,
-  });
-
-  const teamsQuery = useQuery({
-    queryKey: ["coordinator", "teams"],
-    queryFn: coordinatorService.getAllTeams,
-  });
+  const overviewQuery = useCoordinatorEvaluatorOverviewQuery();
+  const teamsQuery = useCoordinatorAllTeamsQuery();
 
   const evaluatorIds =
     overviewQuery.data?.map((entry) => entry.evaluatorId) ?? [];
@@ -33,6 +29,9 @@ export function EvaluatorOverviewCard() {
   );
 
   const overview = overviewQuery.data ?? [];
+  const isLoading =
+    isCoordinatorQueryInitialLoading(overviewQuery) ||
+    isCoordinatorQueryInitialLoading(teamsQuery);
 
   return (
     <Card>
@@ -46,7 +45,7 @@ export function EvaluatorOverviewCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {overviewQuery.isLoading ? (
+        {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading assignments...</p>
         ) : overview.length === 0 ? (
           <p className="text-sm text-muted-foreground">

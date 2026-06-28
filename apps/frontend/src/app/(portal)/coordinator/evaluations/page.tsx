@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Calendar,
@@ -42,9 +41,11 @@ import {
 import { formatDate, formatDateTime, pluralize } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
-import { coordinatorService } from "@/services/coordinator.service";
+import { useCoordinatorEvaluationMutations } from "@/mutations/coordinator";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorEvaluationsQuery,
+} from "@/queries/coordinator";
 import type { CoordinatorEvaluation, EvaluationPanel } from "@/types/coordinator";
 
 function EvaluationPanels({
@@ -213,7 +214,6 @@ function EvaluationPanels({
 }
 
 export default function CoordinatorEvaluationsPage() {
-  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState<CoordinatorEvaluation | null>(
@@ -240,87 +240,38 @@ export default function CoordinatorEvaluationsPage() {
   const [evaluatorRole, setEvaluatorRole] = useState("EVALUATOR");
   const [evaluationSearch, setEvaluationSearch] = useState("");
 
-  const pageQuery = useCoordinatorPageQuery(
-    "evaluations",
-    coordinatorPageService.getEvaluations,
-  );
+  const pageQuery = useCoordinatorEvaluationsQuery();
 
-  const createEvalMutation = useMutation({
-    mutationFn: coordinatorService.createEvaluation,
-    onSuccess: () => {
-      toast.success("Evaluation created");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "evaluations"] });
+  const {
+    createEvalMutation,
+    createPanelMutation,
+    addEvaluatorMutation,
+    assignTeamsMutation,
+  } = useCoordinatorEvaluationMutations({
+    onCreateEvaluationSuccess: () => {
       setCreateOpen(false);
       setEvalTitle("");
       setEvalDate("");
       setEvalVenue("");
       setEvalRemarks("");
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const createPanelMutation = useMutation({
-    mutationFn: coordinatorService.createEvaluationPanel,
-    onSuccess: (_, vars) => {
-      toast.success("Panel created");
-      queryClient.invalidateQueries({
-        queryKey: ["coordinator", "evaluations"],
-      });
+    onCreatePanelSuccess: () => {
       setPanelOpen(null);
       setPanelRoom("");
       setPanelScheduledAt("");
       setPanelRemarks("");
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const addEvaluatorMutation = useMutation({
-    mutationFn: ({
-      panelId,
-      evaluatorId,
-      role,
-    }: {
-      panelId: string;
-      evaluatorId: string;
-      role?: string;
-    }) => coordinatorService.addPanelEvaluator(panelId, { evaluatorId, role }),
-    onSuccess: () => {
-      toast.success("Evaluator added");
-      queryClient.invalidateQueries({ queryKey: ["coordinator", "evaluations"] });
+    onAddEvaluatorSuccess: () => {
       setEvaluatorOpen(null);
       setEvaluatorId("");
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const assignTeamsMutation = useMutation({
-    mutationFn: ({
-      evaluationId,
-      teamIds,
-      panelId,
-    }: {
-      evaluationId: string;
-      teamIds: string[];
-      panelId?: string;
-    }) =>
-      coordinatorService.assignTeamsToEvaluation(evaluationId, {
-        teamIds,
-        panelId,
-      }),
-    onSuccess: (_, vars) => {
-      toast.success(
-        `${pluralize(vars.teamIds.length, "team")} assigned to evaluation`,
-      );
-      queryClient.invalidateQueries({
-        queryKey: ["coordinator", "evaluations"],
-      });
+    onAssignTeamsSuccess: () => {
       setAssignOpen(null);
       setAssignTeamIds([]);
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

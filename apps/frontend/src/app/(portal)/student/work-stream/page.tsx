@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import {
   ArrowLeft,
   Calendar,
@@ -44,11 +43,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { queryKeys } from "@/lib/react-query";
+import { useStudentWorkStreamMutations } from "@/mutations/student";
 import { useAuth } from "@/providers/auth-provider";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { progressService, uploadService } from "@/services/progress.service";
-import { studentService } from "@/services/student.service";
-import { workStreamService } from "@/services/work-stream.service";
+import {
+  useStudentWorkStreamQuery,
+  isStudentQueryPending,
+} from "@/queries/student";
 import type { Submission } from "@/types/student";
 import type {
   WorkStreamAnnouncementItem,
@@ -104,10 +105,8 @@ export default function StudentWorkStreamPage() {
     Record<string, WorkStreamComment[]>
   >({});
 
-  const pageQuery = useStudentPageQuery(
-    "work-stream",
-    studentService.getWorkStream,
-  );
+  const pageQuery = useStudentWorkStreamQuery();
+  const { commentMutation, submitMutation } = useStudentWorkStreamMutations();
 
   useEffect(() => {
     const announcementId = searchParams.get("announcementId");
@@ -132,57 +131,6 @@ export default function StudentWorkStreamPage() {
     }
   }, [pageQuery.data?.commentsByEntity]);
 
-  const commentMutation = useMutation({
-    mutationFn: workStreamService.createComment,
-    onSuccess: (comment, variables) => {
-      const key = workStreamEntityKey(
-        variables.entityType,
-        variables.entityId,
-      );
-      setLocalComments((prev) => ({
-        ...prev,
-        [key]: [...(prev[key] ?? []), comment],
-      }));
-      queryClient.setQueryData(
-        ["student", "work-stream", user?.userId],
-        (old: typeof pageQuery.data) => {
-          if (!old) return old;
-          return {
-            ...old,
-            commentsByEntity: {
-              ...old.commentsByEntity,
-              [key]: [...(old.commentsByEntity[key] ?? []), comment],
-            },
-          };
-        },
-      );
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: async () => {
-      if (!submitFile || !selectedDeliverableId) {
-        throw new Error("File required");
-      }
-      const uploaded = await uploadService.uploadFile(submitFile);
-      return progressService.createSubmission({
-        deliverableId: selectedDeliverableId,
-        fileUrl: uploaded.fileUrl,
-        remarks: submitRemarks || undefined,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Deliverable submitted");
-      setSubmitOpen(false);
-      setSubmitFile(null);
-      setSubmitRemarks("");
-      queryClient.invalidateQueries({ queryKey: ["student", "work-stream"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
   const selectedAnnouncement = useMemo(
     () =>
       pageQuery.data?.announcements.find(
@@ -199,7 +147,7 @@ export default function StudentWorkStreamPage() {
     [pageQuery.data?.deliverables, selectedDeliverableId],
   );
 
-  if (pageQuery.isLoading || pageQuery.isPending || !pageQuery.data) {
+  if (isStudentQueryPending(pageQuery)) {
     return <DashboardSkeleton />;
   }
 
@@ -212,7 +160,7 @@ export default function StudentWorkStreamPage() {
     );
   }
 
-  const data = pageQuery.data;
+  const data = pageQuery.data!;
   const profiles = {
     ...(data.profiles ?? {}),
     ...(data.supervisorProfile
@@ -239,7 +187,29 @@ export default function StudentWorkStreamPage() {
     entityId: string,
     body: string,
   ) => {
-    await commentMutation.mutateAsync({ entityType, entityId, body });
+    const comment = await commentMutation.mutateAsync({
+      entityType,
+      entityId,
+      body,
+    });
+    const key = workStreamEntityKey(entityType, entityId);
+    setLocalComments((prev) => ({
+      ...prev,
+      [key]: [...(prev[key] ?? []), comment],
+    }));
+    queryClient.setQueryData(
+      queryKeys.student.workStream(user?.userId),
+      (old: typeof pageQuery.data) => {
+        if (!old) return old;
+        return {
+          ...old,
+          commentsByEntity: {
+            ...old.commentsByEntity,
+            [key]: [...(old.commentsByEntity[key] ?? []), comment],
+          },
+        };
+      },
+    );
   };
 
   if (selectedAnnouncement) {
@@ -445,7 +415,23 @@ export default function StudentWorkStreamPage() {
               <Button
                 className="w-full"
                 disabled={submitMutation.isPending || !submitFile}
-                onClick={() => submitMutation.mutate()}
+                onClick={() => {
+                  if (!submitFile || !selectedDeliverableId) return;
+                  submitMutation.mutate(
+                    {
+                      deliverableId: selectedDeliverableId,
+                      file: submitFile,
+                      remarks: submitRemarks || undefined,
+                    },
+                    {
+                      onSuccess: () => {
+                        setSubmitOpen(false);
+                        setSubmitFile(null);
+                        setSubmitRemarks("");
+                      },
+                    },
+                  );
+                }}
               >
                 {submitMutation.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />

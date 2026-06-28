@@ -17,8 +17,22 @@ import {
   isNotificationActionable,
   resolveNotificationHref,
 } from "@/lib/notification-navigation";
+import { useStudentNotificationMutations } from "@/mutations/student";
+import { useCoordinatorNotificationMutations } from "@/mutations/coordinator";
+import { useSupervisorNotificationMutations } from "@/mutations/supervisor";
+import {
+  isStudentQueryPending,
+  useStudentNotificationsQuery,
+} from "@/queries/student";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorNotificationsQuery,
+} from "@/queries/coordinator";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorNotificationsQuery,
+} from "@/queries/supervisor";
 import { notificationService } from "@/services/notification.service";
-import { studentService } from "@/services/student.service";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
@@ -35,6 +49,183 @@ export function NotificationList({
   fetchNotifications = notificationService.getMyNotifications,
   queryKeyPrefix = "notifications",
 }: NotificationListProps) {
+  if (queryKeyPrefix === "student") {
+    return <StudentNotificationsList />;
+  }
+
+  if (queryKeyPrefix === "supervisor") {
+    return <SupervisorNotificationsList />;
+  }
+
+  if (queryKeyPrefix === "coordinator") {
+    return <CoordinatorNotificationsList />;
+  }
+
+  return (
+    <GenericNotificationsList
+      fetchNotifications={fetchNotifications}
+      queryKeyPrefix={queryKeyPrefix}
+    />
+  );
+}
+
+function StudentNotificationsList() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const notificationsQuery = useStudentNotificationsQuery(page);
+  const { markReadMutation, markAllMutation } =
+    useStudentNotificationMutations();
+
+  const handleNotificationClick = async (notification: Notification) => {
+    const href = resolveNotificationHref(notification);
+
+    try {
+      if (!notification.isRead) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+    } catch {
+      // Navigation should still proceed when mark-as-read fails.
+    }
+
+    if (href) {
+      router.push(href);
+    }
+  };
+
+  if (isStudentQueryPending(notificationsQuery)) {
+    return <DashboardSkeleton />;
+  }
+
+  if (notificationsQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(notificationsQuery.error)}
+        onRetry={() => notificationsQuery.refetch()}
+      />
+    );
+  }
+
+  const { data: notifications, meta } = notificationsQuery.data!;
+
+  return (
+    <NotificationListContent
+      notifications={notifications}
+      meta={meta}
+      page={page}
+      onPageChange={setPage}
+      onNotificationClick={handleNotificationClick}
+      onMarkAll={() => markAllMutation.mutate()}
+      isMarkAllPending={markAllMutation.isPending}
+    />
+  );
+}
+
+function SupervisorNotificationsList() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const notificationsQuery = useSupervisorNotificationsQuery(page);
+  const { markReadMutation, markAllMutation } =
+    useSupervisorNotificationMutations();
+
+  const handleNotificationClick = async (notification: Notification) => {
+    const href = resolveNotificationHref(notification);
+
+    try {
+      if (!notification.isRead) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+    } catch {
+      // Navigation should still proceed when mark-as-read fails.
+    }
+
+    if (href) {
+      router.push(href);
+    }
+  };
+
+  if (isSupervisorQueryInitialLoading(notificationsQuery)) {
+    return <DashboardSkeleton />;
+  }
+
+  if (notificationsQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(notificationsQuery.error)}
+        onRetry={() => notificationsQuery.refetch()}
+      />
+    );
+  }
+
+  const { data: notifications, meta } = notificationsQuery.data!;
+
+  return (
+    <NotificationListContent
+      notifications={notifications}
+      meta={meta}
+      page={page}
+      onPageChange={setPage}
+      onNotificationClick={handleNotificationClick}
+      onMarkAll={() => markAllMutation.mutate()}
+      isMarkAllPending={markAllMutation.isPending}
+    />
+  );
+}
+
+function CoordinatorNotificationsList() {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const notificationsQuery = useCoordinatorNotificationsQuery(page);
+  const { markReadMutation, markAllMutation } =
+    useCoordinatorNotificationMutations();
+
+  const handleNotificationClick = async (notification: Notification) => {
+    const href = resolveNotificationHref(notification);
+
+    try {
+      if (!notification.isRead) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+    } catch {
+      // Navigation should still proceed when mark-as-read fails.
+    }
+
+    if (href) {
+      router.push(href);
+    }
+  };
+
+  if (isCoordinatorQueryInitialLoading(notificationsQuery)) {
+    return <DashboardSkeleton />;
+  }
+
+  if (notificationsQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(notificationsQuery.error)}
+        onRetry={() => notificationsQuery.refetch()}
+      />
+    );
+  }
+
+  const { data: notifications, meta } = notificationsQuery.data!;
+
+  return (
+    <NotificationListContent
+      notifications={notifications}
+      meta={meta}
+      page={page}
+      onPageChange={setPage}
+      onNotificationClick={handleNotificationClick}
+      onMarkAll={() => markAllMutation.mutate()}
+      isMarkAllPending={markAllMutation.isPending}
+    />
+  );
+}
+
+function GenericNotificationsList({
+  fetchNotifications,
+  queryKeyPrefix,
+}: Required<Pick<NotificationListProps, "fetchNotifications" | "queryKeyPrefix">>) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -48,7 +239,6 @@ export function NotificationList({
     mutationFn: notificationService.markAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
-      queryClient.invalidateQueries({ queryKey: ["student", "notifications"] });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -58,7 +248,6 @@ export function NotificationList({
     onSuccess: () => {
       toast.success("All notifications marked as read");
       queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
-      queryClient.invalidateQueries({ queryKey: ["student", "notifications"] });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -93,6 +282,38 @@ export function NotificationList({
   const { data: notifications, meta } = notificationsQuery.data!;
 
   return (
+    <NotificationListContent
+      notifications={notifications}
+      meta={meta}
+      page={page}
+      onPageChange={setPage}
+      onNotificationClick={handleNotificationClick}
+      onMarkAll={() => markAllMutation.mutate()}
+      isMarkAllPending={markAllMutation.isPending}
+    />
+  );
+}
+
+interface NotificationListContentProps {
+  notifications: Notification[];
+  meta: PaginatedResponse<Notification>["meta"];
+  page: number;
+  onPageChange: (page: number) => void;
+  onNotificationClick: (notification: Notification) => void;
+  onMarkAll: () => void;
+  isMarkAllPending: boolean;
+}
+
+function NotificationListContent({
+  notifications,
+  meta,
+  page,
+  onPageChange,
+  onNotificationClick,
+  onMarkAll,
+  isMarkAllPending,
+}: NotificationListContentProps) {
+  return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -105,10 +326,10 @@ export function NotificationList({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => markAllMutation.mutate()}
-            disabled={markAllMutation.isPending}
+            onClick={onMarkAll}
+            disabled={isMarkAllPending}
           >
-            {markAllMutation.isPending ? (
+            {isMarkAllPending ? (
               <Loader2 className="animate-spin" />
             ) : (
               <CheckCheck className="h-4 w-4" />
@@ -138,7 +359,7 @@ export function NotificationList({
                   !notification.isRead && "border-primary/30 bg-primary/5",
                 )}
                 onClick={() =>
-                  actionable && handleNotificationClick(notification)
+                  actionable && onNotificationClick(notification)
                 }
               >
                 <CardContent className="flex gap-4 p-4">
@@ -196,7 +417,7 @@ export function NotificationList({
             variant="outline"
             size="sm"
             disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
+            onClick={() => onPageChange(page - 1)}
           >
             Previous
           </Button>
@@ -204,7 +425,7 @@ export function NotificationList({
             variant="outline"
             size="sm"
             disabled={page >= meta.totalPages}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => onPageChange(page + 1)}
           >
             Next
           </Button>

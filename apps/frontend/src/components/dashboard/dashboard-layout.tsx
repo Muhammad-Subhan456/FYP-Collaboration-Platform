@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
@@ -14,6 +13,8 @@ import { getNavForRole } from "@/constants/navigation";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
+import { closeMobileMenu, selectMobileMenuOpen } from "@/store/slices/ui-slice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import type { UserRole } from "@/types";
 
 interface DashboardLayoutProps {
@@ -31,7 +32,8 @@ export function DashboardLayout({
   title,
   description,
 }: DashboardLayoutProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const dispatch = useAppDispatch();
+  const mobileOpen = useAppSelector(selectMobileMenuOpen);
   const { isLoading, user } = useAuth();
   const navItems = getNavForRole(role);
   const pathname = usePathname();
@@ -54,7 +56,7 @@ export function DashboardLayout({
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
             className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => dispatch(closeMobileMenu())}
           />
           <div className="absolute left-0 top-0 flex h-full w-72 flex-col bg-card shadow-xl">
             <div className="flex h-16 items-center justify-between border-b px-4">
@@ -62,7 +64,7 @@ export function DashboardLayout({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setMobileOpen(false)}
+                onClick={() => dispatch(closeMobileMenu())}
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -75,7 +77,7 @@ export function DashboardLayout({
                   <Link
                     key={item.title}
                     href={item.href}
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => dispatch(closeMobileMenu())}
                     className={cn(
                       "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium",
                       isActive
@@ -102,7 +104,6 @@ export function DashboardLayout({
           title={title}
           description={description}
           role={role}
-          onMenuClick={() => setMobileOpen(true)}
           unreadCount={unreadCount}
         />
         <main className="flex-1 p-4 sm:p-6">{children}</main>

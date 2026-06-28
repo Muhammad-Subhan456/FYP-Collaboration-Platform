@@ -19,15 +19,14 @@ import {
   isDeepLinkFocused,
   useDeepLinkFocus,
 } from "@/hooks/use-deep-link-focus";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { studentService } from "@/services/student.service";
+import { useStudentResultsQuery, isStudentQueryPending } from "@/queries/student";
 import { cn } from "@/lib/utils";
 
 export default function StudentResultsPage() {
   const resultFocusId = useDeepLinkFocus("resultId");
-  const pageQuery = useStudentPageQuery("results", studentService.getResults);
+  const pageQuery = useStudentResultsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

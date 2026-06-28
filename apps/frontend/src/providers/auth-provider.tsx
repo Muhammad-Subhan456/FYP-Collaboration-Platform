@@ -19,6 +19,9 @@ import {
   isTokenExpired,
   setStoredToken,
 } from "@/lib/auth";
+import { clearAuthenticatedQueries } from "@/lib/react-query";
+import { resetAppState } from "@/store";
+import { useAppDispatch } from "@/store/hooks";
 import { authService } from "@/services/auth.service";
 import { profileService } from "@/services/profile.service";
 import { getOnboardingPath } from "@/constants/navigation";
@@ -45,21 +48,13 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const dispatch = useAppDispatch();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const clearUserQueries = useCallback(() => {
-    queryClient.removeQueries({ queryKey: ["dashboard"] });
-    queryClient.removeQueries({ queryKey: ["student"] });
-    queryClient.removeQueries({ queryKey: ["supervisor"] });
-    queryClient.removeQueries({ queryKey: ["coordinator"] });
-    queryClient.removeQueries({ queryKey: ["evaluator"] });
-    queryClient.removeQueries({ queryKey: ["team"] });
-    queryClient.removeQueries({ queryKey: ["teams"] });
-    queryClient.removeQueries({ queryKey: ["notifications"] });
-    queryClient.removeQueries({ queryKey: ["profiles"] });
-    queryClient.removeQueries({ queryKey: ["activity-logs"] });
+    clearAuthenticatedQueries(queryClient);
   }, [queryClient]);
 
   const loadProfile = useCallback(async () => {
@@ -145,11 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearUserQueries();
+    resetAppState(dispatch);
     clearStoredToken();
     setUser(null);
     setProfile(null);
     router.push("/auth/login");
-  }, [clearUserQueries, router]);
+  }, [clearUserQueries, dispatch, router]);
 
   const value = useMemo(
     () => ({

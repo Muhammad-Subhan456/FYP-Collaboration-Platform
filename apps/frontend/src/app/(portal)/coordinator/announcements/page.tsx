@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2, Megaphone, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -26,39 +25,28 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { useCoordinatorPageQuery } from "@/hooks/use-coordinator-page";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
-import { coordinatorService } from "@/services/coordinator.service";
+import { useCoordinatorCreateAnnouncementMutation } from "@/mutations/coordinator";
+import {
+  isCoordinatorQueryInitialLoading,
+  useCoordinatorAnnouncementsQuery,
+} from "@/queries/coordinator";
 
 export default function CoordinatorAnnouncementsPage() {
-  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
 
-  const pageQuery = useCoordinatorPageQuery(
-    "announcements",
-    coordinatorPageService.getAnnouncements,
-  );
+  const pageQuery = useCoordinatorAnnouncementsQuery();
 
-  const createMutation = useMutation({
-    mutationFn: coordinatorService.createGlobalAnnouncement,
+  const createMutation = useCoordinatorCreateAnnouncementMutation({
     onSuccess: () => {
-      toast.success("Announcement published");
-      queryClient.invalidateQueries({
-        queryKey: ["coordinator", "announcements"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["global-announcements"],
-      });
       setDialogOpen(false);
       setTitle("");
       setMessage("");
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

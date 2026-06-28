@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useStudentProposalMutations } from "@/mutations/student";
+import { useStudentProposalQuery, isStudentQueryPending } from "@/queries/student";
 import {
   AlertCircle,
   ExternalLink,
@@ -32,9 +32,6 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { proposalService } from "@/services/proposal.service";
-import { studentService } from "@/services/student.service";
 import { useAuth } from "@/providers/auth-provider";
 import type { SupervisorInvitation } from "@/types/supervisor";
 
@@ -45,7 +42,6 @@ function resolveFileUrl(url: string) {
 }
 
 export default function StudentProposalPage() {
-  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -53,10 +49,9 @@ export default function StudentProposalPage() {
     null,
   );
 
-  const pageQuery = useStudentPageQuery(
-    "proposal",
-    studentService.getProposal,
-  );
+  const pageQuery = useStudentProposalQuery();
+  const { requestMutation, ignoreInterestMutation } =
+    useStudentProposalMutations();
 
   const pageData = pageQuery.data;
   const team = pageData?.team ?? null;
@@ -69,44 +64,6 @@ export default function StudentProposalPage() {
   const isWorkflowLocked = pageData?.isWorkflowLocked ?? false;
   const isProfileComplete = pageData?.isProfileComplete ?? false;
   const profiles = pageData?.profiles;
-
-  const invalidateProposal = () => {
-    queryClient.invalidateQueries({ queryKey: ["student", "proposal"] });
-    queryClient.invalidateQueries({ queryKey: ["student", "team"] });
-    queryClient.invalidateQueries({ queryKey: ["proposal"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  };
-
-  const requestMutation = useMutation({
-    mutationFn: (supervisorId: string) =>
-      proposalService.requestSupervisor(supervisorId),
-    onSuccess: () => {
-      toast.success(
-        "Proposal submitted! The supervisor has 5 minutes to respond.",
-      );
-      invalidateProposal();
-      setSendingSupervisorId(null);
-    },
-    onError: (e) => {
-      toast.error(getErrorMessage(e));
-      setSendingSupervisorId(null);
-    },
-  });
-
-  const ignoreInterestMutation = useMutation({
-    mutationFn: (interestId: string) =>
-      proposalService.ignoreInterest(interestId),
-    onSuccess: () => {
-      toast.success("Expression of interest dismissed.");
-      invalidateProposal();
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      setRespondingId(null);
-    },
-    onError: (e) => {
-      toast.error(getErrorMessage(e));
-      setRespondingId(null);
-    },
-  });
 
   const supervisorId = proposal?.assignedSupervisorId;
   const supervisorName = supervisorId
@@ -125,15 +82,19 @@ export default function StudentProposalPage() {
 
   const handleSendProposal = (targetSupervisorId: string) => {
     setSendingSupervisorId(targetSupervisorId);
-    requestMutation.mutate(targetSupervisorId);
+    requestMutation.mutate(targetSupervisorId, {
+      onSettled: () => setSendingSupervisorId(null),
+    });
   };
 
   const handleIgnoreInterest = (interestId: string) => {
     setRespondingId(interestId);
-    ignoreInterestMutation.mutate(interestId);
+    ignoreInterestMutation.mutate(interestId, {
+      onSettled: () => setRespondingId(null),
+    });
   };
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

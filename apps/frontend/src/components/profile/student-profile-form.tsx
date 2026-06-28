@@ -1,10 +1,10 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useUpdateStudentProfileMutation } from "@/mutations/student";
+import { useStudentProfileQuery, isStudentQueryPending } from "@/queries/student";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -22,11 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
-import { studentService } from "@/services/student.service";
 
 const schema = z.object({
   fullName: z.string().min(2),
@@ -61,14 +59,16 @@ const defaultFormValues: FormData = {
 };
 
 export function StudentProfileForm() {
-  const { refreshProfile, user } = useAuth();
-  const queryClient = useQueryClient();
+  const { refreshProfile } = useAuth();
   const [picture, setPicture] = useState<File | null>(null);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["student", "profile", user?.userId],
-    queryFn: studentService.getProfile,
-    enabled: !!user?.userId,
+  const profileQuery = useStudentProfileQuery();
+  const { data, isError, error, refetch } = profileQuery;
+
+  const mutation = useUpdateStudentProfileMutation({
+    onSuccess: async () => {
+      await refreshProfile();
+    },
   });
 
   const {
@@ -104,17 +104,7 @@ export function StudentProfileForm() {
     }
   }, [data, reset]);
 
-  const mutation = useMutation({
-    mutationFn: profileService.updateMyProfile,
-    onSuccess: async () => {
-      await refreshProfile();
-      toast.success("Profile updated");
-      refetch();
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  if (isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(profileQuery)) return <DashboardSkeleton />;
 
   if (isError || !data) {
     return (

@@ -1,18 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-
-import { useAuth } from "@/providers/auth-provider";
-
-export function useEvaluatorPageQuery<T>(
-  page: string,
-  queryFn: () => Promise<T>,
-) {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ["evaluator", page, user?.userId],
-    queryFn,
-    enabled: !!user?.userId,
-  });
+/**
+ * @deprecated There is no Evaluator user role in FOASIS.
+ * Panel evaluators are supervisors assigned via Coordinator → Evaluations.
+ * Use hooks from @/queries/coordinator instead.
+ */
+export function useEvaluatorPageQuery() {
+  throw new Error(
+    "useEvaluatorPageQuery is removed — there is no Evaluator portal role.",
+  );
 }

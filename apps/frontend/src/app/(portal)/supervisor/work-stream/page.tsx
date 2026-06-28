@@ -1,9 +1,8 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import {
   ArrowLeft,
   Calendar,
@@ -52,12 +51,18 @@ import {
 } from "@/components/ui/select";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { queryKeys } from "@/lib/react-query";
+import { useSupervisorWorkStreamMutations } from "@/mutations/supervisor";
 import { useAuth } from "@/providers/auth-provider";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { uploadService } from "@/services/progress.service";
-import { supervisorPageService } from "@/services/supervisor-page.service";
-import { supervisorService } from "@/services/supervisor.service";
-import { workStreamService } from "@/services/work-stream.service";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorWorkStreamQuery,
+} from "@/queries/supervisor";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  selectSupervisorTeamFilterIds,
+  setSupervisorTeamFilterIds,
+} from "@/store/slices/work-stream-ui-slice";
 import type { DeliverableType, Submission } from "@/types/student";
 import type {
   WorkStreamAnnouncementItem,
@@ -91,9 +96,10 @@ export default function SupervisorWorkStreamPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
+  const filterTeamIds = useAppSelector(selectSupervisorTeamFilterIds);
 
   const [mainTab, setMainTab] = useState<MainTab>("announcements");
-  const [filterTeamIds, setFilterTeamIds] = useState<string[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
     string | null
   >(null);
@@ -129,14 +135,42 @@ export default function SupervisorWorkStreamPage() {
   const filterKey =
     filterTeamIds.length > 0 ? filterTeamIds.join(",") : "all";
 
-  const pageQuery = useSupervisorPageQuery(
-    "work-stream",
-    () =>
-      supervisorPageService.getWorkStream(
-        filterTeamIds.length > 0 ? filterTeamIds : undefined,
-      ),
-    filterKey,
-  );
+  const pageQuery = useSupervisorWorkStreamQuery(filterTeamIds);
+
+  const resetForm = () => {
+    setCreateMode(null);
+    setEditAnnouncement(null);
+    setEditDeliverable(null);
+    setFormTitle("");
+    setFormBody("");
+    setFormType("GENERAL");
+    setFormDueDate("");
+    setFormDeliverableType("SRS");
+    setPendingFiles([]);
+    if (pageQuery.data?.teams) {
+      setCreateTeamIds(pageQuery.data.teams.map((team) => team.id));
+    }
+  };
+
+  const {
+    createAnnouncementMutation,
+    updateAnnouncementMutation,
+    createDeliverableMutation,
+    updateDeliverableMutation,
+    deleteAnnouncementMutation,
+    deleteDeliverableMutation,
+    toggleSubmissionsMutation,
+    reviewMutation,
+    commentMutation,
+  } = useSupervisorWorkStreamMutations({
+    onFormSuccess: resetForm,
+    onAnnouncementDeleted: () => setSelectedAnnouncementId(null),
+    onDeliverableDeleted: () => setSelectedDeliverableId(null),
+    onReviewSuccess: () => {
+      setReviewTarget(null);
+      setReviewFeedback("");
+    },
+  });
 
   useEffect(() => {
     if (searchParams.get("tab") === "deliverables") {
@@ -156,187 +190,46 @@ export default function SupervisorWorkStreamPage() {
     }
   }, [pageQuery.data?.commentsByEntity]);
 
-  const invalidateWorkStream = () => {
-    queryClient.invalidateQueries({ queryKey: ["supervisor", "work-stream"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  };
+  const selectedAnnouncement = useMemo(
+    () =>
+      pageQuery.data?.announcements.find(
+        (item) => item.id === selectedAnnouncementId,
+      ) ?? null,
+    [pageQuery.data?.announcements, selectedAnnouncementId],
+  );
 
-  const uploadAttachments = async () => {
-    const uploaded = [];
-    for (const file of pendingFiles) {
-      const result = await uploadService.uploadFile(file);
-      uploaded.push({ fileUrl: result.fileUrl, fileName: file.name });
-    }
-    return uploaded;
-  };
+  const selectedDeliverable = useMemo(
+    () =>
+      pageQuery.data?.deliverables.find(
+        (item) => item.id === selectedDeliverableId,
+      ) ?? null,
+    [pageQuery.data?.deliverables, selectedDeliverableId],
+  );
 
-  const createAnnouncementMutation = useMutation({
-    mutationFn: async () => {
-      const attachments = await uploadAttachments();
-      return supervisorService.createAnnouncement({
-        title: formTitle.trim(),
-        message: formBody.trim(),
-        type: formType,
-        dueDate: formDueDate
-          ? new Date(formDueDate).toISOString()
-          : undefined,
-        teamIds: createTeamIds,
-        attachments,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Announcement published");
-      resetForm();
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  if (isSupervisorQueryInitialLoading(pageQuery)) {
+    return <DashboardSkeleton />;
+  }
 
-  const updateAnnouncementMutation = useMutation({
-    mutationFn: async () => {
-      if (!editAnnouncement) return;
-      const attachments =
-        pendingFiles.length > 0 ? await uploadAttachments() : undefined;
-      return supervisorService.updateAnnouncement(editAnnouncement.id, {
-        title: formTitle.trim(),
-        message: formBody.trim(),
-        type: formType,
-        dueDate: formDueDate
-          ? new Date(formDueDate).toISOString()
-          : undefined,
-        attachments,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Announcement updated");
-      resetForm();
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  if (pageQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(pageQuery.error)}
+        onRetry={() => pageQuery.refetch()}
+      />
+    );
+  }
 
-  const createDeliverableMutation = useMutation({
-    mutationFn: async () => {
-      const attachments = await uploadAttachments();
-      return supervisorService.createDeliverable({
-        title: formTitle.trim(),
-        description: formBody.trim(),
-        type: formDeliverableType,
-        dueDate: new Date(formDueDate).toISOString(),
-        teamIds: createTeamIds,
-        attachments,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Deliverable created");
-      resetForm();
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  if (!pageQuery.data) {
+    return (
+      <ErrorState
+        message="Failed to load work stream."
+        onRetry={() => pageQuery.refetch()}
+      />
+    );
+  }
 
-  const updateDeliverableMutation = useMutation({
-    mutationFn: async () => {
-      if (!editDeliverable) return;
-      const attachments =
-        pendingFiles.length > 0 ? await uploadAttachments() : undefined;
-      return supervisorService.updateDeliverable(editDeliverable.id, {
-        title: formTitle.trim(),
-        description: formBody.trim(),
-        type: formDeliverableType,
-        dueDate: formDueDate
-          ? new Date(formDueDate).toISOString()
-          : undefined,
-        attachments,
-      });
-    },
-    onSuccess: () => {
-      toast.success("Deliverable updated");
-      resetForm();
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const deleteAnnouncementMutation = useMutation({
-    mutationFn: (id: string) => supervisorService.deleteAnnouncement(id),
-    onSuccess: () => {
-      toast.success("Announcement deleted");
-      setSelectedAnnouncementId(null);
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const deleteDeliverableMutation = useMutation({
-    mutationFn: (id: string) => supervisorService.deleteDeliverable(id),
-    onSuccess: () => {
-      toast.success("Deliverable removed");
-      setSelectedDeliverableId(null);
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const toggleSubmissionsMutation = useMutation({
-    mutationFn: ({
-      id,
-      submissionsOpen,
-    }: {
-      id: string;
-      submissionsOpen: boolean;
-    }) => supervisorService.updateDeliverable(id, { submissionsOpen }),
-    onSuccess: () => {
-      toast.success("Submission settings updated");
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const reviewMutation = useMutation({
-    mutationFn: () =>
-      supervisorService.reviewSubmission(reviewTarget!.id, {
-        status: reviewStatus,
-        feedback: reviewFeedback || undefined,
-      }),
-    onSuccess: () => {
-      toast.success("Review submitted");
-      setReviewTarget(null);
-      setReviewFeedback("");
-      invalidateWorkStream();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const commentMutation = useMutation({
-    mutationFn: workStreamService.createComment,
-    onSuccess: (comment, variables) => {
-      const key = workStreamEntityKey(
-        variables.entityType,
-        variables.entityId,
-      );
-      setLocalComments((prev) => ({
-        ...prev,
-        [key]: [...(prev[key] ?? []), comment],
-      }));
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const resetForm = () => {
-    setCreateMode(null);
-    setEditAnnouncement(null);
-    setEditDeliverable(null);
-    setFormTitle("");
-    setFormBody("");
-    setFormType("GENERAL");
-    setFormDueDate("");
-    setFormDeliverableType("SRS");
-    setPendingFiles([]);
-    if (pageQuery.data?.teams) {
-      setCreateTeamIds(pageQuery.data.teams.map((team) => team.id));
-    }
-  };
+  const data = pageQuery.data;
+  const profiles = data.profiles ?? {};
 
   const openCreate = (mode: CreateMode) => {
     resetForm();
@@ -363,44 +256,34 @@ export default function SupervisorWorkStreamPage() {
     setPendingFiles([]);
   };
 
-  const selectedAnnouncement = useMemo(
-    () =>
-      pageQuery.data?.announcements.find(
-        (item) => item.id === selectedAnnouncementId,
-      ) ?? null,
-    [pageQuery.data?.announcements, selectedAnnouncementId],
-  );
-
-  const selectedDeliverable = useMemo(
-    () =>
-      pageQuery.data?.deliverables.find(
-        (item) => item.id === selectedDeliverableId,
-      ) ?? null,
-    [pageQuery.data?.deliverables, selectedDeliverableId],
-  );
-
-  if (pageQuery.isLoading || pageQuery.isPending || !pageQuery.data) {
-    return <DashboardSkeleton />;
-  }
-
-  if (pageQuery.isError) {
-    return (
-      <ErrorState
-        message={getErrorMessage(pageQuery.error)}
-        onRetry={() => pageQuery.refetch()}
-      />
-    );
-  }
-
-  const data = pageQuery.data;
-  const profiles = data.profiles ?? {};
-
   const postComment = async (
     entityType: "ANNOUNCEMENT" | "DELIVERABLE",
     entityId: string,
     body: string,
   ) => {
-    await commentMutation.mutateAsync({ entityType, entityId, body });
+    const comment = await commentMutation.mutateAsync({
+      entityType,
+      entityId,
+      body,
+    });
+    const key = workStreamEntityKey(entityType, entityId);
+    setLocalComments((prev) => ({
+      ...prev,
+      [key]: [...(prev[key] ?? []), comment],
+    }));
+    queryClient.setQueryData(
+      queryKeys.supervisor.workStream(user?.userId, filterKey),
+      (old: typeof pageQuery.data) => {
+        if (!old) return old;
+        return {
+          ...old,
+          commentsByEntity: {
+            ...old.commentsByEntity,
+            [key]: [...(old.commentsByEntity[key] ?? []), comment],
+          },
+        };
+      },
+    );
   };
 
   const renderCreateDialog = () => (
@@ -517,16 +400,40 @@ export default function SupervisorWorkStreamPage() {
             }
             onClick={() => {
               if (createMode === "announcement") {
+                const payload = {
+                  title: formTitle.trim(),
+                  message: formBody.trim(),
+                  type: formType,
+                  dueDate: formDueDate
+                    ? new Date(formDueDate).toISOString()
+                    : undefined,
+                  teamIds: createTeamIds,
+                  pendingFiles,
+                };
                 if (editAnnouncement) {
-                  updateAnnouncementMutation.mutate();
+                  updateAnnouncementMutation.mutate({
+                    id: editAnnouncement.id,
+                    ...payload,
+                  });
                 } else {
-                  createAnnouncementMutation.mutate();
+                  createAnnouncementMutation.mutate(payload);
                 }
               } else if (createMode === "deliverable") {
+                const payload = {
+                  title: formTitle.trim(),
+                  description: formBody.trim(),
+                  type: formDeliverableType,
+                  dueDate: new Date(formDueDate).toISOString(),
+                  teamIds: createTeamIds,
+                  pendingFiles,
+                };
                 if (editDeliverable) {
-                  updateDeliverableMutation.mutate();
+                  updateDeliverableMutation.mutate({
+                    id: editDeliverable.id,
+                    ...payload,
+                  });
                 } else {
-                  createDeliverableMutation.mutate();
+                  createDeliverableMutation.mutate(payload);
                 }
               }
             }}
@@ -788,7 +695,13 @@ export default function SupervisorWorkStreamPage() {
               <Button
                 className="w-full"
                 disabled={reviewMutation.isPending}
-                onClick={() => reviewMutation.mutate()}
+                onClick={() =>
+                  reviewMutation.mutate({
+                    submissionId: reviewTarget!.id,
+                    status: reviewStatus,
+                    feedback: reviewFeedback || undefined,
+                  })
+                }
               >
                 {reviewMutation.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -832,7 +745,7 @@ export default function SupervisorWorkStreamPage() {
         <TeamSelector
           teams={data.teams}
           selectedTeamIds={filterTeamIds}
-          onChange={setFilterTeamIds}
+          onChange={(teamIds) => dispatch(setSupervisorTeamFilterIds(teamIds))}
           label="Filter by team"
         />
 

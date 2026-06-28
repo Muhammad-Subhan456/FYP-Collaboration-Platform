@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Flag } from "lucide-react";
-import { toast } from "sonner";
+import {
+  useStudentMilestonesQuery,
+  isStudentQueryPending,
+} from "@/queries/student";
+import { useStudentMilestoneTaskStatusMutation } from "@/mutations/student";
 
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -27,32 +30,13 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
-import { useStudentPageQuery } from "@/hooks/use-student-page";
-import { progressService } from "@/services/progress.service";
-import { studentService } from "@/services/student.service";
 import type { Task, TaskStatus } from "@/types/student";
 
 const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 
 function MilestoneTasks({ tasks }: { tasks: Task[] }) {
-  const queryClient = useQueryClient();
   const { user } = useAuth();
-
-  const updateMutation = useMutation({
-    mutationFn: ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: TaskStatus;
-    }) => progressService.updateTaskStatus(taskId, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["student", "milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["student", "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
+  const updateMutation = useStudentMilestoneTaskStatusMutation();
 
   if (tasks.length === 0) {
     return (
@@ -119,12 +103,9 @@ function MilestoneTasks({ tasks }: { tasks: Task[] }) {
 export default function StudentMilestonesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const pageQuery = useStudentPageQuery(
-    "milestones",
-    studentService.getMilestones,
-  );
+  const pageQuery = useStudentMilestonesQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

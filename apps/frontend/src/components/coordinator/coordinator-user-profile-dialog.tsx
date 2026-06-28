@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 
 import { ProfileAvatar } from "@/components/profile/profile-view-modal";
@@ -14,7 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { coordinatorService } from "@/services/coordinator.service";
+import { useCoordinatorUserDetailQuery } from "@/queries/coordinator";
 import type { AuthUserRecord } from "@/types/profile";
 import type { UserProfile } from "@/types/profile";
 import type {
@@ -33,11 +32,7 @@ export function CoordinatorUserProfileDialog({
   open,
   onOpenChange,
 }: CoordinatorUserProfileDialogProps) {
-  const detailQuery = useQuery({
-    queryKey: ["coordinator", "user-detail", user?.id],
-    queryFn: () => coordinatorService.getUserDetail(user!),
-    enabled: open && !!user,
-  });
+  const detailQuery = useCoordinatorUserDetailQuery(user, open && !!user);
 
   const detail = detailQuery.data;
   const profile = detail?.profile;

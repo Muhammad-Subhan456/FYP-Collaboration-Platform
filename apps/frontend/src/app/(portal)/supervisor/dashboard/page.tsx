@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/axios";
-import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
+import { useSupervisorDashboardQuery } from "@/queries/supervisor";
 import { pluralize } from "@/lib/format";
 
 function StatCard({
@@ -52,7 +52,7 @@ export default function SupervisorDashboardPage() {
     isError,
     error,
     refetch,
-  } = useDashboardOverview("SUPERVISOR");
+  } = useSupervisorDashboardQuery();
 
   if (isResolving) return <DashboardSkeleton />;
 

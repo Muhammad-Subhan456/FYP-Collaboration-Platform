@@ -18,8 +18,10 @@ import {
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { supervisorPageService } from "@/services/supervisor-page.service";
+import {
+  useSupervisorTeamsQuery,
+  isSupervisorQueryInitialLoading,
+} from "@/queries/supervisor";
 import type { TeamMember } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
 
@@ -60,12 +62,9 @@ function TeamMembers({
 export default function SupervisorTeamsPage() {
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
-  const pageQuery = useSupervisorPageQuery(
-    "teams",
-    supervisorPageService.getTeams,
-  );
+  const pageQuery = useSupervisorTeamsQuery();
 
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isSupervisorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (

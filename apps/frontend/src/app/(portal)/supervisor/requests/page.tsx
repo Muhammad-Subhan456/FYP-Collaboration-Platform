@@ -1,9 +1,8 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Check, ExternalLink, Loader2, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
@@ -29,9 +28,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
-import { useSupervisorPageQuery } from "@/hooks/use-supervisor-page";
-import { proposalService } from "@/services/proposal.service";
-import { supervisorPageService } from "@/services/supervisor-page.service";
+import { useSupervisorRequestMutations } from "@/mutations/supervisor";
+import {
+  isSupervisorQueryInitialLoading,
+  useSupervisorRequestsQuery,
+} from "@/queries/supervisor";
 import type { Proposal } from "@/types/student";
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -41,53 +42,16 @@ function resolveFileUrl(url: string) {
 }
 
 export default function SupervisorRequestsPage() {
-  const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<{
     proposal: Proposal;
     type: "accept" | "reject";
   } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const pageQuery = useSupervisorPageQuery(
-    "requests",
-    supervisorPageService.getRequests,
-  );
+  const pageQuery = useSupervisorRequestsQuery();
+  const { acceptMutation, rejectMutation } = useSupervisorRequestMutations();
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["supervisor", "requests"] });
-    queryClient.invalidateQueries({ queryKey: ["supervisor", "teams"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  };
-
-  const acceptMutation = useMutation({
-    mutationFn: (proposalId: string) =>
-      proposalService.approveProposal(proposalId),
-    onSuccess: () => {
-      toast.success("Proposal accepted — you are now assigned as supervisor");
-      invalidate();
-      setConfirmAction(null);
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({
-      proposalId,
-      reason,
-    }: {
-      proposalId: string;
-      reason: string;
-    }) => proposalService.rejectProposal(proposalId, reason),
-    onSuccess: () => {
-      toast.success("Proposal rejected");
-      invalidate();
-      setConfirmAction(null);
-      setRejectionReason("");
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  if (pageQuery.isLoading) return <DashboardSkeleton />;
+  if (isSupervisorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
   if (pageQuery.isError) {
     return (
@@ -105,17 +69,27 @@ export default function SupervisorRequestsPage() {
   const handleConfirm = () => {
     if (!confirmAction) return;
     if (confirmAction.type === "accept") {
-      acceptMutation.mutate(confirmAction.proposal.id);
+      acceptMutation.mutate(confirmAction.proposal.id, {
+        onSuccess: () => setConfirmAction(null),
+      });
       return;
     }
     if (!rejectionReason.trim()) {
       toast.error("Rejection reason is required");
       return;
     }
-    rejectMutation.mutate({
-      proposalId: confirmAction.proposal.id,
-      reason: rejectionReason.trim(),
-    });
+    rejectMutation.mutate(
+      {
+        proposalId: confirmAction.proposal.id,
+        reason: rejectionReason.trim(),
+      },
+      {
+        onSuccess: () => {
+          setConfirmAction(null);
+          setRejectionReason("");
+        },
+      },
+    );
   };
 
   return (
