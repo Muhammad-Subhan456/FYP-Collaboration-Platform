@@ -7,7 +7,6 @@ import {
   Megaphone,
   Package,
   Users,
-  Video,
 } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -335,31 +334,6 @@ export default function StudentDashboardPage() {
               </ScrollableFeed>
             ) : (
               <p className="text-sm text-muted-foreground">No announcements.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Video className="h-4 w-4" />
-              Upcoming Meetings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.meetings.length > 0 ? (
-              <ScrollableFeed>
-                {data.meetings.map((m) => (
-                  <div key={m.id} className="rounded-lg border p-3 text-sm">
-                    <p className="font-medium">{m.title}</p>
-                    <p className="text-muted-foreground">
-                      {formatDateTime(m.meetingDate)}
-                    </p>
-                  </div>
-                ))}
-              </ScrollableFeed>
-            ) : (
-              <p className="text-sm text-muted-foreground">No meetings scheduled.</p>
             )}
           </CardContent>
         </Card>

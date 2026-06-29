@@ -161,18 +161,6 @@ export interface Announcement {
   createdAt: string;
 }
 
-export interface Meeting {
-  id: string;
-  supervisorId: string;
-  title: string;
-  description?: string | null;
-  type: string;
-  meetingDate: string;
-  location?: string | null;
-  meetingLink?: string | null;
-  createdAt: string;
-}
-
 export type MilestoneStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
 

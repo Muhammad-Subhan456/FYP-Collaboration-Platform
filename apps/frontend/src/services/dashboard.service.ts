@@ -7,7 +7,6 @@ import type {
   Announcement,
   Deliverable,
   EvaluationAssignment,
-  Meeting,
   Notification,
   Proposal,
   Team,
@@ -24,7 +23,6 @@ export interface StudentDashboardStats {
 export interface SupervisorDashboardStats {
   activeDeliverables: number;
   pendingReviews: number;
-  upcomingMeetings: number;
   supervisedTeams: number;
   activeTeams?: number;
 }
@@ -72,7 +70,6 @@ export interface StudentDashboardOverview extends DashboardOverviewBase {
   evaluations: EvaluationAssignment[];
   teamMembers: TeamMember[];
   announcements: Announcement[];
-  meetings: Meeting[];
   supervisor: UserProfile | null;
 }
 

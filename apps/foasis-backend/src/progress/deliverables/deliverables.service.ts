@@ -53,7 +53,7 @@ export class DeliverablesService {
 
     if (teamIds.length === 0) {
       throw new BadRequestException(
-        'No supervised teams available for this deliverable',
+        'At least one team must be selected',
       );
     }
 

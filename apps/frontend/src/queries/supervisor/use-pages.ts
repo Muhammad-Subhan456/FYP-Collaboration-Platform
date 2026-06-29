@@ -21,10 +21,6 @@ export function useSupervisorInvitationsQuery() {
   );
 }
 
-export function useSupervisorMeetingsQuery() {
-  return useSupervisorAuthQuery("meetings", supervisorPageService.getMeetings);
-}
-
 export function useSupervisorMilestonesQuery() {
   return useSupervisorAuthQuery(
     "milestones",
@@ -39,19 +35,18 @@ export function useSupervisorEvaluationsQuery() {
   );
 }
 
-export function useSupervisorWorkStreamQuery(teamIds: string[]) {
+export function useSupervisorWorkStreamQuery(
+  teamId?: string | null,
+  enabled = true,
+) {
   const { user } = useAuth();
-  const filterKey =
-    teamIds.length > 0 ? teamIds.join(",") : "all";
+  const filterKey = teamId ?? "pending";
 
   return useQuery({
     ...supervisorPageQueryOptions,
     queryKey: queryKeys.supervisor.workStream(user?.userId, filterKey),
-    queryFn: () =>
-      supervisorPageService.getWorkStream(
-        teamIds.length > 0 ? teamIds : undefined,
-      ),
-    enabled: !!user?.userId,
+    queryFn: () => supervisorPageService.getWorkStream(teamId!),
+    enabled: !!user?.userId && !!teamId && enabled,
   });
 }
 

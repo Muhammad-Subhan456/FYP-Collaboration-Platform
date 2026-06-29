@@ -5,31 +5,34 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
  * comments, or other API data here (TanStack Query owns server state).
  */
 export interface WorkStreamUiState {
-  supervisorTeamFilterIds: string[];
+  supervisorTeamFilterId: string | null;
 }
 
 const initialState: WorkStreamUiState = {
-  supervisorTeamFilterIds: [],
+  supervisorTeamFilterId: null,
 };
 
 const workStreamUiSlice = createSlice({
   name: "workStreamUi",
   initialState,
   reducers: {
-    setSupervisorTeamFilterIds(state, action: PayloadAction<string[]>) {
-      state.supervisorTeamFilterIds = action.payload;
+    setSupervisorTeamFilterId(
+      state,
+      action: PayloadAction<string | null>,
+    ) {
+      state.supervisorTeamFilterId = action.payload;
     },
     clearSupervisorTeamFilter(state) {
-      state.supervisorTeamFilterIds = [];
+      state.supervisorTeamFilterId = null;
     },
   },
 });
 
-export const { setSupervisorTeamFilterIds, clearSupervisorTeamFilter } =
+export const { setSupervisorTeamFilterId, clearSupervisorTeamFilter } =
   workStreamUiSlice.actions;
 
 export const workStreamUiReducer = workStreamUiSlice.reducer;
 
-export const selectSupervisorTeamFilterIds = (state: {
+export const selectSupervisorTeamFilterId = (state: {
   workStreamUi: WorkStreamUiState;
-}) => state.workStreamUi.supervisorTeamFilterIds;
+}) => state.workStreamUi.supervisorTeamFilterId;

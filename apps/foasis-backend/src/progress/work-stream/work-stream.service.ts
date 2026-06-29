@@ -506,7 +506,7 @@ export class WorkStreamService {
             isActive: true,
             ...this.teamVisibilityWhere(team.id),
           },
-          orderBy: { dueDate: 'asc' },
+          orderBy: { createdAt: 'desc' },
         }),
         this.prisma.submission.findMany({
           where: { teamId: team.id },
@@ -597,15 +597,23 @@ export class WorkStreamService {
 
   async getSupervisorWorkStream(
     supervisorId: string,
-    filterTeamIds?: string[],
+    filterTeamId?: string,
   ) {
-    const teamIds = await this.resolveTeamIdsForSupervisor(
-      supervisorId,
-      filterTeamIds,
-    );
+    const allTeamIds =
+      await this.getSupervisedTeamIds(supervisorId);
+
+    if (filterTeamId && !allTeamIds.includes(filterTeamId)) {
+      throw new ForbiddenException(
+        'Selected team is not supervised by you',
+      );
+    }
+
+    const contentTeamIds = filterTeamId
+      ? [filterTeamId]
+      : allTeamIds;
 
     const teamRecords = await this.prisma.team.findMany({
-      where: { id: { in: teamIds } },
+      where: { id: { in: allTeamIds } },
       select: { id: true, name: true, projectTitle: true },
     });
 
@@ -613,7 +621,7 @@ export class WorkStreamService {
       teamRecords.map((team) => [team.id, team]),
     );
 
-    const teams = teamIds.map((teamId) => {
+    const teams = allTeamIds.map((teamId) => {
       const team = teamInfoById[teamId];
       return {
         id: teamId,
@@ -627,10 +635,10 @@ export class WorkStreamService {
     ];
 
     const teamFilter =
-      teamIds.length > 0
+      contentTeamIds.length > 0
         ? {
             OR: [
-              { teamId: { in: teamIds } },
+              { teamId: { in: contentTeamIds } },
               { teamId: null },
             ],
           }
@@ -643,7 +651,7 @@ export class WorkStreamService {
       }),
       this.prisma.deliverable.findMany({
         where: { supervisorId, ...teamFilter },
-        orderBy: { dueDate: 'asc' },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -654,8 +662,8 @@ export class WorkStreamService {
         ? await this.prisma.submission.findMany({
             where: {
               deliverableId: { in: deliverableIds },
-              ...(teamIds.length > 0
-                ? { teamId: { in: teamIds } }
+              ...(contentTeamIds.length > 0
+                ? { teamId: { in: contentTeamIds } }
                 : {}),
             },
             orderBy: [

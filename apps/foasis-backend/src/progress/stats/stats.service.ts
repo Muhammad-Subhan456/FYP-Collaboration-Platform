@@ -25,41 +25,27 @@ export class StatsService {
     supervisorId: string,
     supervisedTeamCount?: number,
   ) {
-    const now = new Date();
+    const [activeDeliverables, pendingReviews, supervisedTeams] =
+      await Promise.all([
+        this.prisma.deliverable.count({
+          where: { supervisorId, isActive: true },
+        }),
 
-    const [
-      activeDeliverables,
-      pendingReviews,
-      upcomingMeetings,
-      supervisedTeams,
-    ] = await Promise.all([
-      this.prisma.deliverable.count({
-        where: { supervisorId, isActive: true },
-      }),
+        this.prisma.submission.count({
+          where: {
+            status: 'SUBMITTED',
+            deliverable: { supervisorId },
+          },
+        }),
 
-      this.prisma.submission.count({
-        where: {
-          status: 'SUBMITTED',
-          deliverable: { supervisorId },
-        },
-      }),
-
-      this.prisma.meeting.count({
-        where: {
-          supervisorId,
-          meetingDate: { gte: now },
-        },
-      }),
-
-      supervisedTeamCount !== undefined
-        ? Promise.resolve(supervisedTeamCount)
-        : this.getSupervisedTeamCount(supervisorId),
-    ]);
+        supervisedTeamCount !== undefined
+          ? Promise.resolve(supervisedTeamCount)
+          : this.getSupervisedTeamCount(supervisorId),
+      ]);
 
     return {
       activeDeliverables,
       pendingReviews,
-      upcomingMeetings,
       supervisedTeams,
     };
   }

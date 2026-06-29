@@ -7,7 +7,6 @@ import { AnnouncementsService } from '../progress/announcements/announcements.se
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
-import { MeetingsService } from '../progress/meetings/meetings.service';
 import { MilestonesService } from '../progress/milestones/milestones.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
 import { TasksService } from '../progress/tasks/tasks.service';
@@ -29,7 +28,6 @@ export class StudentPagesService {
     private readonly deliverablesService: DeliverablesService,
     private readonly submissionsService: SubmissionsService,
     private readonly announcementsService: AnnouncementsService,
-    private readonly meetingsService: MeetingsService,
     private readonly milestonesService: MilestonesService,
     private readonly tasksService: TasksService,
     private readonly evaluationsService: EvaluationsService,
@@ -143,37 +141,6 @@ export class StudentPagesService {
       : [];
 
     return { team: ctx.team, announcements };
-  }
-
-  async getMeetings(authUserId: string) {
-    const ctx =
-      await this.studentContextService.load(authUserId);
-
-    const meetings = ctx.teamId
-      ? await this.meetingsService
-          .getForMyTeamByUserId(
-            authUserId,
-            ctx.supervisorId,
-          )
-          .catch(() => [])
-      : [];
-
-    const supervisorIds = [
-      ...new Set(
-        meetings
-          .map((meeting) => meeting.supervisorId)
-          .filter(Boolean),
-      ),
-    ];
-
-    const profiles =
-      supervisorIds.length > 0
-        ? await this.profilesService
-            .findManyByAuthUserIds(supervisorIds)
-            .catch(() => ({}))
-        : {};
-
-    return { team: ctx.team, meetings, profiles };
   }
 
   async getMilestones(authUserId: string) {

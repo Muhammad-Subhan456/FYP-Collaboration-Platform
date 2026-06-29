@@ -37,7 +37,6 @@ export const TABLE_MIGRATIONS: TableMigration[] = [
     table: 'Notification',
     sourceEnvKey: SOURCE_ENV_KEYS.notification,
   },
-  { table: 'Meeting', sourceEnvKey: SOURCE_ENV_KEYS.progress },
   { table: 'Announcement', sourceEnvKey: SOURCE_ENV_KEYS.progress },
   { table: 'Deliverable', sourceEnvKey: SOURCE_ENV_KEYS.progress },
   { table: 'GlobalAnnouncement', sourceEnvKey: SOURCE_ENV_KEYS.progress },

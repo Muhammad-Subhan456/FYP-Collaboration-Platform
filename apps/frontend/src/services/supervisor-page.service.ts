@@ -5,7 +5,6 @@ import type {
   Announcement,
   Deliverable,
   EvaluationResult,
-  Meeting,
   Proposal,
   Submission,
   TeamMember,
@@ -89,11 +88,6 @@ export const supervisorPageService = {
     return res.data;
   },
 
-  getMeetings: async () => {
-    const res = await api.get<Meeting[]>("/supervisor/meetings");
-    return res.data;
-  },
-
   getAnnouncements: async () => {
     const res = await api.get<Announcement[]>("/supervisor/announcements");
     return res.data;
@@ -148,14 +142,11 @@ export const supervisorPageService = {
     return res.data;
   },
 
-  getWorkStream: async (teamIds?: string[]) => {
+  getWorkStream: async (teamId?: string) => {
     const res = await api.get<
       import("@/types/work-stream").SupervisorWorkStreamPageData
     >("/supervisor/work-stream", {
-      params:
-        teamIds && teamIds.length > 0
-          ? { teamIds: teamIds.join(",") }
-          : undefined,
+      params: teamId ? { teamId } : undefined,
     });
     return res.data;
   },

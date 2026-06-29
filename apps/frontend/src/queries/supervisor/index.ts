@@ -10,7 +10,6 @@ export { useSupervisorDashboardQuery } from "./use-dashboard";
 export {
   useSupervisorEvaluationsQuery,
   useSupervisorInvitationsQuery,
-  useSupervisorMeetingsQuery,
   useSupervisorMilestonesQuery,
   useSupervisorNotificationsQuery,
   useSupervisorProfileQuery,

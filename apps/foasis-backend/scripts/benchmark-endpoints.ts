@@ -145,12 +145,6 @@ async function main() {
       },
       {
         module: 'Student',
-        name: 'Meetings',
-        run: () =>
-          studentPagesService.getMeetings(studentId),
-      },
-      {
-        module: 'Student',
         name: 'Notifications',
         run: () =>
           studentPagesService.getNotifications(studentId),

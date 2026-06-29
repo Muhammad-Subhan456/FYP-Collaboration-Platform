@@ -1,7 +1,6 @@
 export {
   invalidateSupervisorEvaluations,
   invalidateSupervisorInvitations,
-  invalidateSupervisorMeetings,
   invalidateSupervisorMilestones,
   invalidateSupervisorNotifications,
   invalidateSupervisorProfile,
@@ -13,7 +12,6 @@ export {
   useSupervisorInviteMutation,
   useSupervisorRequestMutations,
 } from "./use-requests-invitations";
-export { useSupervisorCreateMeetingMutation } from "./use-meetings";
 export {
   useSupervisorCreateMilestoneMutation,
   useSupervisorCreateTaskMutation,

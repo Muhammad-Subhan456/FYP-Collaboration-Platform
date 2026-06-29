@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -36,10 +37,12 @@ export class CreateDeliverableDto {
   @IsString()
   attachmentUrl?: string;
 
-  @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, {
+    message: 'At least one team must be selected',
+  })
   @IsString({ each: true })
-  teamIds?: string[];
+  teamIds!: string[];
 
   @IsOptional()
   @IsArray()

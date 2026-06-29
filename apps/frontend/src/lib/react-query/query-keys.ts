@@ -26,7 +26,6 @@ export const queryKeys = {
     proposal: (userId?: string) => ["student", "proposal", userId] as const,
     workStream: (userId?: string) =>
       ["student", "work-stream", userId] as const,
-    meetings: (userId?: string) => ["student", "meetings", userId] as const,
     tasks: (userId?: string) => ["student", "tasks", userId] as const,
     milestones: (userId?: string) =>
       ["student", "milestones", userId] as const,
@@ -57,8 +56,6 @@ export const queryKeys = {
       ["supervisor", "requests", userId] as const,
     invitations: (userId?: string) =>
       ["supervisor", "invitations", userId] as const,
-    meetings: (userId?: string) =>
-      ["supervisor", "meetings", userId] as const,
     milestones: (userId?: string) =>
       ["supervisor", "milestones", userId] as const,
     evaluations: (userId?: string) =>

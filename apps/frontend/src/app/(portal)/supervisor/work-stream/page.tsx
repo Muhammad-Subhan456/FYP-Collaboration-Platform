@@ -23,7 +23,8 @@ import { AttachmentList } from "@/components/work-stream/attachment-list";
 import { CommentSection } from "@/components/work-stream/comment-section";
 import { RichContent } from "@/components/work-stream/rich-content";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
-import { TeamSelector } from "@/components/work-stream/team-selector";
+import { TeamFilterSelect } from "@/components/work-stream/team-filter-select";
+import { TeamMultiSelect } from "@/components/work-stream/team-multi-select";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,20 +52,23 @@ import {
 } from "@/components/ui/select";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { cn } from "@/lib/utils";
 import { queryKeys } from "@/lib/react-query";
 import { useSupervisorWorkStreamMutations } from "@/mutations/supervisor";
 import { useAuth } from "@/providers/auth-provider";
 import {
   isSupervisorQueryInitialLoading,
+  useSupervisorTeamsQuery,
   useSupervisorWorkStreamQuery,
 } from "@/queries/supervisor";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  selectSupervisorTeamFilterIds,
-  setSupervisorTeamFilterIds,
+  selectSupervisorTeamFilterId,
+  setSupervisorTeamFilterId,
 } from "@/store/slices/work-stream-ui-slice";
 import type { DeliverableType, Submission } from "@/types/student";
 import type {
+  SupervisorWorkStreamTeam,
   WorkStreamAnnouncementItem,
   WorkStreamComment,
   WorkStreamDeliverableItem,
@@ -97,7 +101,7 @@ export default function SupervisorWorkStreamPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
-  const filterTeamIds = useAppSelector(selectSupervisorTeamFilterIds);
+  const filterTeamId = useAppSelector(selectSupervisorTeamFilterId);
 
   const [mainTab, setMainTab] = useState<MainTab>("announcements");
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
@@ -132,24 +136,49 @@ export default function SupervisorWorkStreamPage() {
   >("APPROVED");
   const [reviewFeedback, setReviewFeedback] = useState("");
 
-  const filterKey =
-    filterTeamIds.length > 0 ? filterTeamIds.join(",") : "all";
+  const [teamAssignError, setTeamAssignError] = useState<string | undefined>();
 
-  const pageQuery = useSupervisorWorkStreamQuery(filterTeamIds);
+  const teamsQuery = useSupervisorTeamsQuery();
+
+  const allSupervisedTeams = useMemo<SupervisorWorkStreamTeam[]>(() => {
+    const proposals = teamsQuery.data?.proposals ?? [];
+    const byId = new Map<string, SupervisorWorkStreamTeam>();
+
+    for (const proposal of proposals) {
+      if (!byId.has(proposal.teamId)) {
+        byId.set(proposal.teamId, {
+          id: proposal.teamId,
+          name: proposal.title,
+          projectTitle: proposal.title,
+        });
+      }
+    }
+
+    return [...byId.values()];
+  }, [teamsQuery.data?.proposals]);
+
+  useEffect(() => {
+    if (allSupervisedTeams.length > 0 && !filterTeamId) {
+      dispatch(setSupervisorTeamFilterId(allSupervisedTeams[0].id));
+    }
+  }, [allSupervisedTeams, dispatch, filterTeamId]);
+
+  const filterKey = filterTeamId ?? "pending";
+
+  const pageQuery = useSupervisorWorkStreamQuery(filterTeamId);
 
   const resetForm = () => {
     setCreateMode(null);
     setEditAnnouncement(null);
     setEditDeliverable(null);
+    setTeamAssignError(undefined);
     setFormTitle("");
     setFormBody("");
     setFormType("GENERAL");
     setFormDueDate("");
     setFormDeliverableType("SRS");
     setPendingFiles([]);
-    if (pageQuery.data?.teams) {
-      setCreateTeamIds(pageQuery.data.teams.map((team) => team.id));
-    }
+    setCreateTeamIds([]);
   };
 
   const {
@@ -179,12 +208,6 @@ export default function SupervisorWorkStreamPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (pageQuery.data?.teams.length && createTeamIds.length === 0) {
-      setCreateTeamIds(pageQuery.data.teams.map((team) => team.id));
-    }
-  }, [pageQuery.data?.teams, createTeamIds.length]);
-
-  useEffect(() => {
     if (pageQuery.data?.commentsByEntity) {
       setLocalComments(pageQuery.data.commentsByEntity);
     }
@@ -206,8 +229,26 @@ export default function SupervisorWorkStreamPage() {
     [pageQuery.data?.deliverables, selectedDeliverableId],
   );
 
-  if (isSupervisorQueryInitialLoading(pageQuery)) {
+  if (teamsQuery.isLoading || (filterTeamId && isSupervisorQueryInitialLoading(pageQuery))) {
     return <DashboardSkeleton />;
+  }
+
+  if (teamsQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(teamsQuery.error)}
+        onRetry={() => teamsQuery.refetch()}
+      />
+    );
+  }
+
+  if (allSupervisedTeams.length === 0) {
+    return (
+      <EmptyState
+        title="No supervised teams"
+        description="Assign teams before managing the work stream."
+      />
+    );
   }
 
   if (pageQuery.isError) {
@@ -233,6 +274,7 @@ export default function SupervisorWorkStreamPage() {
 
   const openCreate = (mode: CreateMode) => {
     resetForm();
+    setCreateTeamIds(allSupervisedTeams.map((team) => team.id));
     setCreateMode(mode);
   };
 
@@ -291,7 +333,23 @@ export default function SupervisorWorkStreamPage() {
       open={createMode !== null}
       onOpenChange={(open) => !open && resetForm()}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="flex max-h-[90vh] flex-col overflow-hidden"
+        onPointerDownOutside={(event) => {
+          if (
+            (event.target as HTMLElement).closest("[data-team-multi-select]")
+          ) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          if (
+            (event.target as HTMLElement).closest("[data-team-multi-select]")
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {editAnnouncement || editDeliverable
@@ -300,13 +358,25 @@ export default function SupervisorWorkStreamPage() {
             {createMode === "announcement" ? "Announcement" : "Deliverable"}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div
+            className={cn(
+              "space-y-4",
+              !editAnnouncement && !editDeliverable && "pb-52",
+            )}
+          >
           {!editAnnouncement && !editDeliverable && (
-            <TeamSelector
-              teams={data.teams}
+            <TeamMultiSelect
+              teams={allSupervisedTeams}
               selectedTeamIds={createTeamIds}
-              onChange={setCreateTeamIds}
+              onChange={(teamIds) => {
+                setCreateTeamIds(teamIds);
+                if (teamIds.length > 0) {
+                  setTeamAssignError(undefined);
+                }
+              }}
               label="Assign to teams"
+              error={teamAssignError}
             />
           )}
           <div className="space-y-2">
@@ -384,7 +454,8 @@ export default function SupervisorWorkStreamPage() {
             />
           </div>
         </div>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="shrink-0">
           <Button
             disabled={
               !formTitle.trim() ||
@@ -399,6 +470,15 @@ export default function SupervisorWorkStreamPage() {
               updateDeliverableMutation.isPending
             }
             onClick={() => {
+              if (
+                !editAnnouncement &&
+                !editDeliverable &&
+                createTeamIds.length === 0
+              ) {
+                setTeamAssignError("Select at least one team.");
+                return;
+              }
+
               if (createMode === "announcement") {
                 const payload = {
                   title: formTitle.trim(),
@@ -479,7 +559,8 @@ export default function SupervisorWorkStreamPage() {
                   </CardDescription>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <StatusBadge status={selectedAnnouncement.type} />
                 <Button
                   size="icon"
                   variant="outline"
@@ -549,7 +630,8 @@ export default function SupervisorWorkStreamPage() {
                   Due {formatDate(selectedDeliverable.dueDate)}
                 </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={selectedDeliverable.type} />
                 <Button
                   size="sm"
                   variant="outline"
@@ -742,10 +824,10 @@ export default function SupervisorWorkStreamPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <TeamSelector
-          teams={data.teams}
-          selectedTeamIds={filterTeamIds}
-          onChange={(teamIds) => dispatch(setSupervisorTeamFilterIds(teamIds))}
+        <TeamFilterSelect
+          teams={allSupervisedTeams}
+          selectedTeamId={filterTeamId ?? allSupervisedTeams[0].id}
+          onChange={(teamId) => dispatch(setSupervisorTeamFilterId(teamId))}
           label="Filter by team"
         />
 
@@ -767,14 +849,17 @@ export default function SupervisorWorkStreamPage() {
                 {data.announcements.map((item) => (
                   <Card
                     key={item.id}
-                    className="cursor-pointer hover:border-primary/30"
+                    className="cursor-pointer transition-all hover:border-primary/30 hover:shadow-md"
                     onClick={() => setSelectedAnnouncementId(item.id)}
                   >
                     <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Megaphone className="h-4 w-4 text-primary" />
-                        {item.title}
-                      </CardTitle>
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Megaphone className="h-4 w-4 text-primary" />
+                          {item.title}
+                        </CardTitle>
+                        <StatusBadge status={item.type} />
+                      </div>
                       <CardDescription>
                         {item.teamName ? `${item.teamName} · ` : ""}
                         {formatDate(item.createdAt)}
@@ -802,18 +887,21 @@ export default function SupervisorWorkStreamPage() {
           ) : data.deliverables.length === 0 ? (
             <EmptyState title="No deliverables" description="Create deliverables for your teams." />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
               {data.deliverables.map((item) => (
                 <Card
                   key={item.id}
-                  className="cursor-pointer hover:border-primary/30"
+                  className="cursor-pointer transition-all hover:border-primary/30 hover:shadow-md"
                   onClick={() => setSelectedDeliverableId(item.id)}
                 >
                   <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Package className="h-4 w-4 text-primary" />
-                      {item.title}
-                    </CardTitle>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Package className="h-4 w-4 text-primary" />
+                        {item.title}
+                      </CardTitle>
+                      <StatusBadge status={item.type} />
+                    </div>
                     <CardDescription className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {item.teamName ? `${item.teamName} · ` : ""}

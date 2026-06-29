@@ -285,11 +285,14 @@ export default function StudentWorkStreamPage() {
           <CardHeader>
             <div className="flex items-start justify-between gap-2">
               <CardTitle>{selectedDeliverable.title}</CardTitle>
-              <StatusBadge
-                status={
-                  selectedDeliverable.isActive ? "ACTIVE" : "INACTIVE"
-                }
-              />
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge status={selectedDeliverable.type} />
+                <StatusBadge
+                  status={
+                    selectedDeliverable.submissionOpen ? "ACTIVE" : "INACTIVE"
+                  }
+                />
+              </div>
             </div>
             <CardDescription className="space-y-1">
               <span className="flex items-center gap-2">
@@ -518,7 +521,7 @@ export default function StudentWorkStreamPage() {
           description="Your supervisor has not assigned any deliverables."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-3">
           {data.deliverables.map((item: WorkStreamDeliverableItem) => {
             const history = data.submissionHistories[item.id];
             return (
@@ -533,9 +536,7 @@ export default function StudentWorkStreamPage() {
                       <Package className="h-4 w-4 text-primary" />
                       {item.title}
                     </CardTitle>
-                    <StatusBadge
-                      status={item.submissionOpen ? "ACTIVE" : "INACTIVE"}
-                    />
+                    <StatusBadge status={item.type} />
                   </div>
                   <CardDescription>
                     Due {formatDate(item.dueDate)}
@@ -543,7 +544,9 @@ export default function StudentWorkStreamPage() {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <p className="text-muted-foreground">
-                    Status: {submissionStatusLabel(item, history)}
+                    Submission:{" "}
+                    {item.submissionOpen ? "Open" : "Closed"} ·{" "}
+                    {submissionStatusLabel(item, history)}
                   </p>
                   <div className="flex gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">

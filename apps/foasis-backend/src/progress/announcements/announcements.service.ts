@@ -67,7 +67,7 @@ export class AnnouncementsService {
 
     if (teamIds.length === 0) {
       throw new BadRequestException(
-        'No supervised teams available for this announcement',
+        'At least one team must be selected',
       );
     }
 
@@ -83,7 +83,7 @@ export class AnnouncementsService {
             teamId,
             title: dto.title,
             message: dto.message,
-            type: (dto.type as any) ?? 'GENERAL',
+            type: dto.type ?? 'GENERAL',
             ...(dueDate && { dueDate }),
           },
         });
@@ -152,7 +152,7 @@ export class AnnouncementsService {
           message: dto.message,
         }),
         ...(dto.type !== undefined && {
-          type: dto.type as any,
+          type: dto.type,
         }),
         ...(dto.dueDate !== undefined && {
           dueDate: dueDate ?? null,

@@ -3,7 +3,6 @@ export { useStudentDashboardQuery } from "./use-dashboard";
 export {
   useBrowseTeamsQuery,
   useStudentEvaluationsQuery,
-  useStudentMeetingsQuery,
   useStudentMilestonesQuery,
   useStudentNotificationsQuery,
   useStudentProfileQuery,

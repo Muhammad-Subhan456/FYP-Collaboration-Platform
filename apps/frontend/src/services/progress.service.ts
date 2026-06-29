@@ -7,7 +7,6 @@ import type {
   Deliverable,
   EvaluationAssignment,
   EvaluationResult,
-  Meeting,
   Milestone,
   Submission,
   Task,
@@ -61,11 +60,6 @@ export const progressService = {
 
   getAnnouncementsForMyTeam: async () => {
     const res = await api.get<Announcement[]>("/announcements/for-my-team");
-    return res.data;
-  },
-
-  getMeetingsForMyTeam: async () => {
-    const res = await api.get<Meeting[]>("/meetings/for-my-team");
     return res.data;
   },
 

@@ -8,7 +8,6 @@ import { DeliverablesModule } from '../progress/deliverables/deliverables.module
 import { EvaluationsModule } from '../progress/evaluations/evaluations.module';
 import { StatsModule } from '../progress/stats/stats.module';
 import { AnnouncementsModule } from '../progress/announcements/announcements.module';
-import { MeetingsModule } from '../progress/meetings/meetings.module';
 import { GlobalAnnouncementsModule } from '../progress/global-announcements/global-announcements.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ActivityLogsModule } from '../progress/activity-logs/activity-logs.module';
@@ -27,7 +26,6 @@ import { DashboardService } from './dashboard.service';
     DeliverablesModule,
     EvaluationsModule,
     AnnouncementsModule,
-    MeetingsModule,
     GlobalAnnouncementsModule,
     NotificationsModule,
     ActivityLogsModule,

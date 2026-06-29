@@ -6,7 +6,6 @@ import { AnnouncementsService } from '../progress/announcements/announcements.se
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationPanelsService } from '../progress/evaluation-panels/evaluation-panels.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
-import { MeetingsService } from '../progress/meetings/meetings.service';
 import { MilestonesService } from '../progress/milestones/milestones.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
@@ -20,7 +19,6 @@ export class SupervisorPagesService {
   constructor(
     private readonly dashboardService: DashboardService,
     private readonly deliverablesService: DeliverablesService,
-    private readonly meetingsService: MeetingsService,
     private readonly announcementsService: AnnouncementsService,
     private readonly proposalsService: ProposalsService,
     private readonly submissionsService: SubmissionsService,
@@ -48,16 +46,12 @@ export class SupervisorPagesService {
 
   getWorkStream(
     supervisorId: string,
-    teamIds?: string[],
+    teamId?: string,
   ) {
     return this.workStreamService.getSupervisorWorkStream(
       supervisorId,
-      teamIds,
+      teamId,
     );
-  }
-
-  getMeetings(supervisorId: string) {
-    return this.meetingsService.getMyMeetings(supervisorId);
   }
 
   getAnnouncements(supervisorId: string) {

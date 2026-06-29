@@ -11,7 +11,6 @@ import { DeliverablesService } from '../progress/deliverables/deliverables.servi
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
 import { StatsService } from '../progress/stats/stats.service';
 import { AnnouncementsService } from '../progress/announcements/announcements.service';
-import { MeetingsService } from '../progress/meetings/meetings.service';
 import { GlobalAnnouncementsService } from '../progress/global-announcements/global-announcements.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
@@ -37,7 +36,6 @@ export class DashboardService {
     private readonly deliverablesService: DeliverablesService,
     private readonly evaluationsService: EvaluationsService,
     private readonly announcementsService: AnnouncementsService,
-    private readonly meetingsService: MeetingsService,
     private readonly globalAnnouncementsService: GlobalAnnouncementsService,
     private readonly notificationsService: NotificationsService,
     private readonly activityLogsService: ActivityLogsService,
@@ -210,7 +208,6 @@ export class DashboardService {
       evaluations,
       teamMembers,
       announcements,
-      meetings,
       supervisor,
     ] = await Promise.all([
       this.globalAnnouncementsService
@@ -261,12 +258,6 @@ export class DashboardService {
           supervisorId,
         )
         .catch(() => []),
-      this.meetingsService
-        .getForMyTeamByUserId(
-          authUserId,
-          supervisorId,
-        )
-        .catch(() => []),
       supervisorId
         ? this.profilesService
             .findOne(supervisorId)
@@ -283,7 +274,6 @@ export class DashboardService {
       teamMembers,
       announcements,
       globalAnnouncements,
-      meetings,
       supervisor,
       recentActivity: {
         notifications,

@@ -22,19 +22,6 @@ export function invalidateSupervisorInvitations(queryClient: QueryClient) {
   });
 }
 
-export function invalidateSupervisorMeetings(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.meetings(),
-  });
-  void invalidateDashboard(queryClient, "SUPERVISOR");
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.activityLogs.all,
-  });
-}
-
 export function invalidateSupervisorMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.supervisor.milestones(),

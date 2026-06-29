@@ -5,7 +5,6 @@ import type {
   EvaluationResult,
   Deliverable,
   DeliverableType,
-  Meeting,
   Milestone,
   MilestoneStatus,
   Submission,
@@ -20,7 +19,7 @@ export interface CreateDeliverableInput {
   type: DeliverableType;
   dueDate: string;
   attachmentUrl?: string;
-  teamIds?: string[];
+  teamIds: string[];
   attachments?: { fileUrl: string; fileName: string }[];
 }
 
@@ -29,7 +28,7 @@ export interface CreateAnnouncementInput {
   message: string;
   type?: string;
   dueDate?: string;
-  teamIds?: string[];
+  teamIds: string[];
   attachments?: { fileUrl: string; fileName: string }[];
 }
 
@@ -39,15 +38,6 @@ export interface UpdateAnnouncementInput {
   type?: string;
   dueDate?: string;
   attachments?: { fileUrl: string; fileName: string }[];
-}
-
-export interface CreateMeetingInput {
-  title: string;
-  description?: string;
-  type: string;
-  meetingDate: string;
-  location?: string;
-  meetingLink?: string;
 }
 
 export interface CreateMilestoneInput {
@@ -174,16 +164,6 @@ export const supervisorService = {
 
   deleteDeliverable: async (id: string) => {
     const res = await api.delete(`/deliverables/${id}`);
-    return res.data;
-  },
-
-  getMyMeetings: async () => {
-    const res = await api.get<Meeting[]>("/meetings/my");
-    return res.data;
-  },
-
-  createMeeting: async (data: CreateMeetingInput) => {
-    const res = await api.post<Meeting>("/meetings", data);
     return res.data;
   },
 

@@ -60,13 +60,6 @@ export class StudentController {
     );
   }
 
-  @Get('meetings')
-  getMeetings(@Req() req: { user: { userId: string } }) {
-    return this.studentPagesService.getMeetings(
-      req.user.userId,
-    );
-  }
-
   @Get('milestones')
   getMilestones(@Req() req: { user: { userId: string } }) {
     return this.studentPagesService.getMilestones(
