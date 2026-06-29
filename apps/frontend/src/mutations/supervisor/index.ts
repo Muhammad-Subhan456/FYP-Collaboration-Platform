@@ -12,12 +12,7 @@ export {
   useSupervisorInviteMutation,
   useSupervisorRequestMutations,
 } from "./use-requests-invitations";
-export {
-  useSupervisorCreateMilestoneMutation,
-  useSupervisorCreateTaskMutation,
-  useSupervisorUpdateMilestoneStatusMutation,
-  useSupervisorUpdateTaskStatusMutation,
-} from "./use-milestones";
+export { useSupervisorTeamIssueCommentMutation } from "./use-team-issues";
 export { useSupervisorEvaluationResultMutation } from "./use-evaluations";
 export { useUpdateSupervisorProfileMutation } from "./use-profile";
 export { useSupervisorNotificationMutations } from "./use-notifications";

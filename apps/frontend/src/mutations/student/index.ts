@@ -3,7 +3,6 @@ export {
   invalidateStudentNotifications,
   invalidateStudentProfile,
   invalidateStudentProposal,
-  invalidateStudentTasks,
   invalidateStudentTeam,
   invalidateStudentWorkStream,
 } from "./invalidate";
@@ -14,7 +13,13 @@ export {
 export { useUpdateStudentProfileMutation } from "./use-profile";
 export { useStudentNotificationMutations } from "./use-notifications";
 export {
-  useStudentMilestoneTaskStatusMutation,
-  useStudentTaskStatusMutation,
+  useStudentClaimTeamIssueMutation,
+  useStudentCompleteTeamIssueMutation,
+  useStudentCreateTeamIssueMutation,
+  useStudentReleaseTeamIssueMutation,
+  useStudentTeamIssueCommentMutation,
+  useStudentUpdateTeamIssueMutation,
+} from "./use-team-issues";
+export {
   useStudentWorkStreamMutations,
 } from "./use-work-stream-tasks";

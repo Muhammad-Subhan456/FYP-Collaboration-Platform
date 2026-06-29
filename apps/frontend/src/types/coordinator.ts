@@ -79,29 +79,15 @@ export interface CoordinatorUserTeamContext {
   isLeader: boolean;
 }
 
-export interface CoordinatorUserTask {
-  id: string;
-  milestoneId: string;
-  title: string;
-  description?: string | null;
-  assignedTo: string;
-  dueDate?: string | null;
-  status: string;
-  createdAt: string;
-  milestone?: {
-    id: string;
-    title: string;
-    proposalId: string;
-    dueDate: string;
-    status: string;
-  };
-}
+import type { TeamIssue } from "@/types/team-issue";
+
+export interface CoordinatorUserIssue extends TeamIssue {}
 
 export interface CoordinatorUserDetail {
   user: AuthUserRecord;
   profile: UserProfile | null;
   team: CoordinatorUserTeamContext | null;
-  tasks: CoordinatorUserTask[];
+  issues: CoordinatorUserIssue[];
 }
 
 export interface ServiceHealth {

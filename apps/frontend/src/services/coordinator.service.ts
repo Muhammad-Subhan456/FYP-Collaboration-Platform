@@ -10,7 +10,7 @@ import type {
   GlobalAnnouncement,
   SystemHealthResponse,
   CoordinatorUserDetail,
-  CoordinatorUserTask,
+  CoordinatorUserIssue,
   CoordinatorUserTeamContext,
 } from "@/types/coordinator";
 import type { EvaluationResult } from "@/types/student";
@@ -189,9 +189,9 @@ export const coordinatorService = {
     return res.data;
   },
 
-  getTasksForUser: async (authUserId: string) => {
-    const res = await api.get<CoordinatorUserTask[]>(
-      `/tasks/user/${authUserId}`,
+  getIssuesForUser: async (authUserId: string) => {
+    const res = await api.get<CoordinatorUserIssue[]>(
+      `/team-issues/by-user/${authUserId}`,
     );
     return res.data;
   },
@@ -205,7 +205,7 @@ export const coordinatorService = {
     }
 
     let team: CoordinatorUserTeamContext | null = null;
-    let tasks: CoordinatorUserTask[] = [];
+    let issues: CoordinatorUserIssue[] = [];
 
     if (user.role === "STUDENT") {
       try {
@@ -217,15 +217,15 @@ export const coordinatorService = {
         team = null;
       }
       try {
-        const tasksRes = await api.get<CoordinatorUserTask[]>(
-          `/tasks/user/${user.id}`,
+        const issuesRes = await api.get<CoordinatorUserIssue[]>(
+          `/team-issues/by-user/${user.id}`,
         );
-        tasks = tasksRes.data;
+        issues = issuesRes.data;
       } catch {
-        tasks = [];
+        issues = [];
       }
     }
 
-    return { user, profile, team, tasks };
+    return { user, profile, team, issues };
   },
 };

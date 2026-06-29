@@ -7,9 +7,8 @@ import { AnnouncementsModule } from '../progress/announcements/announcements.mod
 import { DeliverablesModule } from '../progress/deliverables/deliverables.module';
 import { EvaluationResultsModule } from '../progress/evaluation-results/evaluation-results.module';
 import { EvaluationsModule } from '../progress/evaluations/evaluations.module';
-import { MilestonesModule } from '../progress/milestones/milestones.module';
+import { TeamIssuesModule } from '../progress/team-issues/team-issues.module';
 import { SubmissionsModule } from '../progress/submissions/submissions.module';
-import { TasksModule } from '../progress/tasks/tasks.module';
 import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { TeamsModule } from '../teams/teams.module';
@@ -30,8 +29,7 @@ import { StudentContextModule } from './student-context.module';
     DeliverablesModule,
     SubmissionsModule,
     AnnouncementsModule,
-    MilestonesModule,
-    TasksModule,
+    TeamIssuesModule,
     EvaluationsModule,
     EvaluationResultsModule,
     NotificationsModule,

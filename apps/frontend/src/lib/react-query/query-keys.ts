@@ -56,8 +56,10 @@ export const queryKeys = {
       ["supervisor", "requests", userId] as const,
     invitations: (userId?: string) =>
       ["supervisor", "invitations", userId] as const,
-    milestones: (userId?: string) =>
-      ["supervisor", "milestones", userId] as const,
+    milestones: (userId?: string, teamFilterKey?: string) =>
+      teamFilterKey !== undefined
+        ? (["supervisor", "milestones", userId, teamFilterKey] as const)
+        : (["supervisor", "milestones", userId] as const),
     evaluations: (userId?: string) =>
       ["supervisor", "evaluations", userId] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>

@@ -28,10 +28,6 @@ export function useStudentWorkStreamQuery() {
   return useStudentAuthQuery("work-stream", studentService.getWorkStream);
 }
 
-export function useStudentTasksQuery() {
-  return useStudentAuthQuery("tasks", studentService.getTasks);
-}
-
 export function useStudentMilestonesQuery() {
   return useStudentAuthQuery("milestones", studentService.getMilestones);
 }

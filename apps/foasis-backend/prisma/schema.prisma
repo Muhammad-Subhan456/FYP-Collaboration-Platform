@@ -255,16 +255,27 @@ enum AnnouncementType {
   VIVA
 }
 
-enum MilestoneStatus {
-  PENDING
+enum TeamIssueStatus {
+  OPEN
   IN_PROGRESS
   COMPLETED
+  CLOSED
+  ARCHIVED
 }
 
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
+enum TeamIssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TeamIssueActivityType {
+  CREATED
+  CLAIMED
+  RELEASED
+  COMPLETED
+  COMMENTED
+  UPDATED
 }
 
 enum EvaluationType {
@@ -362,31 +373,52 @@ model WorkStreamAttachment {
   @@index([entityType, entityId])
 }
 
-model Milestone {
-  id          String          @id @default(uuid())
-  proposalId  String
-  title       String
-  description String?
-  dueDate     DateTime
-  status      MilestoneStatus @default(PENDING)
-  createdAt   DateTime        @default(now())
-  tasks       Task[]
+model TeamIssue {
+  id              String            @id @default(uuid())
+  teamId          String
+  title           String
+  description     String
+  priority        TeamIssuePriority @default(MEDIUM)
+  labels          String[]          @default([])
+  status          TeamIssueStatus   @default(OPEN)
+  assignedToId    String?
+  githubPrUrl     String?
+  githubCommitUrl String?
+  createdById     String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  completedAt     DateTime?
+  comments        TeamIssueComment[]
+  activities      TeamIssueActivity[]
 
-  @@index([proposalId])
+  @@index([teamId, status])
+  @@index([teamId, createdAt(sort: Desc)])
+  @@index([assignedToId, status])
 }
 
-model Task {
-  id          String     @id @default(uuid())
-  milestoneId String
-  title       String
-  description String?
-  assignedTo  String
-  dueDate     DateTime?
-  status      TaskStatus @default(TODO)
-  createdAt   DateTime   @default(now())
-  milestone   Milestone  @relation(fields: [milestoneId], references: [id])
+model TeamIssueComment {
+  id         String    @id @default(uuid())
+  issueId    String
+  teamId     String
+  authUserId String
+  body       String
+  createdAt  DateTime  @default(now())
+  issue      TeamIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
-  @@index([assignedTo, status])
+  @@index([issueId, createdAt])
+}
+
+model TeamIssueActivity {
+  id          String                @id @default(uuid())
+  issueId     String
+  teamId      String
+  actorId     String
+  type        TeamIssueActivityType
+  description String?
+  createdAt   DateTime              @default(now())
+  issue       TeamIssue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, createdAt])
 }
 
 model ActivityLog {

@@ -161,30 +161,6 @@ export interface Announcement {
   createdAt: string;
 }
 
-export type MilestoneStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
-
-export interface Milestone {
-  id: string;
-  proposalId: string;
-  title: string;
-  description?: string | null;
-  dueDate: string;
-  status: MilestoneStatus;
-  createdAt: string;
-}
-
-export interface Task {
-  id: string;
-  milestoneId: string;
-  title: string;
-  description?: string | null;
-  assignedTo: string;
-  dueDate?: string | null;
-  status: TaskStatus;
-  createdAt: string;
-}
-
 export interface ActivityLog {
   id: string;
   authUserId: string;

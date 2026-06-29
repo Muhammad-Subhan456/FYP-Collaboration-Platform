@@ -99,9 +99,13 @@ export class SupervisorController {
   }
 
   @Get('milestones')
-  getMilestones(@Req() req: { user: { userId: string } }) {
+  getMilestones(
+    @Req() req: { user: { userId: string } },
+    @Query('teamId') teamId?: string,
+  ) {
     return this.supervisorPagesService.getMilestones(
       req.user.userId,
+      teamId,
     );
   }
 

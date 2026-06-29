@@ -21,11 +21,19 @@ export function useSupervisorInvitationsQuery() {
   );
 }
 
-export function useSupervisorMilestonesQuery() {
-  return useSupervisorAuthQuery(
-    "milestones",
-    supervisorPageService.getMilestones,
-  );
+export function useSupervisorMilestonesQuery(
+  teamId?: string | null,
+  enabled = true,
+) {
+  const { user } = useAuth();
+  const filterKey = teamId ?? "pending";
+
+  return useQuery({
+    ...supervisorPageQueryOptions,
+    queryKey: queryKeys.supervisor.milestones(user?.userId, filterKey),
+    queryFn: () => supervisorPageService.getMilestones(teamId!),
+    enabled: !!user?.userId && !!teamId && enabled,
+  });
 }
 
 export function useSupervisorEvaluationsQuery() {

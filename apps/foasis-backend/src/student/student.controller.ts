@@ -67,11 +67,6 @@ export class StudentController {
     );
   }
 
-  @Get('tasks')
-  getTasks(@Req() req: { user: { userId: string } }) {
-    return this.studentPagesService.getTasks(req.user.userId);
-  }
-
   @Get('evaluations')
   getEvaluations(@Req() req: { user: { userId: string } }) {
     return this.studentPagesService.getEvaluations(

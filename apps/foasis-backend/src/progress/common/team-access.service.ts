@@ -166,4 +166,27 @@ export class TeamAccessService {
       // Non-blocking
     }
   }
+
+  async notifyAssignedSupervisor(
+    teamId: string,
+    context: NotificationContext,
+  ): Promise<void> {
+    try {
+      const proposal =
+        await this.proposalsService.getProposalByTeamId(
+          teamId,
+        );
+
+      if (!proposal?.assignedSupervisorId) {
+        return;
+      }
+
+      await this.notificationDispatch.send({
+        authUserId: proposal.assignedSupervisorId,
+        ...context,
+      });
+    } catch {
+      // Non-blocking
+    }
+  }
 }

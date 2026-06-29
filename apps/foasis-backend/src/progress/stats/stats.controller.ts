@@ -48,7 +48,9 @@ export class StatsController {
       return {
         pendingSubmissions: 0,
         upcomingDeliverables: 0,
-        openTasks: 0,
+        openIssues: 0,
+        assignedIssues: 0,
+        recentlyCompletedIssues: 0,
         upcomingEvaluations: 0,
       };
     }

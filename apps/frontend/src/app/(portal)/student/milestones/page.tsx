@@ -1,25 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Flag } from "lucide-react";
-import {
-  useStudentMilestonesQuery,
-  isStudentQueryPending,
-} from "@/queries/student";
-import { useStudentMilestoneTaskStatusMutation } from "@/mutations/student";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Flag, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
 
+import { IssueDetailPanel } from "@/components/team-issues/issue-detail-panel";
+import { IssueListCard } from "@/components/team-issues/issue-list-card";
+import { IssueStatusTabs } from "@/components/team-issues/issue-status-tabs";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -27,83 +35,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import {
+  filterIssuesByTab,
+  type IssueStatusTab,
+} from "@/lib/team-issue-helpers";
+import {
+  useStudentClaimTeamIssueMutation,
+  useStudentCompleteTeamIssueMutation,
+  useStudentCreateTeamIssueMutation,
+  useStudentReleaseTeamIssueMutation,
+  useStudentUpdateTeamIssueMutation,
+  useStudentTeamIssueCommentMutation,
+} from "@/mutations/student";
 import { useAuth } from "@/providers/auth-provider";
-import type { Task, TaskStatus } from "@/types/student";
+import {
+  isStudentQueryPending,
+  useStudentMilestonesQuery,
+} from "@/queries/student";
+import type { TeamIssuePriority } from "@/types/team-issue";
 
-const TASK_STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
-
-function MilestoneTasks({ tasks }: { tasks: Task[] }) {
-  const { user } = useAuth();
-  const updateMutation = useStudentMilestoneTaskStatusMutation();
-
-  if (tasks.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No tasks assigned for this milestone.
-      </p>
-    );
-  }
-
-  return (
-    <ul className="space-y-2">
-      {tasks.map((task) => {
-        const isMine = task.assignedTo === user?.userId;
-        return (
-          <li
-            key={task.id}
-            className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div>
-              <p className="text-sm font-medium">{task.title}</p>
-              {task.description && (
-                <p className="text-xs text-muted-foreground">
-                  {task.description}
-                </p>
-              )}
-              {task.dueDate && (
-                <p className="text-xs text-muted-foreground">
-                  Due {formatDate(task.dueDate)}
-                </p>
-              )}
-            </div>
-            {isMine ? (
-              <Select
-                value={task.status}
-                onValueChange={(v) =>
-                  updateMutation.mutate({
-                    taskId: task.id,
-                    status: v as TaskStatus,
-                  })
-                }
-                disabled={updateMutation.isPending}
-              >
-                <SelectTrigger className="h-8 w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s.replace(/_/g, " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <StatusBadge status={task.status} />
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+const PRIORITIES: TeamIssuePriority[] = ["LOW", "MEDIUM", "HIGH"];
 
 export default function StudentMilestonesPage() {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const issueIdParam = searchParams.get("issueId");
+
+  const [filter, setFilter] = useState<IssueStatusTab>("open");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<TeamIssuePriority>("MEDIUM");
+  const [labelsInput, setLabelsInput] = useState("");
 
   const pageQuery = useStudentMilestonesQuery();
+  const createMutation = useStudentCreateTeamIssueMutation({
+    onSuccess: () => {
+      setCreateOpen(false);
+      setTitle("");
+      setDescription("");
+      setPriority("MEDIUM");
+      setLabelsInput("");
+    },
+  });
+  const claimMutation = useStudentClaimTeamIssueMutation();
+  const releaseMutation = useStudentReleaseTeamIssueMutation();
+  const updateMutation = useStudentUpdateTeamIssueMutation();
+  const completeMutation = useStudentCompleteTeamIssueMutation();
+  const commentMutation = useStudentTeamIssueCommentMutation();
+
+  useEffect(() => {
+    if (issueIdParam) {
+      setSelectedId(issueIdParam);
+    }
+  }, [issueIdParam]);
+
+  const issues = pageQuery.data?.issues ?? [];
+  const profiles = pageQuery.data?.profiles ?? {};
+  const summaries = pageQuery.data?.summaries;
+
+  const filteredIssues = useMemo(
+    () => filterIssuesByTab(issues, filter),
+    [filter, issues],
+  );
+
+  const selectedIssue =
+    issues.find((i) => i.id === selectedId) ?? filteredIssues[0] ?? null;
 
   if (isStudentQueryPending(pageQuery)) return <DashboardSkeleton />;
 
@@ -116,12 +115,11 @@ export default function StudentMilestonesPage() {
     );
   }
 
-  const data = pageQuery.data;
-  if (!data?.team) {
+  if (!pageQuery.data?.team) {
     return (
       <EmptyState
         title="No team yet"
-        description="Join a team to view project milestones."
+        description="Join a team to use the team work board."
         action={
           <Button asChild>
             <Link href="/student/team">Go to Team</Link>
@@ -131,96 +129,217 @@ export default function StudentMilestonesPage() {
     );
   }
 
-  if (!data.proposal) {
-    return (
-      <EmptyState
-        title="No proposal yet"
-        description="Create a team proposal to view milestones from your supervisor."
-        action={
-          <Button asChild>
-            <Link href="/student/proposal">Go to Proposal</Link>
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (!data.proposal.assignedSupervisorId) {
-    return (
-      <EmptyState
-        title="No supervisor assigned"
-        description="Milestones appear once a supervisor is assigned to your team."
-      />
-    );
-  }
-
-  const milestones = data.milestones;
-
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Project Milestones</h2>
-        <p className="text-sm text-muted-foreground">
-          Milestones and tasks for {data.proposal.title}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Milestones</h2>
+          <p className="text-sm text-muted-foreground">
+            Team work board — create, claim, and track issues together
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" />
+          New issue
+        </Button>
       </div>
 
-      {milestones.length === 0 ? (
-        <EmptyState
-          title="No milestones yet"
-          description="Your supervisor has not created milestones for your project."
-        />
-      ) : (
-        <div className="space-y-4">
-          {milestones.map((milestone) => {
-            const expanded = expandedId === milestone.id;
-            return (
-              <Card key={milestone.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Flag className="h-4 w-4 text-primary" />
-                        {milestone.title}
-                      </CardTitle>
-                      <CardDescription>
-                        Due {formatDate(milestone.dueDate)}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={milestone.status} />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          setExpandedId(expanded ? null : milestone.id)
-                        }
-                      >
-                        {expanded ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                        Tasks
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {milestone.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {milestone.description}
-                    </p>
-                  )}
-                  {expanded && (
-                    <MilestoneTasks tasks={milestone.tasks ?? []} />
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+      {summaries && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Open
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">
+              {summaries.open}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                In progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">
+              {summaries.inProgress ?? 0}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Recently completed
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-bold">
+              {summaries.recentlyCompleted}
+            </CardContent>
+          </Card>
         </div>
       )}
+
+      <IssueStatusTabs value={filter} onChange={setFilter} />
+
+      {filteredIssues.length === 0 ? (
+        <EmptyState
+          title={`No ${filter.replace(/_/g, " ")} issues`}
+          description={
+            filter === "open"
+              ? "Create the first issue for your team."
+              : "Issues will appear here when their status changes."
+          }
+          action={
+            filter === "open" ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Flag className="h-4 w-4" />
+                Create issue
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="space-y-2">
+            {filteredIssues.map((issue) => (
+              <IssueListCard
+                key={issue.id}
+                issue={issue}
+                profiles={profiles}
+                selected={selectedIssue?.id === issue.id}
+                showInProgressDetails={filter === "in_progress"}
+                onSelect={() => setSelectedId(issue.id)}
+              />
+            ))}
+          </div>
+
+          {selectedIssue && (
+            <Card>
+              <CardContent className="pt-6">
+                <IssueDetailPanel
+                  issue={selectedIssue}
+                  profiles={profiles}
+                  currentUserId={user?.userId}
+                  onClaim={async () => {
+                    await claimMutation.mutateAsync(selectedIssue.id);
+                  }}
+                  onRelease={async () => {
+                    await releaseMutation.mutateAsync(selectedIssue.id);
+                  }}
+                  onComplete={async (input) => {
+                    await completeMutation.mutateAsync({
+                      issueId: selectedIssue.id,
+                      input,
+                    });
+                  }}
+                  onComment={async (body) => {
+                    await commentMutation.mutateAsync({
+                      issueId: selectedIssue.id,
+                      body,
+                    });
+                  }}
+                  onEdit={async (input) => {
+                    await updateMutation.mutateAsync({
+                      issueId: selectedIssue.id,
+                      input,
+                    });
+                  }}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create issue</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!title.trim() || !description.trim()) {
+                toast.error("Title and description are required");
+                return;
+              }
+              const labels = labelsInput
+                .split(",")
+                .map((l) => l.trim())
+                .filter(Boolean);
+              createMutation.mutate({
+                title: title.trim(),
+                description: description.trim(),
+                priority,
+                labels: labels.length ? labels : undefined,
+              });
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="issueTitle">Title</Label>
+              <Input
+                id="issueTitle"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="issueDescription">Description</Label>
+              <Textarea
+                id="issueDescription"
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select
+                value={priority}
+                onValueChange={(v) =>
+                  setPriority(v as TeamIssuePriority)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="issueLabels">Labels (comma-separated)</Label>
+              <Input
+                id="issueLabels"
+                placeholder="bug, frontend"
+                value={labelsInput}
+                onChange={(e) => setLabelsInput(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending && (
+                  <Loader2 className="animate-spin" />
+                )}
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

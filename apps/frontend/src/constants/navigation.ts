@@ -12,7 +12,6 @@ export const STUDENT_NAV: NavItemConfig[] = [
   { title: "Proposal", href: "/student/proposal", icon: "FileText" },
   { title: "Work Stream", href: "/student/work-stream", icon: "Megaphone" },
   { title: "Milestones", href: "/student/milestones", icon: "Flag" },
-  { title: "My Tasks", href: "/student/tasks", icon: "CheckSquare" },
   { title: "Evaluations", href: "/student/evaluations", icon: "Calendar" },
   { title: "Results", href: "/student/results", icon: "Award" },
   { title: "Notifications", href: "/student/notifications", icon: "Bell" },

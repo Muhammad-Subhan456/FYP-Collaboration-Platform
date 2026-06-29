@@ -12,14 +12,13 @@ import type {
   EvaluationAssignment,
   EvaluationResult,
   JoinRequest,
-  Milestone,
   Notification,
   Proposal,
   Submission,
-  Task,
   Team,
   TeamMember,
 } from "@/types/student";
+import type { StudentMilestonesPageData } from "@/types/team-issue";
 import type {
   DashboardOverview,
   StudentDashboardOverview,
@@ -41,21 +40,6 @@ export interface StudentSubmissionsPageData {
 export interface StudentAnnouncementsPageData {
   team: Team | null;
   announcements: Announcement[];
-}
-
-export interface MilestoneWithTasks extends Milestone {
-  tasks: Task[];
-}
-
-export interface StudentMilestonesPageData {
-  team: Team | null;
-  proposal: Proposal | null;
-  milestones: MilestoneWithTasks[];
-}
-
-export interface StudentTasksPageData {
-  team: Team | null;
-  tasks: Task[];
 }
 
 export interface StudentEvaluationsPageData {
@@ -120,11 +104,6 @@ export const studentService = {
     const res = await api.get<StudentMilestonesPageData>(
       "/student/milestones",
     );
-    return res.data;
-  },
-
-  getTasks: async () => {
-    const res = await api.get<StudentTasksPageData>("/student/tasks");
     return res.data;
   },
 

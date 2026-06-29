@@ -47,8 +47,9 @@ export const TABLE_MIGRATIONS: TableMigration[] = [
     sourceEnvKey: SOURCE_ENV_KEYS.progress,
   },
   { table: 'Submission', sourceEnvKey: SOURCE_ENV_KEYS.progress },
-  { table: 'Milestone', sourceEnvKey: SOURCE_ENV_KEYS.progress },
-  { table: 'Task', sourceEnvKey: SOURCE_ENV_KEYS.progress },
+  { table: 'TeamIssue', sourceEnvKey: SOURCE_ENV_KEYS.progress },
+  { table: 'TeamIssueComment', sourceEnvKey: SOURCE_ENV_KEYS.progress },
+  { table: 'TeamIssueActivity', sourceEnvKey: SOURCE_ENV_KEYS.progress },
   {
     table: 'EvaluationPanel',
     sourceEnvKey: SOURCE_ENV_KEYS.progress,

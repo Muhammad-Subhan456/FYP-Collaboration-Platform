@@ -25,28 +25,81 @@ export class StatsService {
     supervisorId: string,
     supervisedTeamCount?: number,
   ) {
-    const [activeDeliverables, pendingReviews, supervisedTeams] =
-      await Promise.all([
-        this.prisma.deliverable.count({
-          where: { supervisorId, isActive: true },
-        }),
+    const supervisedTeamIds = await this.prisma.proposal.findMany({
+      where: {
+        assignedSupervisorId: supervisorId,
+        status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
+      },
+      select: { teamId: true },
+    });
 
-        this.prisma.submission.count({
-          where: {
-            status: 'SUBMITTED',
-            deliverable: { supervisorId },
-          },
-        }),
+    const teamIds = [
+      ...new Set(supervisedTeamIds.map((p) => p.teamId)),
+    ];
 
-        supervisedTeamCount !== undefined
-          ? Promise.resolve(supervisedTeamCount)
-          : this.getSupervisedTeamCount(supervisorId),
-      ]);
+    const weekAgo = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000,
+    );
+
+    const [
+      activeDeliverables,
+      pendingReviews,
+      supervisedTeams,
+      openIssues,
+      inProgressIssues,
+      recentlyCompletedIssues,
+    ] = await Promise.all([
+      this.prisma.deliverable.count({
+        where: { supervisorId, isActive: true },
+      }),
+
+      this.prisma.submission.count({
+        where: {
+          status: 'SUBMITTED',
+          deliverable: { supervisorId },
+        },
+      }),
+
+      supervisedTeamCount !== undefined
+        ? Promise.resolve(supervisedTeamCount)
+        : this.getSupervisedTeamCount(supervisorId),
+
+      teamIds.length
+        ? this.prisma.teamIssue.count({
+            where: {
+              teamId: { in: teamIds },
+              status: 'OPEN',
+            },
+          })
+        : Promise.resolve(0),
+
+      teamIds.length
+        ? this.prisma.teamIssue.count({
+            where: {
+              teamId: { in: teamIds },
+              status: 'IN_PROGRESS',
+            },
+          })
+        : Promise.resolve(0),
+
+      teamIds.length
+        ? this.prisma.teamIssue.count({
+            where: {
+              teamId: { in: teamIds },
+              status: 'COMPLETED',
+              completedAt: { gte: weekAgo },
+            },
+          })
+        : Promise.resolve(0),
+    ]);
 
     return {
       activeDeliverables,
       pendingReviews,
       supervisedTeams,
+      openIssues,
+      inProgressIssues,
+      recentlyCompletedIssues,
     };
   }
 
@@ -92,7 +145,7 @@ export class StatsService {
     const [
       pendingSubmissions,
       upcomingDeliverables,
-      openTasks,
+      issueSummaries,
       upcomingEvaluations,
     ] = await Promise.all([
       this.prisma.submission.count({
@@ -112,11 +165,35 @@ export class StatsService {
           })
         : Promise.resolve(0),
 
-      this.prisma.task.count({
+      this.prisma.teamIssue.count({
         where: {
-          assignedTo: authUserId,
-          status: { not: 'DONE' },
+          teamId,
+          status: 'OPEN',
         },
+      }).then(async (open) => {
+        const [assignedToMe, recentlyCompleted] =
+          await Promise.all([
+            this.prisma.teamIssue.count({
+              where: {
+                teamId,
+                assignedToId: authUserId,
+                status: 'IN_PROGRESS',
+              },
+            }),
+            this.prisma.teamIssue.count({
+              where: {
+                teamId,
+                status: 'COMPLETED',
+                completedAt: {
+                  gte: new Date(
+                    Date.now() - 7 * 24 * 60 * 60 * 1000,
+                  ),
+                },
+              },
+            }),
+          ]);
+
+        return { open, assignedToMe, recentlyCompleted };
       }),
 
       this.prisma.evaluationAssignment.count({
@@ -130,7 +207,9 @@ export class StatsService {
     return {
       pendingSubmissions,
       upcomingDeliverables,
-      openTasks,
+      openIssues: issueSummaries.open,
+      assignedIssues: issueSummaries.assignedToMe,
+      recentlyCompletedIssues: issueSummaries.recentlyCompleted,
       upcomingEvaluations,
     };
   }

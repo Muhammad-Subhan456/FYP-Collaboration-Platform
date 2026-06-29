@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, Inbox, Package, Users } from "lucide-react";
+import { CheckSquare, Flag, Inbox, Package, Users } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
@@ -101,6 +101,24 @@ export default function SupervisorDashboardPage() {
   return (
     <div className="space-y-6">
       <DashboardInsights lines={insightLines} />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          title="Open Issues"
+          value={stats.openIssues ?? 0}
+          icon={Flag}
+        />
+        <StatCard
+          title="In Progress"
+          value={stats.inProgressIssues ?? 0}
+          icon={Flag}
+        />
+        <StatCard
+          title="Recently Completed"
+          value={stats.recentlyCompletedIssues ?? 0}
+          icon={Flag}
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

@@ -8,7 +8,6 @@ export {
   useStudentProfileQuery,
   useStudentProposalQuery,
   useStudentResultsQuery,
-  useStudentTasksQuery,
   useStudentTeamQuery,
   useStudentWorkStreamQuery,
 } from "./use-pages";

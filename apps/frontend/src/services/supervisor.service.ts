@@ -5,11 +5,7 @@ import type {
   EvaluationResult,
   Deliverable,
   DeliverableType,
-  Milestone,
-  MilestoneStatus,
   Submission,
-  Task,
-  TaskStatus,
 } from "@/types/student";
 import type { ReviewSubmissionInput } from "@/types/supervisor";
 
@@ -38,21 +34,6 @@ export interface UpdateAnnouncementInput {
   type?: string;
   dueDate?: string;
   attachments?: { fileUrl: string; fileName: string }[];
-}
-
-export interface CreateMilestoneInput {
-  proposalId: string;
-  title: string;
-  description?: string;
-  dueDate: string;
-}
-
-export interface CreateTaskInput {
-  milestoneId: string;
-  title: string;
-  description?: string;
-  assignedTo: string;
-  dueDate?: string;
 }
 
 export const supervisorService = {
@@ -167,41 +148,6 @@ export const supervisorService = {
     return res.data;
   },
 
-  getMilestones: async (proposalId: string) => {
-    const res = await api.get<Milestone[]>(`/milestones/${proposalId}`);
-    return res.data;
-  },
-
-  createMilestone: async (data: CreateMilestoneInput) => {
-    const res = await api.post<Milestone>("/milestones", data);
-    return res.data;
-  },
-
-  updateMilestoneStatus: async (
-    milestoneId: string,
-    status: MilestoneStatus,
-  ) => {
-    const res = await api.patch<Milestone>(
-      `/milestones/${milestoneId}/status`,
-      { status },
-    );
-    return res.data;
-  },
-
-  getMilestoneTasks: async (milestoneId: string) => {
-    const res = await api.get<Task[]>(`/tasks/milestone/${milestoneId}`);
-    return res.data;
-  },
-
-  createTask: async (data: CreateTaskInput) => {
-    const res = await api.post<Task>("/tasks", data);
-    return res.data;
-  },
-
-  updateTaskStatus: async (taskId: string, status: TaskStatus) => {
-    const res = await api.patch<Task>(`/tasks/${taskId}/status`, { status });
-    return res.data;
-  },
 
   getSupervisorStats: async () => {
     const res = await api.get("/stats/supervisor");

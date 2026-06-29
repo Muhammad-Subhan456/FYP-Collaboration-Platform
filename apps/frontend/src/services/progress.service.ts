@@ -7,10 +7,7 @@ import type {
   Deliverable,
   EvaluationAssignment,
   EvaluationResult,
-  Milestone,
   Submission,
-  Task,
-  TaskStatus,
   UploadResponse,
 } from "@/types/student";
 
@@ -63,25 +60,6 @@ export const progressService = {
     return res.data;
   },
 
-  getMilestones: async (proposalId: string) => {
-    const res = await api.get<Milestone[]>(`/milestones/${proposalId}`);
-    return res.data;
-  },
-
-  getMilestoneTasks: async (milestoneId: string) => {
-    const res = await api.get<Task[]>(`/tasks/milestone/${milestoneId}`);
-    return res.data;
-  },
-
-  getMyTasks: async () => {
-    const res = await api.get<Task[]>("/tasks/my");
-    return res.data;
-  },
-
-  updateTaskStatus: async (taskId: string, status: TaskStatus) => {
-    const res = await api.patch<Task>(`/tasks/${taskId}/status`, { status });
-    return res.data;
-  },
 
   getMyActivityLogs: async () => {
     const res = await api.get<ActivityLog[]>("/activity-logs/my");

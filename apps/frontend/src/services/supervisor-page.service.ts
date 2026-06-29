@@ -15,7 +15,7 @@ import type {
 import type { SupervisorInvitation, SupervisorRequest } from "@/types/supervisor";
 import type { PaginatedResponse } from "@/types";
 import type { Notification } from "@/types/student";
-import type { MilestoneWithTasks } from "@/services/student.service";
+import type { SupervisorMilestonesPageData } from "@/types/team-issue";
 
 export interface SupervisorTeamsPageData {
   proposals: Proposal[];
@@ -55,13 +55,6 @@ export interface SupervisorReviewsPageData {
   supervisedProposals: Proposal[];
   selectedDeliverableId: string | null;
   submissions: Submission[];
-}
-
-export interface SupervisorMilestonesPageData {
-  proposals: Proposal[];
-  membersByTeamId: Record<string, TeamMember[]>;
-  milestonesByProposalId: Record<string, MilestoneWithTasks[]>;
-  profiles: Record<string, UserProfile>;
 }
 
 export interface SupervisorEvaluationsPageData {
@@ -128,9 +121,10 @@ export const supervisorPageService = {
     return res.data;
   },
 
-  getMilestones: async () => {
+  getMilestones: async (teamId?: string) => {
     const res = await api.get<SupervisorMilestonesPageData>(
       "/supervisor/milestones",
+      { params: teamId ? { teamId } : undefined },
     );
     return res.data;
   },

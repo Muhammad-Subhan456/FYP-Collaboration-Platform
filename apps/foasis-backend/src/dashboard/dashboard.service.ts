@@ -19,7 +19,9 @@ import { StudentContextService } from '../student/student-context.service';
 const EMPTY_STUDENT_STATS = {
   pendingSubmissions: 0,
   upcomingDeliverables: 0,
-  openTasks: 0,
+  openIssues: 0,
+  assignedIssues: 0,
+  recentlyCompletedIssues: 0,
   upcomingEvaluations: 0,
 };
 

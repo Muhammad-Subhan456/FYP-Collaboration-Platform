@@ -18,7 +18,7 @@ import type { AuthUserRecord } from "@/types/profile";
 import type { UserProfile } from "@/types/profile";
 import type {
   CoordinatorUserDetail,
-  CoordinatorUserTask,
+  CoordinatorUserIssue,
 } from "@/types/coordinator";
 
 interface CoordinatorUserProfileDialogProps {
@@ -118,7 +118,7 @@ export function CoordinatorUserProfileDialog({
               <>
                 <Separator />
                 <TeamSection detail={detail} />
-                <TasksSection tasks={detail.tasks} />
+                <IssuesSection issues={detail.issues} />
               </>
             )}
           </div>
@@ -314,35 +314,24 @@ function TeamSection({ detail }: { detail: CoordinatorUserDetail }) {
   );
 }
 
-function TasksSection({ tasks }: { tasks: CoordinatorUserTask[] }) {
+function IssuesSection({ issues }: { issues: CoordinatorUserIssue[] }) {
   return (
     <section className="space-y-3">
       <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Assigned tasks
+        Assigned issues
       </h4>
-      {tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tasks assigned.</p>
+      {issues.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No issues assigned.</p>
       ) : (
         <div className="space-y-2">
-          {tasks.map((task) => (
-            <div key={task.id} className="rounded-lg border p-3 text-sm">
+          {issues.map((issue) => (
+            <div key={issue.id} className="rounded-lg border p-3 text-sm">
               <div className="flex items-start justify-between gap-2">
-                <p className="font-medium">{task.title}</p>
-                <StatusBadge status={task.status} />
+                <p className="font-medium">{issue.title}</p>
+                <StatusBadge status={issue.status} />
               </div>
-              {task.description && (
-                <p className="mt-1 text-muted-foreground">{task.description}</p>
-              )}
-              {task.milestone && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Milestone: {task.milestone.title} ·{" "}
-                  {task.milestone.status.replace(/_/g, " ")}
-                </p>
-              )}
-              {task.dueDate && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Due {formatDate(task.dueDate)}
-                </p>
+              {issue.description && (
+                <p className="mt-1 text-muted-foreground">{issue.description}</p>
               )}
             </div>
           ))}

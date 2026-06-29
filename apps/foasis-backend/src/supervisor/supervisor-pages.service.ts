@@ -6,10 +6,10 @@ import { AnnouncementsService } from '../progress/announcements/announcements.se
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationPanelsService } from '../progress/evaluation-panels/evaluation-panels.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
-import { MilestonesService } from '../progress/milestones/milestones.service';
-import { ProposalsService } from '../proposals/proposals.service';
+import { TeamIssuesService } from '../progress/team-issues/team-issues.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
 import { WorkStreamService } from '../progress/work-stream/work-stream.service';
+import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
 import { ProfilesService } from '../users/profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,7 +22,7 @@ export class SupervisorPagesService {
     private readonly announcementsService: AnnouncementsService,
     private readonly proposalsService: ProposalsService,
     private readonly submissionsService: SubmissionsService,
-    private readonly milestonesService: MilestonesService,
+    private readonly teamIssuesService: TeamIssuesService,
     private readonly evaluationPanelsService: EvaluationPanelsService,
     private readonly evaluationResultsService: EvaluationResultsService,
     private readonly teamsService: TeamsService,
@@ -212,55 +212,76 @@ export class SupervisorPagesService {
     };
   }
 
-  async getMilestones(supervisorId: string) {
+  async getMilestones(supervisorId: string, teamId?: string) {
     const proposals =
       await this.proposalsService.getSupervisedProposals(
         supervisorId,
       );
 
-    const teamIds = [
-      ...new Set(proposals.map((p) => p.teamId)),
+    const teams = [
+      ...new Map(
+        proposals.map((proposal) => [
+          proposal.teamId,
+          {
+            id: proposal.teamId,
+            name: proposal.title,
+          },
+        ]),
+      ).values(),
     ];
 
-    const [membersByTeamId, milestonesEntries] =
-      await Promise.all([
-        this.loadMembersByTeamIds(teamIds),
-        Promise.all(
-          proposals.map(async (proposal) => {
-            const milestones =
-              await this.milestonesService
-                .getMilestonesWithTasks(
-                  proposal.id,
-                  supervisorId,
-                  'SUPERVISOR',
-                )
-                .catch(() => []);
+    const supervisedTeamIds = teams.map((team) => team.id);
+    let resolvedTeamId = teamId ?? supervisedTeamIds[0];
 
-            return [proposal.id, milestones] as const;
-          }),
-        ),
-      ]);
+    if (
+      resolvedTeamId &&
+      !supervisedTeamIds.includes(resolvedTeamId)
+    ) {
+      resolvedTeamId = supervisedTeamIds[0];
+    }
 
-    const milestonesByProposalId = Object.fromEntries(
-      milestonesEntries,
-    );
+    const [issues, members] = await Promise.all([
+      resolvedTeamId
+        ? this.teamIssuesService
+            .getIssuesForTeam(resolvedTeamId)
+            .catch(() => [])
+        : Promise.resolve([]),
+      resolvedTeamId
+        ? this.teamsService
+            .getTeamMembers(resolvedTeamId)
+            .catch(() => [])
+        : Promise.resolve([]),
+    ]);
 
-    const memberIds = Object.values(membersByTeamId)
-      .flat()
-      .map((m: { authUserId: string }) => m.authUserId);
+    const summaries = this.teamIssuesService.buildSummaries(issues);
+
+    const profileIds = [
+      ...issues.map((issue) => issue.createdById),
+      ...issues
+        .map((issue) => issue.assignedToId)
+        .filter((id): id is string => !!id),
+      ...issues.flatMap((issue) =>
+        issue.comments.map((comment) => comment.authUserId),
+      ),
+      ...issues.flatMap((issue) =>
+        issue.activities.map((activity) => activity.actorId),
+      ),
+      ...members.map((member) => member.authUserId),
+    ];
 
     const profiles =
-      memberIds.length > 0
+      profileIds.length > 0
         ? await this.profilesService
-            .findManyByAuthUserIds([...new Set(memberIds)])
+            .findManyByAuthUserIds([...new Set(profileIds)])
             .catch(() => ({}))
         : {};
 
     return {
-      proposals,
-      membersByTeamId,
-      milestonesByProposalId,
+      teams,
+      selectedTeamId: resolvedTeamId ?? null,
+      issues,
       profiles,
+      summaries,
     };
   }
 

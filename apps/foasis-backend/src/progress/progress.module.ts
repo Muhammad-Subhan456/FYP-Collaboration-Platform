@@ -5,8 +5,7 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { DeliverablesModule } from './deliverables/deliverables.module';
 import { SubmissionsModule } from './submissions/submissions.module';
-import { MilestonesModule } from './milestones/milestones.module';
-import { TasksModule } from './tasks/tasks.module';
+import { TeamIssuesModule } from './team-issues/team-issues.module';
 import { GlobalAnnouncementsModule } from './global-announcements/global-announcements.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
 import { EvaluationResultsModule } from './evaluation-results/evaluation-results.module';
@@ -24,8 +23,7 @@ import { WorkStreamModule } from './work-stream/work-stream.module';
     AnnouncementsModule,
     DeliverablesModule,
     SubmissionsModule,
-    MilestonesModule,
-    TasksModule,
+    TeamIssuesModule,
     ActivityLogsModule,
     GlobalAnnouncementsModule,
     EvaluationsModule,

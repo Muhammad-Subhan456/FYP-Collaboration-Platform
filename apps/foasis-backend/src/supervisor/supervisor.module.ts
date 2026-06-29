@@ -6,7 +6,7 @@ import { AnnouncementsModule } from '../progress/announcements/announcements.mod
 import { DeliverablesModule } from '../progress/deliverables/deliverables.module';
 import { EvaluationPanelsModule } from '../progress/evaluation-panels/evaluation-panels.module';
 import { EvaluationResultsModule } from '../progress/evaluation-results/evaluation-results.module';
-import { MilestonesModule } from '../progress/milestones/milestones.module';
+import { TeamIssuesModule } from '../progress/team-issues/team-issues.module';
 import { SubmissionsModule } from '../progress/submissions/submissions.module';
 import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
 import { ProposalsModule } from '../proposals/proposals.module';
@@ -23,7 +23,7 @@ import { SupervisorPagesService } from './supervisor-pages.service';
     AnnouncementsModule,
     ProposalsModule,
     SubmissionsModule,
-    MilestonesModule,
+    TeamIssuesModule,
     EvaluationPanelsModule,
     EvaluationResultsModule,
     TeamsModule,

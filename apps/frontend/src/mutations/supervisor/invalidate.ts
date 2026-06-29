@@ -32,6 +32,7 @@ export function invalidateSupervisorMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.activityLogs.all,
   });
+  invalidateDashboard(queryClient, "SUPERVISOR");
 }
 
 export function invalidateSupervisorEvaluations(queryClient: QueryClient) {

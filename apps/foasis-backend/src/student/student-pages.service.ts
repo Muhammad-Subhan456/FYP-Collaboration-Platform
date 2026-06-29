@@ -7,9 +7,8 @@ import { AnnouncementsService } from '../progress/announcements/announcements.se
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
-import { MilestonesService } from '../progress/milestones/milestones.service';
+import { TeamIssuesService } from '../progress/team-issues/team-issues.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
-import { TasksService } from '../progress/tasks/tasks.service';
 import { WorkStreamService } from '../progress/work-stream/work-stream.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
@@ -28,8 +27,7 @@ export class StudentPagesService {
     private readonly deliverablesService: DeliverablesService,
     private readonly submissionsService: SubmissionsService,
     private readonly announcementsService: AnnouncementsService,
-    private readonly milestonesService: MilestonesService,
-    private readonly tasksService: TasksService,
+    private readonly teamIssuesService: TeamIssuesService,
     private readonly evaluationsService: EvaluationsService,
     private readonly evaluationResultsService: EvaluationResultsService,
     private readonly proposalsService: ProposalsService,
@@ -147,35 +145,55 @@ export class StudentPagesService {
     const ctx =
       await this.studentContextService.load(authUserId);
 
-    const milestones =
-      ctx.proposal?.id
-        ? await this.milestonesService
-            .getMilestonesWithTasks(
-              ctx.proposal.id,
-              authUserId,
-              'STUDENT',
-            )
-            .catch(() => [])
-        : [];
+    if (!ctx.teamId) {
+      return {
+        team: ctx.team,
+        issues: [],
+        profiles: {},
+        summaries: {
+          open: 0,
+          inProgress: 0,
+          recentlyCompleted: 0,
+          assignedToMe: 0,
+        },
+      };
+    }
+
+    const issues = await this.teamIssuesService
+      .getIssuesForTeam(ctx.teamId)
+      .catch(() => []);
+
+    const summaries = this.teamIssuesService.buildSummaries(
+      issues,
+      authUserId,
+    );
+
+    const profileIds = [
+      ...issues.map((issue) => issue.createdById),
+      ...issues
+        .map((issue) => issue.assignedToId)
+        .filter((id): id is string => !!id),
+      ...issues.flatMap((issue) =>
+        issue.comments.map((comment) => comment.authUserId),
+      ),
+      ...issues.flatMap((issue) =>
+        issue.activities.map((activity) => activity.actorId),
+      ),
+    ];
+
+    const profiles =
+      profileIds.length > 0
+        ? await this.profilesService
+            .findManyByAuthUserIds([...new Set(profileIds)])
+            .catch(() => ({}))
+        : {};
 
     return {
       team: ctx.team,
-      proposal: ctx.proposal,
-      milestones,
+      issues,
+      profiles,
+      summaries,
     };
-  }
-
-  async getTasks(authUserId: string) {
-    const ctx =
-      await this.studentContextService.load(authUserId);
-
-    const tasks = ctx.teamId
-      ? await this.tasksService
-          .getMyTasks(authUserId)
-          .catch(() => [])
-      : [];
-
-    return { team: ctx.team, tasks };
   }
 
   async getEvaluations(authUserId: string) {

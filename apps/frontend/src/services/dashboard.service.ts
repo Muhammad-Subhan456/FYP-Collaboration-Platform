@@ -16,7 +16,9 @@ import type {
 export interface StudentDashboardStats {
   pendingSubmissions: number;
   upcomingDeliverables: number;
-  openTasks: number;
+  openIssues: number;
+  assignedIssues: number;
+  recentlyCompletedIssues: number;
   upcomingEvaluations: number;
 }
 
@@ -25,6 +27,9 @@ export interface SupervisorDashboardStats {
   pendingReviews: number;
   supervisedTeams: number;
   activeTeams?: number;
+  openIssues?: number;
+  inProgressIssues?: number;
+  recentlyCompletedIssues?: number;
 }
 
 export interface CoordinatorUserStats {
