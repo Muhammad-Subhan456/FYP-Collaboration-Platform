@@ -17,11 +17,19 @@ export interface StudentTeamOverview {
   isLeader: boolean;
   profiles: Record<string, UserProfile>;
   browseTeams?: Team[];
+  pendingJoinTeamIds?: string[];
   isWorkflowLocked?: boolean;
   isProfileComplete?: boolean;
   canEditProfile?: boolean;
   canDeleteTeam?: boolean;
   canLeaveTeam?: boolean;
+}
+
+export interface BrowseTeamDetails {
+  team: Team;
+  members: TeamMember[];
+  profiles: Record<string, UserProfile>;
+  memberCount: number;
 }
 
 export const teamService = {
@@ -49,6 +57,13 @@ export const teamService = {
     const res = await api.get<Team[]>("/teams/search", {
       params: { domain },
     });
+    return res.data;
+  },
+
+  getBrowseTeamDetails: async (teamId: string) => {
+    const res = await api.get<BrowseTeamDetails>(
+      `/teams/${teamId}/browse`,
+    );
     return res.data;
   },
 

@@ -76,11 +76,13 @@ export class EvaluatorPagesService {
     evaluatorId: string,
     page = 1,
     limit = 20,
+    isRead?: boolean,
   ) {
     return this.notificationsService.getMyNotifications(
       evaluatorId,
       page,
       limit,
+      isRead,
     );
   }
 

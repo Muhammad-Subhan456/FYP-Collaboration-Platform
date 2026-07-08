@@ -33,6 +33,9 @@ export function invalidateCoordinatorNotifications(queryClient: QueryClient) {
     queryKey: queryKeys.notifications.unreadCount(),
   });
   void queryClient.invalidateQueries({
+    queryKey: queryKeys.notifications.unreadPreview(),
+  });
+  void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.recentActivity(),
   });
   void queryClient.invalidateQueries({

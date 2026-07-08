@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -9,6 +10,7 @@ import { PerformanceInterceptor } from './common/performance/performance.interce
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   if (process.env.PERF_LOG === 'true') {
     app.useGlobalInterceptors(new PerformanceInterceptor());

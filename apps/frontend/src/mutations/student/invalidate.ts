@@ -30,14 +30,14 @@ export function invalidateStudentProposal(queryClient: QueryClient) {
 
 export function invalidateStudentWorkStream(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.workStream(),
+    queryKey: queryKeys.student.workStreamPrefix(),
   });
   void invalidateDashboard(queryClient, "STUDENT");
 }
 
 export function invalidateStudentMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.milestones(),
+    queryKey: queryKeys.student.milestonesPrefix(),
   });
   void queryClient.invalidateQueries({
     queryKey: queryKeys.activityLogs.all,
@@ -51,6 +51,9 @@ export function invalidateStudentMilestones(queryClient: QueryClient) {
 export function invalidateStudentNotifications(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.unreadCount(),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.notifications.unreadPreview(),
   });
   void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.recentActivity(),

@@ -232,11 +232,13 @@ export class StudentPagesService {
     authUserId: string,
     page = 1,
     limit = 20,
+    isRead?: boolean,
   ) {
     return this.notificationsService.getMyNotifications(
       authUserId,
       page,
       limit,
+      isRead,
     );
   }
 

@@ -104,7 +104,6 @@ export function DashboardLayout({
           title={title}
           description={description}
           role={role}
-          unreadCount={unreadCount}
         />
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>

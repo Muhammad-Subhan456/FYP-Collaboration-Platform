@@ -53,7 +53,9 @@ import {
   ProfileAvatar,
   ProfileViewModal,
 } from "@/components/profile/profile-view-modal";
+import { BrowseTeamDetailsDialog } from "@/components/team/browse-team-details-dialog";
 import type { UserProfile } from "@/types/profile";
+import type { Team } from "@/types/student";
 
 const createTeamSchema = z.object({
   name: z.string().min(2, "Team name is required"),
@@ -91,6 +93,12 @@ export default function StudentTeamPage() {
   const [joiningTeamId, setJoiningTeamId] = useState<string | null>(null);
   const [joinedTeamIds, setJoinedTeamIds] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [selectedBrowseTeamId, setSelectedBrowseTeamId] = useState<
+    string | null
+  >(null);
+  const [selectedBrowseTeam, setSelectedBrowseTeam] = useState<Team | null>(
+    null,
   );
   const [isEditingTeam, setIsEditingTeam] = useState(false);
   const [editPdfUrl, setEditPdfUrl] = useState<string | null>(null);
@@ -687,8 +695,45 @@ export default function StudentTeamPage() {
     ? browseQuery.data ?? []
     : overview.browseTeams ?? [];
 
+  const pendingJoinTeamIds = new Set([
+    ...(overview.pendingJoinTeamIds ?? []),
+    ...joinedTeamIds,
+  ]);
+
+  const hasPendingJoinRequest = (teamId: string) =>
+    pendingJoinTeamIds.has(teamId);
+
+  const handleRequestJoin = (teamId: string) => {
+    setJoiningTeamId(teamId);
+    joinMutation.mutate(teamId, {
+      onSuccess: () => {
+        toast.success("Join request sent!");
+        setJoinedTeamIds((prev) => new Set(prev).add(teamId));
+      },
+      onSettled: () => setJoiningTeamId(null),
+    });
+  };
+
   return (
     <Tabs defaultValue="browse" className="space-y-4">
+      <BrowseTeamDetailsDialog
+        teamId={selectedBrowseTeamId}
+        open={!!selectedBrowseTeamId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedBrowseTeamId(null);
+            setSelectedBrowseTeam(null);
+          }
+        }}
+        fallbackTeam={selectedBrowseTeam}
+        hasPendingRequest={
+          selectedBrowseTeamId
+            ? hasPendingJoinRequest(selectedBrowseTeamId)
+            : false
+        }
+        isJoining={joiningTeamId === selectedBrowseTeamId}
+        onRequestJoin={handleRequestJoin}
+      />
       <TabsList>
         <TabsTrigger value="browse">Browse Teams</TabsTrigger>
         <TabsTrigger value="create">Create Team</TabsTrigger>
@@ -728,7 +773,20 @@ export default function StudentTeamPage() {
                 {browseTeams.map((t) => (
                   <div
                     key={t.id}
-                    className="rounded-xl border p-4 transition-all hover:border-primary/30 hover:shadow-sm"
+                    role="button"
+                    tabIndex={0}
+                    className="cursor-pointer rounded-xl border p-4 transition-all hover:border-primary/30 hover:shadow-sm"
+                    onClick={() => {
+                      setSelectedBrowseTeam(t);
+                      setSelectedBrowseTeamId(t.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedBrowseTeam(t);
+                        setSelectedBrowseTeamId(t.id);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div>
@@ -753,26 +811,18 @@ export default function StudentTeamPage() {
                       </span>
                       <Button
                         size="sm"
-                        onClick={() => {
-                          setJoiningTeamId(t.id);
-                          joinMutation.mutate(t.id, {
-                            onSuccess: () => {
-                              toast.success("Join request sent!");
-                              setJoinedTeamIds((prev) =>
-                                new Set(prev).add(t.id),
-                              );
-                            },
-                            onSettled: () => setJoiningTeamId(null),
-                          });
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRequestJoin(t.id);
                         }}
                         disabled={
-                          joiningTeamId === t.id || joinedTeamIds.has(t.id)
+                          joiningTeamId === t.id || hasPendingJoinRequest(t.id)
                         }
                       >
                         {joiningTeamId === t.id && (
                           <Loader2 className="animate-spin" />
                         )}
-                        {joinedTeamIds.has(t.id)
+                        {hasPendingJoinRequest(t.id)
                           ? "Request Sent"
                           : "Request to Join"}
                       </Button>

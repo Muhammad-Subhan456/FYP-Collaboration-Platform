@@ -119,10 +119,26 @@ export const studentService = {
     return res.data;
   },
 
-  getNotifications: async (page = 1, limit = 20) => {
+  getNotifications: async (
+    page = 1,
+    limit = 20,
+    readFilter: import("@/services/notification.service").NotificationReadFilter = "all",
+  ) => {
+    const isRead =
+      readFilter === "unread"
+        ? false
+        : readFilter === "read"
+          ? true
+          : undefined;
     const res = await api.get<PaginatedResponse<Notification>>(
       "/student/notifications",
-      { params: { page, limit } },
+      {
+        params: {
+          page,
+          limit,
+          ...(isRead === undefined ? {} : { isRead }),
+        },
+      },
     );
     return res.data;
   },

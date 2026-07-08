@@ -16,7 +16,7 @@ import { InternalApiKeyGuard } from '../common/guards/internal-api-key.guard';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { CreateBulkNotificationDto } from './dto/create-bulk-notification.dto';
 import { NotificationsService } from './notifications.service';
-import { PaginationQueryDto } from '../common/helpers/pagination';
+import { NotificationsQueryDto } from './dto/notifications-query.dto';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -48,12 +48,13 @@ export class NotificationsController {
   @Get('me')
   getMyNotifications(
     @Req() req: any,
-    @Query() query: PaginationQueryDto,
+    @Query() query: NotificationsQueryDto,
   ) {
     return this.notificationsService.getMyNotifications(
       req.user.userId,
       query.page,
       query.limit,
+      query.isRead,
     );
   }
 

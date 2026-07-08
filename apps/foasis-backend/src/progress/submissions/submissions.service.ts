@@ -10,11 +10,15 @@ import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { TeamAccessService } from '../common/team-access.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { SubmissionSnapshotPayload } from '../../domain-events/domain-event.types';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import {
   buildPaginatedResponse,
   getPaginationParams,
 } from '../../common/helpers/pagination';
+import { serializeSubmission } from '../work-stream/work-stream-realtime';
 
 @Injectable()
 export class SubmissionsService {
@@ -23,6 +27,7 @@ export class SubmissionsService {
     private readonly activityLogsService: ActivityLogsService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly teamAccessService: TeamAccessService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   private async notifySupervisor(
@@ -165,17 +170,27 @@ export class SubmissionsService {
       `${deliverable.title} (v${nextVersion})`,
     );
 
-    await this.notifySupervisor(
-      deliverable.supervisorId,
-      {
-        title: 'New Submission Received',
-        message: `A team submitted ${deliverable.title} (v${nextVersion}).`,
-        type: 'NEW_SUBMISSION',
-        entityType: 'SUBMISSION',
-        entityId: submission.id,
-        route: '/supervisor/work-stream',
+    void this.notifySupervisor(deliverable.supervisorId, {
+      title: 'New Submission Received',
+      message: `A team submitted ${deliverable.title} (v${nextVersion}).`,
+      type: 'NEW_SUBMISSION',
+      entityType: 'SUBMISSION',
+      entityId: submission.id,
+      route: '/supervisor/work-stream',
+    }).catch(() => undefined);
+
+    this.domainEventService.emitSafe<SubmissionSnapshotPayload>({
+      name: DomainEvents.SUBMISSION_CREATED,
+      timestamp: submission.submittedAt.toISOString(),
+      actorId: authUserId,
+      scope: { type: 'team', id: team.id },
+      entity: { type: 'SUBMISSION', id: submission.id },
+      payload: {
+        teamId: team.id,
+        deliverableId: dto.deliverableId,
+        submission: serializeSubmission(submission),
       },
-    );
+    });
 
     return submission;
   }
@@ -378,17 +393,27 @@ export class SubmissionsService {
       submission.deliverable.title,
     );
 
-    await this.notifyTeamMembers(
-      submission.teamId,
-      {
-        title: 'Submission Reviewed',
-        message: `Feedback has been provided for ${submission.deliverable.title}.`,
-        type: 'SUBMISSION_REVIEWED',
-        entityType: 'SUBMISSION',
-        entityId: submission.id,
-        route: '/student/work-stream',
+    void this.notifyTeamMembers(submission.teamId, {
+      title: 'Submission Reviewed',
+      message: `Feedback has been provided for ${submission.deliverable.title}.`,
+      type: 'SUBMISSION_REVIEWED',
+      entityType: 'SUBMISSION',
+      entityId: submission.id,
+      route: '/student/work-stream',
+    }).catch(() => undefined);
+
+    this.domainEventService.emitSafe<SubmissionSnapshotPayload>({
+      name: DomainEvents.SUBMISSION_REVIEWED,
+      timestamp: new Date().toISOString(),
+      actorId: supervisorId,
+      scope: { type: 'team', id: submission.teamId },
+      entity: { type: 'SUBMISSION', id: updatedSubmission.id },
+      payload: {
+        teamId: submission.teamId,
+        deliverableId: submission.deliverableId,
+        submission: serializeSubmission(updatedSubmission),
       },
-    );
+    });
 
     return updatedSubmission;
   }

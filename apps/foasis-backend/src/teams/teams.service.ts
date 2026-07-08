@@ -3,8 +3,10 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   forwardRef,
 } from '@nestjs/common';
+import { JoinRequest, Prisma, ProposalStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,7 +15,21 @@ import { UpdateTeamDto } from './dto/update-team.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 import { ProposalsService } from '../proposals/proposals.service';
+import { DomainEvents } from '../domain-events/domain-event.constants';
+import { DomainEventService } from '../domain-events/domain-event.service';
+import type {
+  DomainEventScope,
+  TeamJoinRequestReceivedPayload,
+  TeamJoinRequestResolvedPayload,
+  TeamMemberJoinedPayload,
+  TeamMemberLeftPayload,
+  TeamRoleUpdatedPayload,
+} from '../domain-events/domain-event.types';
 import { isTeamProfileComplete } from './team-profile.util';
+import {
+  serializeJoinRequest,
+  serializeTeamMember,
+} from './teams-realtime';
 
 @Injectable()
 export class TeamsService {
@@ -23,6 +39,7 @@ export class TeamsService {
     private readonly profilesService: ProfilesService,
     @Inject(forwardRef(() => ProposalsService))
     private readonly proposalsService: ProposalsService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
@@ -43,6 +60,48 @@ export class TeamsService {
         'Team workflow is locked after supervisor acceptance',
       );
     }
+  }
+
+  private async rejectPendingJoinRequestsForUser(
+    authUserId: string,
+    actorId: string,
+  ) {
+    const staleRequests = await this.prisma.joinRequest.findMany({
+      where: {
+        authUserId,
+        status: 'PENDING',
+      },
+    });
+
+    if (staleRequests.length === 0) {
+      return [];
+    }
+
+    await this.prisma.joinRequest.updateMany({
+      where: {
+        authUserId,
+        status: 'PENDING',
+      },
+      data: { status: 'REJECTED' },
+    });
+
+    for (const stale of staleRequests) {
+      this.publishTeamEvent(
+        DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+        actorId,
+        { type: 'team', id: stale.teamId },
+        {
+          teamId: stale.teamId,
+          joinRequest: serializeJoinRequest({
+            ...stale,
+            status: 'REJECTED',
+          }),
+        },
+        stale.id,
+      );
+    }
+
+    return staleRequests;
   }
 
   async createTeam(
@@ -89,9 +148,7 @@ export class TeamsService {
 
 async getAllTeams() {
   return this.prisma.team.findMany({
-    where: {
-      isOpen: true,
-    },
+    where: this.browseTeamsWhere(),
     orderBy: {
       createdAt: 'desc',
     },
@@ -105,9 +162,25 @@ async searchByDomain(domain: string) {
         contains: domain,
         mode: 'insensitive',
       },
-      isOpen: true,
+      ...this.browseTeamsWhere(),
     },
   });
+}
+
+private browseTeamsWhere() {
+  return {
+    isOpen: true,
+    NOT: {
+      proposal: {
+        status: {
+          in: [
+            ProposalStatus.SUPERVISOR_ASSIGNED,
+            ProposalStatus.APPROVED,
+          ],
+        },
+      },
+    },
+  };
 }
 async requestToJoin(
   teamId: string,
@@ -154,43 +227,108 @@ async requestToJoin(
   }
 
   const existingRequest =
-    await this.prisma.joinRequest.findFirst({
+    await this.prisma.joinRequest.findUnique({
       where: {
-        teamId,
-        authUserId,
+        teamId_authUserId: {
+          teamId,
+          authUserId,
+        },
       },
     });
 
-  if (existingRequest) {
+  if (existingRequest?.status === 'PENDING') {
     throw new BadRequestException(
-      'Join request already exists',
+      'Join request already pending',
     );
   }
 
-  return this.prisma.joinRequest.create({
-    data: {
-      teamId,
-      authUserId,
-    },
-  }).then(async (request) => {
-    try {
-      await this.notificationDispatch.send({
-        authUserId: team.leaderId,
-        title: 'FOASIS Team Join Request',
-        message: `A student has requested to join your team "${team.name}".`,
-        type: 'JOIN_REQUEST_RECEIVED',
-        entityType: 'TEAM',
-        entityId: team.id,
-        route: '/student/team',
+  const request = existingRequest
+    ? await this.prisma.joinRequest.update({
+        where: { id: existingRequest.id },
+        data: {
+          status: 'PENDING',
+          createdAt: new Date(),
+        },
+      })
+    : await this.prisma.joinRequest.create({
+        data: {
+          teamId,
+          authUserId,
+        },
       });
-    } catch (error) {
-      console.error(
-        'Failed to notify team leader of join request',
-        error,
-      );
-    }
-    return request;
+
+  await this.notifyJoinRequestReceived(team, request, authUserId);
+
+  return request;
+}
+
+private async notifyJoinRequestReceived(
+  team: { id: string; name: string; leaderId: string },
+  request: JoinRequest,
+  authUserId: string,
+) {
+  try {
+    await this.notificationDispatch.send({
+      authUserId: team.leaderId,
+      title: 'FOASIS Team Join Request',
+      message: `A student has requested to join your team "${team.name}".`,
+      type: 'JOIN_REQUEST_RECEIVED',
+      entityType: 'TEAM',
+      entityId: team.id,
+      route: '/student/team',
+    });
+  } catch (error) {
+    console.error(
+      'Failed to notify team leader of join request',
+      error,
+    );
+  }
+
+  const receivedPayload: TeamJoinRequestReceivedPayload = {
+    teamId: team.id,
+    joinRequest: serializeJoinRequest(request),
+  };
+
+  this.publishTeamEvent(
+    DomainEvents.TEAM_JOIN_REQUEST_RECEIVED,
+    authUserId,
+    { type: 'team', id: team.id },
+    receivedPayload,
+    request.id,
+  );
+}
+
+async getBrowseTeamDetails(teamId: string) {
+  const team = await this.prisma.team.findFirst({
+    where: {
+      id: teamId,
+      ...this.browseTeamsWhere(),
+    },
   });
+
+  if (!team) {
+    throw new NotFoundException(
+      'Team not found or is not available to join',
+    );
+  }
+
+  const members = await this.getTeamMembers(team.id);
+  const profileIds = [
+    team.leaderId,
+    ...members.map((member) => member.authUserId),
+  ];
+
+  const profiles =
+    await this.profilesService
+      .findManyByAuthUserIds([...new Set(profileIds)])
+      .catch(() => ({}));
+
+  return {
+    team,
+    members,
+    profiles,
+    memberCount: members.length,
+  };
 }
 
 async getMyTeamRequests(
@@ -220,106 +358,223 @@ async approveRequest(
   requestId: string,
   leaderId: string,
 ) {
+  const request = await this.prisma.joinRequest.findUnique({
+    where: { id: requestId },
+  });
 
-  const request =
-  await this.prisma.joinRequest.findUnique({
+  if (!request) {
+    throw new BadRequestException('Request not found');
+  }
+
+  if (request.status !== 'PENDING') {
+    throw new BadRequestException(
+      'This join request is no longer pending',
+    );
+  }
+
+  const team = await this.prisma.team.findUnique({
+    where: { id: request.teamId },
+  });
+
+  if (!team) {
+    throw new BadRequestException('Team not found');
+  }
+
+  if (team.leaderId !== leaderId) {
+    throw new ForbiddenException('Not your team');
+  }
+
+  const existingMembership =
+    await this.prisma.teamMember.findUnique({
+      where: { authUserId: request.authUserId },
+    });
+
+  if (existingMembership) {
+    await this.rejectPendingJoinRequestsForUser(
+      request.authUserId,
+      leaderId,
+    );
+
+    throw new BadRequestException(
+      'This student already belongs to another team',
+    );
+  }
+
+  await this.assertTeamNotLocked(team.id);
+
+  const freshRequest = await this.prisma.joinRequest.findUnique({
+    where: { id: requestId },
+  });
+
+  if (!freshRequest || freshRequest.status !== 'PENDING') {
+    throw new BadRequestException(
+      'This join request is no longer pending',
+    );
+  }
+
+  const existingMember = await this.prisma.teamMember.findUnique({
+    where: { authUserId: freshRequest.authUserId },
+  });
+
+  if (existingMember) {
+    await this.rejectPendingJoinRequestsForUser(
+      freshRequest.authUserId,
+      leaderId,
+    );
+
+    throw new BadRequestException(
+      'This student already belongs to another team',
+    );
+  }
+
+  const currentMembers = await this.prisma.teamMember.count({
+    where: { teamId: team.id },
+  });
+
+  if (currentMembers >= team.maxMembers) {
+    throw new BadRequestException('Team is already full');
+  }
+
+  let member;
+  try {
+    member = await this.prisma.teamMember.create({
+      data: {
+        teamId: team.id,
+        authUserId: freshRequest.authUserId,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      await this.rejectPendingJoinRequestsForUser(
+        freshRequest.authUserId,
+        leaderId,
+      );
+
+      throw new BadRequestException(
+        'This student already belongs to another team',
+      );
+    }
+
+    throw error;
+  }
+
+  const approveResult = await this.prisma.joinRequest.updateMany({
     where: {
       id: requestId,
+      status: 'PENDING',
     },
+    data: { status: 'APPROVED' },
   });
 
-if (!request) {
-  throw new BadRequestException(
-    'Request not found',
-  );
-}
+  if (approveResult.count === 0) {
+    await this.prisma.teamMember
+      .delete({ where: { id: member.id } })
+      .catch(() => undefined);
 
-const team = await this.prisma.team.findUnique({
-  where: {
-    id: request.teamId,
-  },
-});
+    throw new BadRequestException(
+      'This join request is no longer pending',
+    );
+  }
 
-if (!team) {
-  throw new BadRequestException(
-    'Team not found',
-  );
-}
+  const approvedRequest =
+    await this.prisma.joinRequest.findUniqueOrThrow({
+      where: { id: requestId },
+    });
 
-if (team.leaderId !== leaderId) {
-  throw new ForbiddenException(
-    'Not your team',
-  );
-}
-
-await this.assertTeamNotLocked(team.id);
-
-const currentMembers =
-  await this.prisma.teamMember.count({
+  const cancelledRequests = await this.prisma.joinRequest.findMany({
     where: {
-      teamId: team.id,
+      authUserId: freshRequest.authUserId,
+      status: 'PENDING',
+      id: { not: requestId },
     },
   });
 
-if (currentMembers >= team.maxMembers) {
-  throw new BadRequestException(
-    'Team is already full',
-  );
-}
-await this.prisma.teamMember.create({
-  data: {
+  if (cancelledRequests.length > 0) {
+    await this.prisma.joinRequest.updateMany({
+      where: {
+        authUserId: freshRequest.authUserId,
+        status: 'PENDING',
+        id: { not: requestId },
+      },
+      data: { status: 'REJECTED' },
+    });
+  }
+
+  const memberCount = await this.prisma.teamMember.count({
+    where: { teamId: team.id },
+  });
+
+  if (memberCount >= team.maxMembers) {
+    await this.prisma.team.update({
+      where: { id: team.id },
+      data: { isOpen: false },
+    });
+  }
+
+  try {
+    await this.notificationDispatch.send({
+      authUserId: approvedRequest.authUserId,
+      title: 'Join Request Approved',
+      message: `You have been accepted into team ${team.name}`,
+      type: 'JOIN_REQUEST_APPROVED',
+      entityType: 'TEAM',
+      entityId: team.id,
+      route: '/student/team',
+    });
+  } catch (error) {
+    console.error('Failed to create notification', error);
+  }
+
+  const resolvedPayload: TeamJoinRequestResolvedPayload = {
     teamId: team.id,
-    authUserId: request.authUserId,
-  },
-});
+    joinRequest: serializeJoinRequest(approvedRequest),
+  };
 
-const memberCount =
-  await this.prisma.teamMember.count({
-    where: {
-      teamId: team.id,
-    },
-  });
-
-if (memberCount >= team.maxMembers) {
-  await this.prisma.team.update({
-    where: {
-      id: team.id,
-    },
-    data: {
-      isOpen: false,
-    },
-  });
-}
-
-await this.prisma.joinRequest.update({
-  where: {
-    id: request.id,
-  },
-  data: {
-    status: 'APPROVED',
-  },
-});
-
-// Create notification
-try {
-  await this.notificationDispatch.send({
-    authUserId: request.authUserId,
-    title: 'Join Request Approved',
-    message: `You have been accepted into team ${team.name}`,
-    type: 'JOIN_REQUEST_APPROVED',
-    entityType: 'TEAM',
-    entityId: team.id,
-    route: '/student/team',
-  });
-} catch (error) {
-  console.error(
-    'Failed to create notification',
+  this.publishTeamEvent(
+    DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+    leaderId,
+    { type: 'team', id: team.id },
+    resolvedPayload,
+    approvedRequest.id,
   );
-}
 
-return {
-  message: 'Request approved successfully',
-};
+  for (const cancelled of cancelledRequests) {
+    const cancelledPayload: TeamJoinRequestResolvedPayload = {
+      teamId: cancelled.teamId,
+      joinRequest: serializeJoinRequest({
+        ...cancelled,
+        status: 'REJECTED',
+      }),
+    };
+
+    this.publishTeamEvent(
+      DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+      leaderId,
+      { type: 'team', id: cancelled.teamId },
+      cancelledPayload,
+      cancelled.id,
+    );
+  }
+
+  const joinedPayload: TeamMemberJoinedPayload = {
+    teamId: team.id,
+    member: serializeTeamMember(member),
+  };
+
+  this.publishTeamEvent(
+    DomainEvents.TEAM_MEMBER_JOINED,
+    leaderId,
+    { type: 'team', id: team.id },
+    joinedPayload,
+    member.id,
+  );
+
+  return {
+    message: 'Request approved successfully',
+  };
 }
 
 async rejectRequest(
@@ -383,6 +638,23 @@ try {
     'Failed to create notification',
   );
 }
+
+const rejectedJoinRequest = await this.prisma.joinRequest.findUniqueOrThrow({
+  where: { id: requestId },
+});
+
+const resolvedPayload: TeamJoinRequestResolvedPayload = {
+  teamId: team.id,
+  joinRequest: serializeJoinRequest(rejectedJoinRequest),
+};
+
+this.publishTeamEvent(
+  DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+  leaderId,
+  { type: 'team', id: team.id },
+  resolvedPayload,
+  requestId,
+);
 
 return {
   message: 'Request rejected successfully',
@@ -550,6 +822,19 @@ async updateMemberRole(
     );
   }
 
+  const rolePayload: TeamRoleUpdatedPayload = {
+    teamId: team.id,
+    member: serializeTeamMember(updated),
+  };
+
+  this.publishTeamEvent(
+    DomainEvents.TEAM_ROLE_UPDATED,
+    leaderId,
+    { type: 'team', id: team.id },
+    rolePayload,
+    updated.id,
+  );
+
   return updated;
 }
 
@@ -557,7 +842,18 @@ async getStudentTeamOverview(authUserId: string) {
   const team = await this.getMyTeam(authUserId);
 
   if (!team) {
-    const browseTeams = await this.getAllTeams().catch(() => []);
+    const [browseTeams, pendingRequests] = await Promise.all([
+      this.getAllTeams().catch(() => []),
+      this.prisma.joinRequest
+        .findMany({
+          where: {
+            authUserId,
+            status: 'PENDING',
+          },
+          select: { teamId: true },
+        })
+        .catch(() => []),
+    ]);
 
     return {
       team: null,
@@ -566,6 +862,9 @@ async getStudentTeamOverview(authUserId: string) {
       isLeader: false,
       profiles: {},
       browseTeams,
+      pendingJoinTeamIds: pendingRequests.map(
+        (request) => request.teamId,
+      ),
     };
   }
 
@@ -717,6 +1016,20 @@ async leaveTeam(authUserId: string) {
 
   await this.assertTeamNotLocked(membership.teamId);
 
+  const leftPayload: TeamMemberLeftPayload = {
+    teamId: membership.teamId,
+    memberId: membership.id,
+    authUserId: membership.authUserId,
+  };
+
+  this.publishTeamEvent(
+    DomainEvents.TEAM_MEMBER_LEFT,
+    authUserId,
+    { type: 'team', id: membership.teamId },
+    leftPayload,
+    membership.id,
+  );
+
   await this.prisma.teamMember.delete({
     where: { id: membership.id },
   });
@@ -749,5 +1062,21 @@ async leaveTeam(authUserId: string) {
   return { message: 'You have left the team' };
 }
 
+private publishTeamEvent(
+  name: string,
+  actorId: string | undefined,
+  scope: DomainEventScope,
+  payload: object,
+  entityId: string,
+) {
+  this.domainEventService.emitSafe({
+    name,
+    timestamp: new Date().toISOString(),
+    actorId,
+    scope,
+    entity: { type: 'TEAM', id: entityId },
+    payload,
+  });
+}
 
 }

@@ -2,11 +2,42 @@ import api from "@/lib/axios";
 import type { PaginatedResponse } from "@/types";
 import type { Notification } from "@/types/student";
 
+export type NotificationReadFilter = "all" | "unread" | "read";
+
+function readFilterToParam(filter: NotificationReadFilter) {
+  if (filter === "unread") {
+    return false;
+  }
+  if (filter === "read") {
+    return true;
+  }
+  return undefined;
+}
+
 export const notificationService = {
-  getMyNotifications: async (page = 1, limit = 20) => {
+  getMyNotifications: async (
+    page = 1,
+    limit = 20,
+    readFilter: NotificationReadFilter = "all",
+  ) => {
+    const isRead = readFilterToParam(readFilter);
     const res = await api.get<PaginatedResponse<Notification>>(
       "/notifications/me",
-      { params: { page, limit } },
+      {
+        params: {
+          page,
+          limit,
+          ...(isRead === undefined ? {} : { isRead }),
+        },
+      },
+    );
+    return res.data;
+  },
+
+  getUnreadPreview: async (limit = 20) => {
+    const res = await api.get<PaginatedResponse<Notification>>(
+      "/notifications/me",
+      { params: { page: 1, limit, isRead: false } },
     );
     return res.data;
   },

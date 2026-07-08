@@ -72,13 +72,18 @@ export function useCoordinatorProfileQuery() {
   });
 }
 
-export function useCoordinatorNotificationsQuery(page: number, limit = 20) {
+export function useCoordinatorNotificationsQuery(
+  page: number,
+  limit = 20,
+  readFilter: import("@/services/notification.service").NotificationReadFilter = "all",
+) {
   const { user } = useAuth();
 
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.notificationsList(page),
-    queryFn: () => coordinatorPageService.getNotifications(page, limit),
+    queryKey: queryKeys.coordinator.notificationsList(page, readFilter),
+    queryFn: () =>
+      coordinatorPageService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,
     placeholderData: keepPreviousData,
   });

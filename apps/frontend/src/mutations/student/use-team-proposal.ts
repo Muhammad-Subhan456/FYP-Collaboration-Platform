@@ -28,6 +28,9 @@ export function useStudentTeamMutations() {
 
   const joinMutation = useMutation({
     mutationFn: teamService.requestToJoin,
+    onSuccess: () => {
+      invalidateTeam();
+    },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 

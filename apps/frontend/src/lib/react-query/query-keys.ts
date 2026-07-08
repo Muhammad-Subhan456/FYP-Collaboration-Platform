@@ -26,16 +26,19 @@ export const queryKeys = {
     proposal: (userId?: string) => ["student", "proposal", userId] as const,
     workStream: (userId?: string) =>
       ["student", "work-stream", userId] as const,
+    workStreamPrefix: () => ["student", "work-stream"] as const,
     tasks: (userId?: string) => ["student", "tasks", userId] as const,
     milestones: (userId?: string) =>
       ["student", "milestones", userId] as const,
+    /** Prefix for invalidating every student milestones query (any userId). */
+    milestonesPrefix: () => ["student", "milestones"] as const,
     evaluations: (userId?: string) =>
       ["student", "evaluations", userId] as const,
     results: (userId?: string) => ["student", "results", userId] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["student", "notifications", userId, page, limit] as const,
-    notificationsList: (page: number) =>
-      ["student", "me", page] as const,
+    notificationsList: (page: number, readFilter = "all") =>
+      ["student", "me", page, readFilter] as const,
     profile: (userId?: string) => ["student", "profile", userId] as const,
   },
 
@@ -60,12 +63,15 @@ export const queryKeys = {
       teamFilterKey !== undefined
         ? (["supervisor", "milestones", userId, teamFilterKey] as const)
         : (["supervisor", "milestones", userId] as const),
+    /** Prefix for invalidating every supervisor milestones query. */
+    milestonesPrefix: () => ["supervisor", "milestones"] as const,
+    workStreamPrefix: () => ["supervisor", "work-stream"] as const,
     evaluations: (userId?: string) =>
       ["supervisor", "evaluations", userId] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["supervisor", "notifications", userId, page, limit] as const,
-    notificationsList: (page: number) =>
-      ["supervisor", "me", page] as const,
+    notificationsList: (page: number, readFilter = "all") =>
+      ["supervisor", "me", page, readFilter] as const,
     profile: (userId?: string) => ["supervisor", "profile", userId] as const,
     overview: (supervisorId: string) =>
       ["supervisor-overview", supervisorId] as const,
@@ -90,8 +96,8 @@ export const queryKeys = {
     results: (userId?: string) => ["coordinator", "results", userId] as const,
     announcements: (userId?: string) =>
       ["coordinator", "announcements", userId] as const,
-    notificationsList: (page: number) =>
-      ["coordinator", "me", page] as const,
+    notificationsList: (page: number, readFilter = "all") =>
+      ["coordinator", "me", page, readFilter] as const,
     systemHealth: (userId?: string) =>
       ["coordinator", "system-health", userId] as const,
     userDetail: (userId: string) =>
@@ -104,6 +110,8 @@ export const queryKeys = {
   teams: {
     all: ["teams"] as const,
     browse: (search: string) => ["teams", "browse", search] as const,
+    browseDetails: (teamId: string) =>
+      ["teams", "browse-details", teamId] as const,
     mine: () => ["team"] as const,
   },
 
@@ -111,6 +119,8 @@ export const queryKeys = {
     all: ["notifications"] as const,
     unreadCount: (userId?: string) =>
       ["notifications", "unread-count", userId] as const,
+    unreadPreview: (userId?: string) =>
+      ["notifications", "unread-preview", userId] as const,
     recentActivity: () => ["notifications", "recent-activity"] as const,
   },
 

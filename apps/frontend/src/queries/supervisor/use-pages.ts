@@ -69,13 +69,18 @@ export function useSupervisorProfileQuery() {
   });
 }
 
-export function useSupervisorNotificationsQuery(page: number, limit = 20) {
+export function useSupervisorNotificationsQuery(
+  page: number,
+  limit = 20,
+  readFilter: import("@/services/notification.service").NotificationReadFilter = "all",
+) {
   const { user } = useAuth();
 
   return useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.notificationsList(page),
-    queryFn: () => supervisorPageService.getNotifications(page, limit),
+    queryKey: queryKeys.supervisor.notificationsList(page, readFilter),
+    queryFn: () =>
+      supervisorPageService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,
     placeholderData: keepPreviousData,
   });

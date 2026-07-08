@@ -5,16 +5,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { WorkStreamEntityType } from '@prisma/client';
+import type { Deliverable } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
 import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
 import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { DeliverableSnapshotPayload } from '../../domain-events/domain-event.types';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { TeamAccessService } from '../common/team-access.service';
 import type { NotificationContext } from '../common/team-access.service';
 import { WorkStreamService } from '../work-stream/work-stream.service';
+import { serializeDeliverable } from '../work-stream/work-stream-realtime';
 
 @Injectable()
 export class DeliverablesService {
@@ -23,7 +28,28 @@ export class DeliverablesService {
     private readonly activityLogsService: ActivityLogsService,
     private readonly teamAccessService: TeamAccessService,
     private readonly workStreamService: WorkStreamService,
+    private readonly domainEventService: DomainEventService,
   ) {}
+
+  private publishDeliverableEvent(
+    eventName: string,
+    actorId: string,
+    teamId: string,
+    deliverable: Deliverable,
+    extras?: Parameters<typeof serializeDeliverable>[1],
+  ) {
+    this.domainEventService.emitSafe<DeliverableSnapshotPayload>({
+      name: eventName,
+      timestamp: new Date().toISOString(),
+      actorId,
+      scope: { type: 'team', id: teamId },
+      entity: { type: 'DELIVERABLE', id: deliverable.id },
+      payload: {
+        teamId,
+        deliverable: serializeDeliverable(deliverable, extras),
+      },
+    });
+  }
 
   private teamVisibilityWhere(teamId: string) {
     return {
@@ -82,14 +108,22 @@ export class DeliverablesService {
         dto.attachments,
       );
 
-      await this.notifyTeam(teamId, {
+      void this.notifyTeam(teamId, {
         title: 'New Deliverable Assigned',
         message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
         type: 'DELIVERABLE_CREATED',
         entityType: 'DELIVERABLE',
         entityId: deliverable.id,
         route: '/student/work-stream',
-      });
+      }).catch(() => undefined);
+
+      this.publishDeliverableEvent(
+        DomainEvents.DELIVERABLE_CREATED,
+        supervisorId,
+        teamId,
+        deliverable,
+        { attachmentCount: dto.attachments?.length ?? 0 },
+      );
 
       created.push(deliverable);
     }
@@ -223,6 +257,15 @@ export class DeliverablesService {
       );
     }
 
+    const teamId = updated.teamId ?? supervisorId;
+    this.publishDeliverableEvent(
+      DomainEvents.DELIVERABLE_UPDATED,
+      supervisorId,
+      teamId,
+      updated,
+      { attachmentCount: dto.attachments?.length },
+    );
+
     return updated;
   }
 
@@ -335,15 +378,22 @@ export class DeliverablesService {
     );
 
     if (deliverable.teamId) {
-      await this.notifyTeam(deliverable.teamId, {
+      void this.notifyTeam(deliverable.teamId, {
         title: 'Deliverable Deadline Extended',
         message: `The deadline for "${deliverable.title}" has been extended to ${dateLabel(newDueDate)}.`,
         type: 'DELIVERABLE_DEADLINE_EXTENDED',
         entityType: 'DELIVERABLE',
         entityId: deliverable.id,
         route: '/student/work-stream',
-      });
+      }).catch(() => undefined);
     }
+
+    this.publishDeliverableEvent(
+      DomainEvents.DELIVERABLE_DEADLINE_EXTENDED,
+      supervisorId,
+      deliverable.teamId ?? supervisorId,
+      updated,
+    );
 
     return { deliverable: updated, extension };
   }

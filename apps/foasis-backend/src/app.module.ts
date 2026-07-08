@@ -17,6 +17,8 @@ import { StudentModule } from './student/student.module';
 import { SupervisorModule } from './supervisor/supervisor.module';
 import { CoordinatorModule } from './coordinator/coordinator.module';
 import { EvaluatorModule } from './evaluator/evaluator.module';
+import { DomainEventsModule } from './domain-events/domain-events.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 /**
  * FOASIS modular monolith root module.
@@ -40,6 +42,8 @@ import { EvaluatorModule } from './evaluator/evaluator.module';
     SupervisorModule,
     CoordinatorModule,
     EvaluatorModule,
+    DomainEventsModule,
+    RealtimeModule,
   ],
 })
 export class AppModule {}

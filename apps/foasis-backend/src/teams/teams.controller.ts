@@ -87,6 +87,13 @@ export class TeamsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
+  @Get(':teamId/browse')
+  getBrowseTeamDetails(@Param('teamId') teamId: string) {
+    return this.teamsService.getBrowseTeamDetails(teamId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('my-team/requests')
   getMyTeamRequests(@Req() req: any) {
     return this.teamsService.getMyTeamRequests(req.user.userId);

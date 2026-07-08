@@ -17,3 +17,15 @@ export function useUnreadNotifications(enabled = true) {
     staleTime: 2 * 60 * 1000,
   });
 }
+
+export function useUnreadNotificationsPreview(enabled = true) {
+  const { user } = useAuth();
+
+  return useQuery({
+    ...studentPageQueryOptions,
+    queryKey: queryKeys.notifications.unreadPreview(user?.userId),
+    queryFn: () => notificationService.getUnreadPreview(20),
+    enabled: enabled && !!user?.userId,
+    staleTime: 60 * 1000,
+  });
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { CheckCheck, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import {
@@ -33,6 +34,7 @@ import {
   useSupervisorNotificationsQuery,
 } from "@/queries/supervisor";
 import { notificationService } from "@/services/notification.service";
+import type { NotificationReadFilter } from "@/services/notification.service";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
@@ -41,6 +43,7 @@ interface NotificationListProps {
   fetchNotifications?: (
     page: number,
     limit: number,
+    readFilter?: NotificationReadFilter,
   ) => Promise<PaginatedResponse<Notification>>;
   queryKeyPrefix?: string;
 }
@@ -72,7 +75,13 @@ export function NotificationList({
 function StudentNotificationsList() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const notificationsQuery = useStudentNotificationsQuery(page);
+  const [readFilter, setReadFilter] =
+    useState<NotificationReadFilter>("all");
+  const notificationsQuery = useStudentNotificationsQuery(
+    page,
+    20,
+    readFilter,
+  );
   const { markReadMutation, markAllMutation } =
     useStudentNotificationMutations();
 
@@ -112,6 +121,11 @@ function StudentNotificationsList() {
       notifications={notifications}
       meta={meta}
       page={page}
+      readFilter={readFilter}
+      onReadFilterChange={(filter) => {
+        setReadFilter(filter);
+        setPage(1);
+      }}
       onPageChange={setPage}
       onNotificationClick={handleNotificationClick}
       onMarkAll={() => markAllMutation.mutate()}
@@ -123,7 +137,13 @@ function StudentNotificationsList() {
 function SupervisorNotificationsList() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const notificationsQuery = useSupervisorNotificationsQuery(page);
+  const [readFilter, setReadFilter] =
+    useState<NotificationReadFilter>("all");
+  const notificationsQuery = useSupervisorNotificationsQuery(
+    page,
+    20,
+    readFilter,
+  );
   const { markReadMutation, markAllMutation } =
     useSupervisorNotificationMutations();
 
@@ -163,6 +183,11 @@ function SupervisorNotificationsList() {
       notifications={notifications}
       meta={meta}
       page={page}
+      readFilter={readFilter}
+      onReadFilterChange={(filter) => {
+        setReadFilter(filter);
+        setPage(1);
+      }}
       onPageChange={setPage}
       onNotificationClick={handleNotificationClick}
       onMarkAll={() => markAllMutation.mutate()}
@@ -174,7 +199,13 @@ function SupervisorNotificationsList() {
 function CoordinatorNotificationsList() {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const notificationsQuery = useCoordinatorNotificationsQuery(page);
+  const [readFilter, setReadFilter] =
+    useState<NotificationReadFilter>("all");
+  const notificationsQuery = useCoordinatorNotificationsQuery(
+    page,
+    20,
+    readFilter,
+  );
   const { markReadMutation, markAllMutation } =
     useCoordinatorNotificationMutations();
 
@@ -214,6 +245,11 @@ function CoordinatorNotificationsList() {
       notifications={notifications}
       meta={meta}
       page={page}
+      readFilter={readFilter}
+      onReadFilterChange={(filter) => {
+        setReadFilter(filter);
+        setPage(1);
+      }}
       onPageChange={setPage}
       onNotificationClick={handleNotificationClick}
       onMarkAll={() => markAllMutation.mutate()}
@@ -229,10 +265,13 @@ function GenericNotificationsList({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [readFilter, setReadFilter] =
+    useState<NotificationReadFilter>("all");
 
   const notificationsQuery = useQuery({
-    queryKey: [queryKeyPrefix, "me", page],
-    queryFn: () => fetchNotifications(page, 20),
+    queryKey: [queryKeyPrefix, "me", page, readFilter],
+    queryFn: () => fetchNotifications(page, 20, readFilter),
+    placeholderData: keepPreviousData,
   });
 
   const markReadMutation = useMutation({
@@ -286,6 +325,11 @@ function GenericNotificationsList({
       notifications={notifications}
       meta={meta}
       page={page}
+      readFilter={readFilter}
+      onReadFilterChange={(filter) => {
+        setReadFilter(filter);
+        setPage(1);
+      }}
       onPageChange={setPage}
       onNotificationClick={handleNotificationClick}
       onMarkAll={() => markAllMutation.mutate()}
@@ -298,6 +342,8 @@ interface NotificationListContentProps {
   notifications: Notification[];
   meta: PaginatedResponse<Notification>["meta"];
   page: number;
+  readFilter: NotificationReadFilter;
+  onReadFilterChange: (filter: NotificationReadFilter) => void;
   onPageChange: (page: number) => void;
   onNotificationClick: (notification: Notification) => void;
   onMarkAll: () => void;
@@ -308,6 +354,8 @@ function NotificationListContent({
   notifications,
   meta,
   page,
+  readFilter,
+  onReadFilterChange,
   onPageChange,
   onNotificationClick,
   onMarkAll,
@@ -315,7 +363,7 @@ function NotificationListContent({
 }: NotificationListContentProps) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Notifications</h2>
           <p className="text-sm text-muted-foreground">
@@ -338,6 +386,19 @@ function NotificationListContent({
           </Button>
         )}
       </div>
+
+      <Tabs
+        value={readFilter}
+        onValueChange={(value) =>
+          onReadFilterChange(value as NotificationReadFilter)
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="unread">Unread</TabsTrigger>
+          <TabsTrigger value="read">Read</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {notifications.length === 0 ? (
         <EmptyState

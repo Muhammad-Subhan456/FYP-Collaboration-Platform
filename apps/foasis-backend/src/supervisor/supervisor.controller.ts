@@ -3,6 +3,7 @@ import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { NotificationsQueryDto } from '../notifications/dto/notifications-query.dto';
 
 import { SupervisorPagesService } from './supervisor-pages.service';
 
@@ -56,13 +57,13 @@ export class SupervisorController {
   @Get('notifications')
   getNotifications(
     @Req() req: { user: { userId: string } },
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: NotificationsQueryDto,
   ) {
     return this.supervisorPagesService.getNotifications(
       req.user.userId,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
+      query.page,
+      query.limit,
+      query.isRead,
     );
   }
 

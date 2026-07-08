@@ -128,19 +128,26 @@ export class TeamAccessService {
   async notifyTeamMembers(
     teamId: string,
     context: NotificationContext,
+    options?: { excludeAuthUserId?: string },
   ): Promise<void> {
     try {
-      const members =
-        await this.getTeamMembers(teamId);
+      const members = await this.getTeamMembers(teamId);
 
-      await Promise.allSettled(
-        members.map((member) =>
-          this.notificationDispatch.send({
-            authUserId: member.authUserId,
-            ...context,
-          }),
-        ),
-      );
+      const payloads = members
+        .filter(
+          (member) =>
+            member.authUserId !== options?.excludeAuthUserId,
+        )
+        .map((member) => ({
+          authUserId: member.authUserId,
+          ...context,
+        }));
+
+      if (payloads.length === 0) {
+        return;
+      }
+
+      await this.notificationDispatch.sendBulk(payloads);
     } catch {
       // Non-blocking
     }

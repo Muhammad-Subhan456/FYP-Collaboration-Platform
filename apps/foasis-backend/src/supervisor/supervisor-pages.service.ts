@@ -64,11 +64,13 @@ export class SupervisorPagesService {
     supervisorId: string,
     page = 1,
     limit = 20,
+    isRead?: boolean,
   ) {
     return this.notificationsService.getMyNotifications(
       supervisorId,
       page,
       limit,
+      isRead,
     );
   }
 

@@ -9,7 +9,9 @@ export function IssueActivityTimeline({
 }: {
   activities: TeamIssueActivity[];
 }) {
-  const sorted = sortActivitiesNewestFirst(activities);
+  const sorted = sortActivitiesNewestFirst(
+    activities.filter((activity) => activity.type !== "COMMENTED"),
+  );
 
   if (!sorted.length) {
     return (

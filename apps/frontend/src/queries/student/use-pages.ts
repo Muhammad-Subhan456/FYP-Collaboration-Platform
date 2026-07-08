@@ -20,6 +20,15 @@ export function useBrowseTeamsQuery(search: string, enabled: boolean) {
   });
 }
 
+export function useBrowseTeamDetailsQuery(teamId: string | null) {
+  return useQuery({
+    ...studentPageQueryOptions,
+    queryKey: queryKeys.teams.browseDetails(teamId ?? ""),
+    queryFn: () => teamService.getBrowseTeamDetails(teamId!),
+    enabled: !!teamId,
+  });
+}
+
 export function useStudentProposalQuery() {
   return useStudentAuthQuery("proposal", studentService.getProposal);
 }
@@ -51,13 +60,17 @@ export function useStudentProfileQuery() {
   });
 }
 
-export function useStudentNotificationsQuery(page: number, limit = 20) {
+export function useStudentNotificationsQuery(
+  page: number,
+  limit = 20,
+  readFilter: import("@/services/notification.service").NotificationReadFilter = "all",
+) {
   const { user } = useAuth();
 
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.student.notificationsList(page),
-    queryFn: () => studentService.getNotifications(page, limit),
+    queryKey: queryKeys.student.notificationsList(page, readFilter),
+    queryFn: () => studentService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,
     placeholderData: keepPreviousData,
   });

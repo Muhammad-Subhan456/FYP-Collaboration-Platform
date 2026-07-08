@@ -24,7 +24,7 @@ export function invalidateSupervisorInvitations(queryClient: QueryClient) {
 
 export function invalidateSupervisorMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.milestones(),
+    queryKey: queryKeys.supervisor.milestonesPrefix(),
   });
   void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.unreadCount(),
@@ -43,7 +43,7 @@ export function invalidateSupervisorEvaluations(queryClient: QueryClient) {
 
 export function invalidateSupervisorWorkStream(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.workStream(),
+    queryKey: queryKeys.supervisor.workStreamPrefix(),
   });
   void invalidateDashboard(queryClient, "SUPERVISOR");
 }
@@ -51,6 +51,9 @@ export function invalidateSupervisorWorkStream(queryClient: QueryClient) {
 export function invalidateSupervisorNotifications(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.unreadCount(),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.notifications.unreadPreview(),
   });
   void queryClient.invalidateQueries({
     queryKey: queryKeys.notifications.recentActivity(),

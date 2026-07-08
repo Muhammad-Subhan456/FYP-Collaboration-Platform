@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -21,6 +20,7 @@ import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { StatusBadge } from "@/components/common/status-badge";
 import { AttachmentList } from "@/components/work-stream/attachment-list";
 import { CommentSection } from "@/components/work-stream/comment-section";
+import { SubmissionRemarks } from "@/components/work-stream/submission-remarks";
 import { RichContent } from "@/components/work-stream/rich-content";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { queryKeys } from "@/lib/react-query";
 import { useStudentWorkStreamMutations } from "@/mutations/student";
 import { useAuth } from "@/providers/auth-provider";
 import {
@@ -53,7 +52,6 @@ import {
 import type { Submission } from "@/types/student";
 import type {
   WorkStreamAnnouncementItem,
-  WorkStreamComment,
   WorkStreamDeliverableItem,
 } from "@/types/work-stream";
 import { workStreamEntityKey } from "@/types/work-stream";
@@ -86,7 +84,6 @@ function submissionStatusLabel(
 
 export default function StudentWorkStreamPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   const [mainTab, setMainTab] = useState<MainTab>("announcements");
@@ -101,9 +98,6 @@ export default function StudentWorkStreamPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitFile, setSubmitFile] = useState<File | null>(null);
   const [submitRemarks, setSubmitRemarks] = useState("");
-  const [localComments, setLocalComments] = useState<
-    Record<string, WorkStreamComment[]>
-  >({});
 
   const pageQuery = useStudentWorkStreamQuery();
   const { commentMutation, submitMutation } = useStudentWorkStreamMutations();
@@ -124,12 +118,6 @@ export default function StudentWorkStreamPage() {
       setSelectedDeliverableId(deliverableId);
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (pageQuery.data?.commentsByEntity) {
-      setLocalComments(pageQuery.data.commentsByEntity);
-    }
-  }, [pageQuery.data?.commentsByEntity]);
 
   const selectedAnnouncement = useMemo(
     () =>
@@ -160,7 +148,11 @@ export default function StudentWorkStreamPage() {
     );
   }
 
-  const data = pageQuery.data!;
+  if (!pageQuery.data) {
+    return <DashboardSkeleton />;
+  }
+
+  const data = pageQuery.data;
   const profiles = {
     ...(data.profiles ?? {}),
     ...(data.supervisorProfile
@@ -187,29 +179,11 @@ export default function StudentWorkStreamPage() {
     entityId: string,
     body: string,
   ) => {
-    const comment = await commentMutation.mutateAsync({
+    await commentMutation.mutateAsync({
       entityType,
       entityId,
       body,
     });
-    const key = workStreamEntityKey(entityType, entityId);
-    setLocalComments((prev) => ({
-      ...prev,
-      [key]: [...(prev[key] ?? []), comment],
-    }));
-    queryClient.setQueryData(
-      queryKeys.student.workStream(user?.userId),
-      (old: typeof pageQuery.data) => {
-        if (!old) return old;
-        return {
-          ...old,
-          commentsByEntity: {
-            ...old.commentsByEntity,
-            [key]: [...(old.commentsByEntity[key] ?? []), comment],
-          },
-        };
-      },
-    );
   };
 
   if (selectedAnnouncement) {
@@ -249,7 +223,7 @@ export default function StudentWorkStreamPage() {
             <CommentSection
               entityType="ANNOUNCEMENT"
               entityId={selectedAnnouncement.id}
-              comments={localComments[commentKey] ?? []}
+              comments={data.commentsByEntity[commentKey] ?? []}
               profiles={profiles}
               currentUserId={user?.userId}
               onPost={(body) =>
@@ -345,7 +319,7 @@ export default function StudentWorkStreamPage() {
               <CommentSection
                 entityType="DELIVERABLE"
                 entityId={selectedDeliverable.id}
-                comments={localComments[commentKey] ?? []}
+                comments={data.commentsByEntity[commentKey] ?? []}
                 profiles={profiles}
                 currentUserId={user?.userId}
                 onPost={(body) =>
@@ -381,6 +355,11 @@ export default function StudentWorkStreamPage() {
                       >
                         View attachment
                       </a>
+                      <SubmissionRemarks
+                        remarks={submission.remarks}
+                        feedback={submission.feedback}
+                        grade={submission.grade}
+                      />
                     </div>
                   ))
                 )}
@@ -552,6 +531,14 @@ export default function StudentWorkStreamPage() {
                     <span className="flex items-center gap-1">
                       <Paperclip className="h-3 w-3" />
                       {item.attachmentCount}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3" />
+                      {item.commentCount}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Upload className="h-3 w-3" />
+                      {item.submissionCount}
                     </span>
                   </div>
                 </CardContent>

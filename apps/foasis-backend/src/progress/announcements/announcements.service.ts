@@ -10,9 +10,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type {
+  AnnouncementDeletedPayload,
+  AnnouncementSnapshotPayload,
+} from '../../domain-events/domain-event.types';
 import { TeamAccessService } from '../common/team-access.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { WorkStreamService } from '../work-stream/work-stream.service';
+import { serializeAnnouncement } from '../work-stream/work-stream-realtime';
 
 @Injectable()
 export class AnnouncementsService {
@@ -21,6 +28,7 @@ export class AnnouncementsService {
     private readonly teamAccessService: TeamAccessService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly workStreamService: WorkStreamService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   private parseOptionalDate(
@@ -95,17 +103,34 @@ export class AnnouncementsService {
         dto.attachments,
       );
 
-      await this.teamAccessService.notifyTeamMembers(
-        teamId,
-        {
-          title: 'FOASIS Team Announcement',
-          message: `${announcement.title}: ${announcement.message}`,
-          type: 'ANNOUNCEMENT_PUBLISHED',
-          entityType: 'ANNOUNCEMENT',
-          entityId: announcement.id,
-          route: '/student/work-stream',
+      void this.teamAccessService
+        .notifyTeamMembers(
+          teamId,
+          {
+            title: 'FOASIS Team Announcement',
+            message: `${announcement.title}: ${announcement.message}`,
+            type: 'ANNOUNCEMENT_PUBLISHED',
+            entityType: 'ANNOUNCEMENT',
+            entityId: announcement.id,
+            route: '/student/work-stream',
+          },
+          { excludeAuthUserId: supervisorId },
+        )
+        .catch(() => undefined);
+
+      this.domainEventService.emitSafe<AnnouncementSnapshotPayload>({
+        name: DomainEvents.ANNOUNCEMENT_CREATED,
+        timestamp: announcement.createdAt.toISOString(),
+        actorId: supervisorId,
+        scope: { type: 'team', id: teamId },
+        entity: { type: 'ANNOUNCEMENT', id: announcement.id },
+        payload: {
+          teamId,
+          announcement: serializeAnnouncement(announcement, {
+            attachmentCount: dto.attachments?.length ?? 0,
+          }),
         },
-      );
+      });
 
       created.push(announcement);
     }
@@ -169,6 +194,21 @@ export class AnnouncementsService {
       );
     }
 
+    const teamId = updated.teamId ?? supervisorId;
+    this.domainEventService.emitSafe<AnnouncementSnapshotPayload>({
+      name: DomainEvents.ANNOUNCEMENT_UPDATED,
+      timestamp: new Date().toISOString(),
+      actorId: supervisorId,
+      scope: { type: 'team', id: teamId },
+      entity: { type: 'ANNOUNCEMENT', id: updated.id },
+      payload: {
+        teamId,
+        announcement: serializeAnnouncement(updated, {
+          attachmentCount: dto.attachments?.length,
+        }),
+      },
+    });
+
     return updated;
   }
 
@@ -208,6 +248,19 @@ export class AnnouncementsService {
         where: { id: announcementId },
       }),
     ]);
+
+    const teamId = announcement.teamId ?? supervisorId;
+    this.domainEventService.emitSafe<AnnouncementDeletedPayload>({
+      name: DomainEvents.ANNOUNCEMENT_DELETED,
+      timestamp: new Date().toISOString(),
+      actorId: supervisorId,
+      scope: { type: 'team', id: teamId },
+      entity: { type: 'ANNOUNCEMENT', id: announcementId },
+      payload: {
+        teamId,
+        announcementId,
+      },
+    });
 
     return { success: true };
   }

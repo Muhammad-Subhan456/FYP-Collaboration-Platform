@@ -15,6 +15,9 @@ export interface WorkStreamComment {
   authUserId: string;
   body: string;
   createdAt: string;
+  teamId?: string;
+  entityType?: WorkStreamEntityType;
+  entityId?: string;
 }
 
 export interface WorkStreamAnnouncementItem {
@@ -52,6 +55,7 @@ export interface WorkStreamDeliverableItem {
   commentCount: number;
   attachments: WorkStreamAttachment[];
   latestSubmissionStatus: string | null;
+  submissionCount: number;
   submissionOpen: boolean;
   submissionClosedReason: string | null;
 }

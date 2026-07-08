@@ -2,6 +2,7 @@ export { useStudentAuthQuery, isStudentQueryPending, isStudentQueryInitialLoadin
 export { useStudentDashboardQuery } from "./use-dashboard";
 export {
   useBrowseTeamsQuery,
+  useBrowseTeamDetailsQuery,
   useStudentEvaluationsQuery,
   useStudentMilestonesQuery,
   useStudentNotificationsQuery,

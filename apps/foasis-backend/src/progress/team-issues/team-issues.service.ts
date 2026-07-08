@@ -8,11 +8,18 @@ import {
   TeamIssueActivityType,
   TeamIssueStatus,
   type TeamIssue,
+  type TeamIssueComment,
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProposalsService } from '../../proposals/proposals.service';
 import { ProfilesService } from '../../users/profiles.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type {
+  IssueCommentCreatedPayload,
+  IssueSnapshotPayload,
+} from '../../domain-events/domain-event.types';
 import { TeamAccessService } from '../common/team-access.service';
 
 import { CompleteTeamIssueDto } from './dto/complete-team-issue.dto';
@@ -20,6 +27,11 @@ import { CreateTeamIssueCommentDto } from './dto/create-team-issue-comment.dto';
 import { CreateTeamIssueDto } from './dto/create-team-issue.dto';
 import { UpdateTeamIssueDto } from './dto/update-team-issue.dto';
 import { parseGithubLinks } from './helpers/github-url';
+import {
+  serializeActivity,
+  serializeComment,
+  serializeIssueSnapshot,
+} from './team-issues-realtime';
 
 const ISSUE_INCLUDE = {
   comments: { orderBy: { createdAt: 'asc' as const } },
@@ -33,6 +45,7 @@ export class TeamIssuesService {
     private readonly teamAccessService: TeamAccessService,
     private readonly proposalsService: ProposalsService,
     private readonly profilesService: ProfilesService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   private async actorName(actorId: string) {
@@ -50,7 +63,7 @@ export class TeamIssuesService {
     type: TeamIssueActivityType,
     description: string,
   ) {
-    await this.prisma.teamIssueActivity.create({
+    return this.prisma.teamIssueActivity.create({
       data: {
         issueId,
         teamId,
@@ -59,6 +72,101 @@ export class TeamIssuesService {
         description,
       },
     });
+  }
+
+  private async reloadIssue(issueId: string) {
+    return this.prisma.teamIssue.findUniqueOrThrow({
+      where: { id: issueId },
+      include: ISSUE_INCLUDE,
+    });
+  }
+
+  private publishIssueSnapshot(
+    eventName: string,
+    actorId: string,
+    issue: Awaited<ReturnType<TeamIssuesService['reloadIssue']>>,
+  ) {
+    const payload: IssueSnapshotPayload = {
+      issue: serializeIssueSnapshot(issue),
+    };
+
+    this.domainEventService.emitSafe<IssueSnapshotPayload>({
+      name: eventName,
+      timestamp: new Date().toISOString(),
+      actorId,
+      scope: { type: 'team', id: issue.teamId },
+      entity: { type: 'TEAM_ISSUE', id: issue.id },
+      payload,
+    });
+  }
+
+  private publishIssueComment(
+    actorId: string,
+    issueId: string,
+    teamId: string,
+    comment: TeamIssueComment,
+    activity: Awaited<ReturnType<TeamIssuesService['logActivity']>>,
+  ) {
+    const payload: IssueCommentCreatedPayload = {
+      issueId,
+      teamId,
+      comment: serializeComment(comment),
+      activity: serializeActivity(activity),
+    };
+
+    this.domainEventService.emitSafe<IssueCommentCreatedPayload>({
+      name: DomainEvents.ISSUE_COMMENT_CREATED,
+      timestamp: comment.createdAt.toISOString(),
+      actorId,
+      scope: { type: 'team', id: teamId },
+      entity: { type: 'TEAM_ISSUE', id: issueId },
+      payload,
+    });
+  }
+
+  private scheduleTeamNotifications(
+    teamId: string,
+    actorId: string,
+    context: {
+      title: string;
+      message: string;
+      type: string;
+      entityId: string;
+      studentRoute?: string;
+      supervisorRoute?: string;
+    },
+  ) {
+    void (async () => {
+      try {
+        await this.teamAccessService.notifyTeamMembers(
+          teamId,
+          {
+            title: context.title,
+            message: context.message,
+            type: context.type,
+            entityType: 'TEAM_ISSUE',
+            entityId: context.entityId,
+            route: context.studentRoute ?? '/student/milestones',
+          },
+          { excludeAuthUserId: actorId },
+        );
+
+        await this.teamAccessService.notifyAssignedSupervisor(
+          teamId,
+          {
+            title: context.title,
+            message: context.message,
+            type: context.type,
+            entityType: 'TEAM_ISSUE',
+            entityId: context.entityId,
+            route:
+              context.supervisorRoute ?? '/supervisor/milestones',
+          },
+        );
+      } catch {
+        // Non-blocking background delivery
+      }
+    })();
   }
 
   private async notifyTeamAndSupervisor(
@@ -71,7 +179,13 @@ export class TeamIssuesService {
       studentRoute?: string;
       supervisorRoute?: string;
     },
+    actorId?: string,
   ) {
+    if (actorId) {
+      this.scheduleTeamNotifications(teamId, actorId, context);
+      return;
+    }
+
     await this.teamAccessService.notifyTeamMembers(teamId, {
       title: context.title,
       message: context.message,
@@ -89,6 +203,47 @@ export class TeamIssuesService {
       entityId: context.entityId,
       route: context.supervisorRoute ?? '/supervisor/milestones',
     });
+  }
+
+  private async getIssueForCommentAccess(
+    issueId: string,
+    authUserId: string,
+    role: string,
+  ) {
+    const issue = await this.prisma.teamIssue.findUnique({
+      where: { id: issueId },
+      select: { id: true, teamId: true, title: true },
+    });
+
+    if (!issue) {
+      throw new NotFoundException('Issue not found');
+    }
+
+    if (role === 'STUDENT') {
+      const membership =
+        await this.prisma.teamMember.findFirst({
+          where: {
+            authUserId,
+            teamId: issue.teamId,
+          },
+          select: { teamId: true },
+        });
+
+      if (!membership) {
+        throw new ForbiddenException(
+          'You are not a member of this team',
+        );
+      }
+    } else if (role === 'SUPERVISOR') {
+      await this.assertSupervisorTeamAccess(
+        authUserId,
+        issue.teamId,
+      );
+    } else {
+      throw new ForbiddenException('Invalid role');
+    }
+
+    return issue;
   }
 
   private async assertTeamMember(teamId: string, authUserId: string) {
@@ -258,7 +413,14 @@ export class TeamIssuesService {
       entityId: issue.id,
     });
 
-    return issue;
+    const snapshot = await this.reloadIssue(issue.id);
+    this.publishIssueSnapshot(
+      DomainEvents.ISSUE_CREATED,
+      authUserId,
+      snapshot,
+    );
+
+    return snapshot;
   }
 
   async updateIssue(
@@ -281,7 +443,7 @@ export class TeamIssuesService {
       );
     }
 
-    const updated = await this.prisma.teamIssue.update({
+    await this.prisma.teamIssue.update({
       where: { id: issueId },
       data: {
         title: dto.title?.trim(),
@@ -289,7 +451,6 @@ export class TeamIssuesService {
         priority: dto.priority,
         labels: dto.labels,
       },
-      include: ISSUE_INCLUDE,
     });
 
     const name = await this.actorName(authUserId);
@@ -301,7 +462,14 @@ export class TeamIssuesService {
       `${name} updated the issue`,
     );
 
-    return updated;
+    const snapshot = await this.reloadIssue(issue.id);
+    this.publishIssueSnapshot(
+      DomainEvents.ISSUE_UPDATED,
+      authUserId,
+      snapshot,
+    );
+
+    return snapshot;
   }
 
   async claimIssue(issueId: string, authUserId: string) {
@@ -320,13 +488,12 @@ export class TeamIssuesService {
       );
     }
 
-    const updated = await this.prisma.teamIssue.update({
+    await this.prisma.teamIssue.update({
       where: { id: issueId },
       data: {
         status: 'IN_PROGRESS',
         assignedToId: authUserId,
       },
-      include: ISSUE_INCLUDE,
     });
 
     const name = await this.actorName(authUserId);
@@ -345,7 +512,14 @@ export class TeamIssuesService {
       entityId: issue.id,
     });
 
-    return updated;
+    const snapshot = await this.reloadIssue(issue.id);
+    this.publishIssueSnapshot(
+      DomainEvents.ISSUE_CLAIMED,
+      authUserId,
+      snapshot,
+    );
+
+    return snapshot;
   }
 
   async releaseIssue(issueId: string, authUserId: string) {
@@ -364,13 +538,12 @@ export class TeamIssuesService {
       );
     }
 
-    const updated = await this.prisma.teamIssue.update({
+    await this.prisma.teamIssue.update({
       where: { id: issueId },
       data: {
         status: 'OPEN',
         assignedToId: null,
       },
-      include: ISSUE_INCLUDE,
     });
 
     const name = await this.actorName(authUserId);
@@ -389,7 +562,14 @@ export class TeamIssuesService {
       entityId: issue.id,
     });
 
-    return updated;
+    const snapshot = await this.reloadIssue(issue.id);
+    this.publishIssueSnapshot(
+      DomainEvents.ISSUE_RELEASED,
+      authUserId,
+      snapshot,
+    );
+
+    return snapshot;
   }
 
   async completeIssue(
@@ -417,7 +597,7 @@ export class TeamIssuesService {
       dto.githubCommitUrl,
     );
 
-    const updated = await this.prisma.teamIssue.update({
+    await this.prisma.teamIssue.update({
       where: { id: issueId },
       data: {
         status: 'COMPLETED',
@@ -425,7 +605,6 @@ export class TeamIssuesService {
         githubCommitUrl: evidence.githubCommitUrl,
         completedAt: new Date(),
       },
-      include: ISSUE_INCLUDE,
     });
 
     const name = await this.actorName(authUserId);
@@ -444,7 +623,14 @@ export class TeamIssuesService {
       entityId: issue.id,
     });
 
-    return updated;
+    const snapshot = await this.reloadIssue(issue.id);
+    this.publishIssueSnapshot(
+      DomainEvents.ISSUE_COMPLETED,
+      authUserId,
+      snapshot,
+    );
+
+    return snapshot;
   }
 
   async createComment(
@@ -457,28 +643,30 @@ export class TeamIssuesService {
       throw new BadRequestException('Comment cannot be empty');
     }
 
-    const issue = await this.assertIssueAccess(
+    const issue = await this.getIssueForCommentAccess(
       issueId,
       authUserId,
       role,
     );
 
-    const comment = await this.prisma.teamIssueComment.create({
-      data: {
-        issueId,
-        teamId: issue.teamId,
-        authUserId,
-        body: dto.body.trim(),
-      },
-    });
+    const [comment, name] = await Promise.all([
+      this.prisma.teamIssueComment.create({
+        data: {
+          issueId,
+          teamId: issue.teamId,
+          authUserId,
+          body: dto.body.trim(),
+        },
+      }),
+      this.actorName(authUserId),
+    ]);
 
-    const name = await this.actorName(authUserId);
     const activityLabel =
       role === 'SUPERVISOR'
         ? 'Supervisor commented'
         : `${name} commented`;
 
-    await this.logActivity(
+    const activity = await this.logActivity(
       issueId,
       issue.teamId,
       authUserId,
@@ -486,12 +674,24 @@ export class TeamIssuesService {
       activityLabel,
     );
 
-    await this.notifyTeamAndSupervisor(issue.teamId, {
-      title: 'New issue comment',
-      message: `${name} commented on "${issue.title}".`,
-      type: 'TEAM_ISSUE_COMMENTED',
-      entityId: issue.id,
-    });
+    this.publishIssueComment(
+      authUserId,
+      issueId,
+      issue.teamId,
+      comment,
+      activity,
+    );
+
+    this.notifyTeamAndSupervisor(
+      issue.teamId,
+      {
+        title: 'New issue comment',
+        message: `${name} commented on "${issue.title}".`,
+        type: 'TEAM_ISSUE_COMMENTED',
+        entityId: issue.id,
+      },
+      authUserId,
+    );
 
     return comment;
   }

@@ -3,12 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/axios";
+import { patchLocalIssueComment } from "@/lib/realtime/issue-cache";
 import { teamIssueService } from "@/services/team-issue.service";
-
-import { invalidateSupervisorMilestones } from "./invalidate";
+import { useAuth } from "@/providers/auth-provider";
 
 export function useSupervisorTeamIssueCommentMutation() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: ({
@@ -18,8 +19,15 @@ export function useSupervisorTeamIssueCommentMutation() {
       issueId: string;
       body: string;
     }) => teamIssueService.comment(issueId, body),
-    onSuccess: () => {
-      invalidateSupervisorMilestones(queryClient);
+    onSuccess: (comment) => {
+      if (user?.userId) {
+        patchLocalIssueComment(
+          queryClient,
+          user.userId,
+          user.role,
+          comment,
+        );
+      }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

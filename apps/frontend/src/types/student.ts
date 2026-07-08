@@ -103,6 +103,8 @@ export interface Submission {
   version: number;
   fileUrl: string;
   remarks?: string | null;
+  feedback?: string | null;
+  grade?: number | null;
   status: SubmissionStatus;
   submittedAt: string;
   deliverable?: Deliverable;

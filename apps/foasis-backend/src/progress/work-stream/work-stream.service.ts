@@ -15,10 +15,14 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProposalsService } from '../../proposals/proposals.service';
 import { ProfilesService } from '../../users/profiles.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { WorkstreamCommentCreatedPayload } from '../../domain-events/domain-event.types';
 import { TeamAccessService } from '../common/team-access.service';
 
 import { CreateWorkStreamCommentDto } from './dto/create-comment.dto';
 import type { WorkStreamAttachmentDto } from './dto/work-stream-attachment.dto';
+import { serializeWorkstreamComment } from './work-stream-realtime';
 
 type EntityRef = {
   entityType: WorkStreamEntityType;
@@ -32,6 +36,7 @@ export class WorkStreamService {
     private readonly teamAccessService: TeamAccessService,
     private readonly proposalsService: ProposalsService,
     private readonly profilesService: ProfilesService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   entityKey(entityType: WorkStreamEntityType, entityId: string) {
@@ -463,7 +468,7 @@ export class WorkStreamService {
       throw new ForbiddenException('Invalid role');
     }
 
-    return this.prisma.workStreamComment.create({
+    const comment = await this.prisma.workStreamComment.create({
       data: {
         entityType: dto.entityType,
         entityId: dto.entityId,
@@ -472,6 +477,130 @@ export class WorkStreamService {
         body: dto.body.trim(),
       },
     });
+
+    this.domainEventService.emitSafe<WorkstreamCommentCreatedPayload>({
+      name: DomainEvents.WORKSTREAM_COMMENT_CREATED,
+      timestamp: comment.createdAt.toISOString(),
+      actorId: authUserId,
+      scope: { type: 'team', id: teamId },
+      entity: {
+        type: dto.entityType,
+        id: dto.entityId,
+      },
+      payload: {
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        teamId,
+        comment: serializeWorkstreamComment(comment),
+      },
+    });
+
+    const [actorDisplayName, entityTitle] = await Promise.all([
+      this.actorName(authUserId),
+      this.getEntityTitle(dto.entityType, dto.entityId),
+    ]);
+
+    this.scheduleWorkStreamCommentNotifications(
+      teamId,
+      authUserId,
+      dto.entityType,
+      dto.entityId,
+      actorDisplayName,
+      entityTitle,
+      role,
+    );
+
+    return comment;
+  }
+
+  private async actorName(actorId: string) {
+    const profile = await this.profilesService
+      .findOne(actorId)
+      .catch(() => null);
+
+    return profile?.fullName ?? 'A user';
+  }
+
+  private async getEntityTitle(
+    entityType: WorkStreamEntityType,
+    entityId: string,
+  ) {
+    if (entityType === 'ANNOUNCEMENT') {
+      const announcement =
+        await this.prisma.announcement.findUnique({
+          where: { id: entityId },
+          select: { title: true },
+        });
+
+      return announcement?.title ?? 'announcement';
+    }
+
+    const deliverable = await this.prisma.deliverable.findUnique({
+      where: { id: entityId },
+      select: { title: true },
+    });
+
+    return deliverable?.title ?? 'deliverable';
+  }
+
+  private studentRouteForEntity(
+    entityType: WorkStreamEntityType,
+    entityId: string,
+  ) {
+    if (entityType === 'ANNOUNCEMENT') {
+      return `/student/work-stream?announcementId=${entityId}`;
+    }
+
+    return `/student/work-stream?deliverableId=${entityId}&tab=deliverables`;
+  }
+
+  private supervisorRouteForEntity(
+    entityType: WorkStreamEntityType,
+  ) {
+    return entityType === 'ANNOUNCEMENT'
+      ? '/supervisor/work-stream?tab=announcements'
+      : '/supervisor/work-stream?tab=deliverables';
+  }
+
+  private scheduleWorkStreamCommentNotifications(
+    teamId: string,
+    actorId: string,
+    entityType: WorkStreamEntityType,
+    entityId: string,
+    actorDisplayName: string,
+    entityTitle: string,
+    role: string,
+  ) {
+    void (async () => {
+      try {
+        const context = {
+          title: 'New comment',
+          message: `${actorDisplayName} commented on "${entityTitle}".`,
+          type: 'WORKSTREAM_COMMENTED',
+          entityType,
+          entityId,
+          route: this.studentRouteForEntity(entityType, entityId),
+        };
+
+        await this.teamAccessService.notifyTeamMembers(
+          teamId,
+          context,
+          { excludeAuthUserId: actorId },
+        );
+
+        if (role === 'STUDENT') {
+          await this.teamAccessService.notifyAssignedSupervisor(
+            teamId,
+            {
+              ...context,
+              route: this.supervisorRouteForEntity(entityType),
+            },
+          );
+        }
+      } catch {
+        // Non-blocking background delivery
+      }
+    })();
   }
 
   async getStudentWorkStream(
@@ -582,6 +711,8 @@ export class WorkStreamService {
           commentCounts,
           attachmentMap,
           histories[item.id]?.[0] ?? null,
+          undefined,
+          histories[item.id]?.length ?? 0,
         ),
       ),
       submissionHistories: histories,
@@ -739,6 +870,7 @@ export class WorkStreamService {
           attachmentMap,
           submissionsByDeliverable[item.id]?.[0] ?? null,
           teamNameById[item.teamId ?? ''] ?? null,
+          submissionsByDeliverable[item.id]?.length ?? 0,
         ),
       ),
       submissionsByDeliverable,
@@ -802,6 +934,7 @@ export class WorkStreamService {
     >,
     latestSubmission: Submission | null,
     teamName?: string | null,
+    submissionCount = 0,
   ) {
     const attachments = this.mapAttachments(
       'DELIVERABLE',
@@ -828,6 +961,7 @@ export class WorkStreamService {
         ) ?? 0,
       attachments,
       latestSubmissionStatus: latestSubmission?.status ?? null,
+      submissionCount,
       submissionOpen,
       submissionClosedReason: submissionOpen
         ? null

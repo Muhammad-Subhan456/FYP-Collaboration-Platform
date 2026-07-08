@@ -181,11 +181,13 @@ export class CoordinatorPagesService {
     coordinatorId: string,
     page = 1,
     limit = 20,
+    isRead?: boolean,
   ) {
     return this.notificationsService.getMyNotifications(
       coordinatorId,
       page,
       limit,
+      isRead,
     );
   }
 

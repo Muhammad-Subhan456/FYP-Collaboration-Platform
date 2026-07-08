@@ -9,6 +9,7 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { NotificationsQueryDto } from '../notifications/dto/notifications-query.dto';
 
 import { StudentPagesService } from './student-pages.service';
 
@@ -84,13 +85,13 @@ export class StudentController {
   @Get('notifications')
   getNotifications(
     @Req() req: { user: { userId: string } },
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: NotificationsQueryDto,
   ) {
     return this.studentPagesService.getNotifications(
       req.user.userId,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
+      query.page,
+      query.limit,
+      query.isRead,
     );
   }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -21,6 +20,7 @@ import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
 import { AttachmentList } from "@/components/work-stream/attachment-list";
 import { CommentSection } from "@/components/work-stream/comment-section";
+import { SubmissionRemarks } from "@/components/work-stream/submission-remarks";
 import { RichContent } from "@/components/work-stream/rich-content";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
 import { TeamFilterSelect } from "@/components/work-stream/team-filter-select";
@@ -53,7 +53,6 @@ import {
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { cn } from "@/lib/utils";
-import { queryKeys } from "@/lib/react-query";
 import { useSupervisorWorkStreamMutations } from "@/mutations/supervisor";
 import { useAuth } from "@/providers/auth-provider";
 import {
@@ -70,7 +69,6 @@ import type { DeliverableType, Submission } from "@/types/student";
 import type {
   SupervisorWorkStreamTeam,
   WorkStreamAnnouncementItem,
-  WorkStreamComment,
   WorkStreamDeliverableItem,
 } from "@/types/work-stream";
 import { workStreamEntityKey } from "@/types/work-stream";
@@ -98,7 +96,6 @@ const DELIVERABLE_TYPES: DeliverableType[] = [
 
 export default function SupervisorWorkStreamPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const filterTeamId = useAppSelector(selectSupervisorTeamFilterId);
@@ -119,9 +116,6 @@ export default function SupervisorWorkStreamPage() {
     useState<WorkStreamDeliverableItem | null>(null);
   const [createTeamIds, setCreateTeamIds] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [localComments, setLocalComments] = useState<
-    Record<string, WorkStreamComment[]>
-  >({});
 
   const [formTitle, setFormTitle] = useState("");
   const [formBody, setFormBody] = useState("");
@@ -206,12 +200,6 @@ export default function SupervisorWorkStreamPage() {
       setMainTab("deliverables");
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (pageQuery.data?.commentsByEntity) {
-      setLocalComments(pageQuery.data.commentsByEntity);
-    }
-  }, [pageQuery.data?.commentsByEntity]);
 
   const selectedAnnouncement = useMemo(
     () =>
@@ -303,29 +291,11 @@ export default function SupervisorWorkStreamPage() {
     entityId: string,
     body: string,
   ) => {
-    const comment = await commentMutation.mutateAsync({
+    await commentMutation.mutateAsync({
       entityType,
       entityId,
       body,
     });
-    const key = workStreamEntityKey(entityType, entityId);
-    setLocalComments((prev) => ({
-      ...prev,
-      [key]: [...(prev[key] ?? []), comment],
-    }));
-    queryClient.setQueryData(
-      queryKeys.supervisor.workStream(user?.userId, filterKey),
-      (old: typeof pageQuery.data) => {
-        if (!old) return old;
-        return {
-          ...old,
-          commentsByEntity: {
-            ...old.commentsByEntity,
-            [key]: [...(old.commentsByEntity[key] ?? []), comment],
-          },
-        };
-      },
-    );
   };
 
   const renderCreateDialog = () => (
@@ -586,7 +556,7 @@ export default function SupervisorWorkStreamPage() {
             <CommentSection
               entityType="ANNOUNCEMENT"
               entityId={selectedAnnouncement.id}
-              comments={localComments[commentKey] ?? []}
+              comments={data.commentsByEntity[commentKey] ?? []}
               profiles={profiles}
               currentUserId={user?.userId}
               onPost={(body) =>
@@ -684,7 +654,7 @@ export default function SupervisorWorkStreamPage() {
               <CommentSection
                 entityType="DELIVERABLE"
                 entityId={selectedDeliverable.id}
-                comments={localComments[commentKey] ?? []}
+                comments={data.commentsByEntity[commentKey] ?? []}
                 profiles={profiles}
                 currentUserId={user?.userId}
                 onPost={(body) =>
@@ -732,6 +702,11 @@ export default function SupervisorWorkStreamPage() {
                         </Button>
                       )}
                     </div>
+                    <SubmissionRemarks
+                      remarks={submission.remarks}
+                      feedback={submission.feedback}
+                      grade={submission.grade}
+                    />
                   </div>
                 ))}
               </div>
@@ -908,10 +883,26 @@ export default function SupervisorWorkStreamPage() {
                       Due {formatDate(item.dueDate)}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    {item.latestSubmissionStatus
-                      ? `Latest: ${item.latestSubmissionStatus}`
-                      : "No submissions yet"}
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      {item.latestSubmissionStatus
+                        ? `Latest: ${item.latestSubmissionStatus}`
+                        : "No submissions yet"}
+                    </p>
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Paperclip className="h-3 w-3" />
+                        {item.attachmentCount}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" />
+                        {item.commentCount}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        {item.submissionCount}
+                      </span>
+                    </div>
                   </CardContent>
                 </Card>
               ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, LogOut, Menu, User } from "lucide-react";
+import { LogOut, Menu, User } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { useAuth } from "@/providers/auth-provider";
 import { openMobileMenu } from "@/store/slices/ui-slice";
 import { useAppDispatch } from "@/store/hooks";
@@ -22,18 +22,12 @@ interface DashboardHeaderProps {
   title: string;
   description?: string;
   role: UserRole;
-  unreadCount?: number;
-}
-
-function getNotificationPath(role: UserRole) {
-  return `/${role.toLowerCase()}/notifications`;
 }
 
 export function DashboardHeader({
   title,
   description,
   role,
-  unreadCount = 0,
 }: DashboardHeaderProps) {
   const dispatch = useAppDispatch();
   const { user, profile, logout } = useAuth();
@@ -71,16 +65,7 @@ export function DashboardHeader({
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <Button variant="ghost" size="icon" className="relative" asChild>
-          <a href={getNotificationPath(role)} aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}>
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <Badge className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center px-1 text-[10px]">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </Badge>
-            )}
-          </a>
-        </Button>
+        <NotificationBell role={role} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

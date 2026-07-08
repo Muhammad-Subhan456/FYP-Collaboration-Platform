@@ -18,6 +18,20 @@ import { NotificationDispatchService } from '../notifications/notification-dispa
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 import { AuthContextService } from '../common/auth-context.service';
 import { NotificationPayload } from '../common/helpers/notification-payload';
+import { DomainEvents } from '../domain-events/domain-event.constants';
+import { DomainEventService } from '../domain-events/domain-event.service';
+import type {
+  DomainEventScope,
+  ProposalInterestDismissedPayload,
+  ProposalInterestPayload,
+  ProposalSnapshotPayload,
+  ProposalSubmittedPayload,
+} from '../domain-events/domain-event.types';
+import {
+  serializeProposal,
+  serializeSupervisorInvitation,
+  serializeSupervisorRequest,
+} from './proposals-realtime';
 import {
   InvitationBrowseTarget,
   SUPERVISOR_MAX_ACCEPTED_TEAMS,
@@ -35,6 +49,7 @@ export class ProposalsService {
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly authContext: AuthContextService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   async getAcceptedTeamCount(supervisorId: string) {
@@ -784,6 +799,31 @@ async submitProposalToSupervisor(
     `A team submitted proposal "${proposal.title}" for review.`,
   );
 
+  const updatedProposal = await this.prisma.proposal.findUniqueOrThrow({
+    where: { id: proposal.id },
+  });
+
+  const submittedPayload: ProposalSubmittedPayload = {
+    teamId,
+    proposal: serializeProposal(updatedProposal),
+    request: serializeSupervisorRequest(result),
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_SUBMITTED,
+    authUserId,
+    { type: 'team', id: teamId },
+    submittedPayload,
+    proposal.id,
+  );
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_SUBMITTED,
+    authUserId,
+    { type: 'supervisor', id: supervisorId },
+    submittedPayload,
+    proposal.id,
+  );
+
   return result;
 }
 
@@ -999,6 +1039,26 @@ async expressInterest(
     `Expressed interest in team "${team.name}".`,
   );
 
+  const interestPayload: ProposalInterestPayload = {
+    teamId,
+    invitation: serializeSupervisorInvitation(invitation),
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_INTEREST_RECEIVED,
+    supervisorId,
+    { type: 'team', id: teamId },
+    interestPayload,
+    invitation.id,
+  );
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_INTEREST_RECEIVED,
+    supervisorId,
+    { type: 'supervisor', id: supervisorId },
+    interestPayload,
+    invitation.id,
+  );
+
   return invitation;
 }
 
@@ -1143,6 +1203,27 @@ async ignoreInterest(
     where: { id: invitationId },
     data: { status: 'IGNORED' },
   });
+
+  const dismissedPayload: ProposalInterestDismissedPayload = {
+    teamId: invitation.teamId ?? team.id,
+    invitationId,
+    supervisorId: invitation.supervisorId,
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_INTEREST_DISMISSED,
+    authUserId,
+    { type: 'team', id: dismissedPayload.teamId },
+    dismissedPayload,
+    invitationId,
+  );
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_INTEREST_DISMISSED,
+    authUserId,
+    { type: 'supervisor', id: invitation.supervisorId },
+    dismissedPayload,
+    invitationId,
+  );
 
   return { message: 'Expression of interest dismissed' };
 }
@@ -1442,6 +1523,19 @@ async resubmitProposal(
     `Revised proposal "${updated.title}" after supervisor feedback.`,
   );
 
+  const resubmittedPayload: ProposalSnapshotPayload = {
+    teamId,
+    proposal: serializeProposal(updated),
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_RESUBMITTED,
+    authUserId,
+    { type: 'team', id: teamId },
+    resubmittedPayload,
+    updated.id,
+  );
+
   return updated;
 }
 
@@ -1558,6 +1652,32 @@ async approveProposal(
 
   await this.enforceSupervisorCapacity(supervisorId);
 
+  const acceptedPayload: ProposalSnapshotPayload = {
+    teamId: proposal.teamId,
+    proposal: serializeProposal(updated),
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_ACCEPTED,
+    supervisorId,
+    { type: 'team', id: proposal.teamId },
+    acceptedPayload,
+    proposal.id,
+  );
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_ACCEPTED,
+    supervisorId,
+    { type: 'supervisor', id: supervisorId },
+    acceptedPayload,
+    proposal.id,
+  );
+  await this.publishProposalEventToCoordinators(
+    DomainEvents.PROPOSAL_ACCEPTED,
+    supervisorId,
+    acceptedPayload,
+    proposal.id,
+  );
+
   return updated;
 }
 
@@ -1638,7 +1758,66 @@ async rejectProposal(
     `Rejected proposal "${proposal.title}" with review feedback.`,
   );
 
+  const rejectedPayload: ProposalSnapshotPayload = {
+    teamId: proposal.teamId,
+    proposal: serializeProposal(updated),
+  };
+
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_REJECTED,
+    supervisorId,
+    { type: 'team', id: proposal.teamId },
+    rejectedPayload,
+    proposal.id,
+  );
+  this.publishProposalEvent(
+    DomainEvents.PROPOSAL_REJECTED,
+    supervisorId,
+    { type: 'supervisor', id: supervisorId },
+    rejectedPayload,
+    proposal.id,
+  );
+
   return updated;
+}
+
+private publishProposalEvent(
+  name: string,
+  actorId: string | undefined,
+  scope: DomainEventScope,
+  payload: object,
+  entityId: string,
+) {
+  this.domainEventService.emitSafe({
+    name,
+    timestamp: new Date().toISOString(),
+    actorId,
+    scope,
+    entity: { type: 'PROPOSAL', id: entityId },
+    payload,
+  });
+}
+
+private async publishProposalEventToCoordinators(
+  name: string,
+  actorId: string | undefined,
+  payload: ProposalSnapshotPayload,
+  entityId: string,
+) {
+  const coordinators = await this.prisma.user.findMany({
+    where: { role: 'COORDINATOR', isActive: true },
+    select: { id: true },
+  });
+
+  for (const coordinator of coordinators) {
+    this.publishProposalEvent(
+      name,
+      actorId,
+      { type: 'coordinator', id: coordinator.id },
+      payload,
+      entityId,
+    );
+  }
 }
 
 }

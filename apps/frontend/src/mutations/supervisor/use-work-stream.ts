@@ -3,9 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/axios";
+import { patchLocalWorkStreamComment } from "@/lib/realtime/work-stream-cache";
 import { uploadService } from "@/services/progress.service";
 import { supervisorService } from "@/services/supervisor.service";
 import { workStreamService } from "@/services/work-stream.service";
+import { useAuth } from "@/providers/auth-provider";
 import type { DeliverableType } from "@/types/student";
 
 import { invalidateSupervisorWorkStream } from "./invalidate";
@@ -64,6 +66,7 @@ export function useSupervisorWorkStreamMutations(options?: {
   onReviewSuccess?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const invalidate = () => invalidateSupervisorWorkStream(queryClient);
 
@@ -210,6 +213,16 @@ export function useSupervisorWorkStreamMutations(options?: {
 
   const commentMutation = useMutation({
     mutationFn: workStreamService.createComment,
+    onSuccess: (comment, variables) => {
+      if (user?.userId && comment.teamId) {
+        patchLocalWorkStreamComment(queryClient, user.userId, user.role, {
+          entityType: variables.entityType,
+          entityId: variables.entityId,
+          teamId: comment.teamId,
+          comment,
+        });
+      }
+    },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
