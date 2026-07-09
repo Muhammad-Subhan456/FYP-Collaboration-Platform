@@ -5,6 +5,7 @@ import type { Proposal, Team, TeamMember } from "@/types/student";
 import type {
   CoordinatorEvaluation,
   CoordinatorProposalStats,
+  CreateGlobalAnnouncementInput,
   EvaluationPanel,
   EvaluationType,
   GlobalAnnouncement,
@@ -53,7 +54,7 @@ export const coordinatorService = {
     return res.data;
   },
 
-  createGlobalAnnouncement: async (data: { title: string; message: string }) => {
+  createGlobalAnnouncement: async (data: CreateGlobalAnnouncementInput) => {
     const res = await api.post<GlobalAnnouncement>("/global-announcements", data);
     return res.data;
   },

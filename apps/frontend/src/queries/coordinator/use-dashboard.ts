@@ -11,7 +11,7 @@ export function useCoordinatorDashboardQuery() {
 
   const query = useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.dashboard(user?.userId),
+    queryKey: queryKeys.coordinator.dashboard(user?.userId, user?.workspaceId),
     queryFn: coordinatorPageService.getDashboard,
     enabled: !!user?.userId,
   });

@@ -21,7 +21,8 @@ export function useSupervisorAuthQuery<TData>(
 ): UseQueryResult<TData, Error> {
   const { user } = useAuth();
   const queryKey =
-    options?.queryKey ?? queryKeys.supervisor.page(page, user?.userId);
+    options?.queryKey ??
+    queryKeys.supervisor.page(page, user?.userId, undefined, user?.workspaceId);
 
   return useQuery({
     ...supervisorPageQueryOptions,

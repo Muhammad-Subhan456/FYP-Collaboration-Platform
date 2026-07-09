@@ -37,6 +37,7 @@ export class RealtimeEventDispatcher {
   @OnEvent(DomainEvents.ANNOUNCEMENT_CREATED)
   @OnEvent(DomainEvents.ANNOUNCEMENT_UPDATED)
   @OnEvent(DomainEvents.ANNOUNCEMENT_DELETED)
+  @OnEvent(DomainEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED)
   @OnEvent(DomainEvents.DELIVERABLE_CREATED)
   @OnEvent(DomainEvents.DELIVERABLE_UPDATED)
   @OnEvent(DomainEvents.DELIVERABLE_DEADLINE_EXTENDED)

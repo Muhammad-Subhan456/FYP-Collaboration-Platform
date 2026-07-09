@@ -2,6 +2,8 @@
 export const DomainEvents = {
   NOTIFICATION_CREATED: 'notification.created',
 
+  GLOBAL_ANNOUNCEMENT_PUBLISHED: 'global_announcement.published',
+
   ANNOUNCEMENT_CREATED: 'announcement.created',
   ANNOUNCEMENT_UPDATED: 'announcement.updated',
   ANNOUNCEMENT_DELETED: 'announcement.deleted',
@@ -9,9 +11,11 @@ export const DomainEvents = {
   DELIVERABLE_CREATED: 'deliverable.created',
   DELIVERABLE_UPDATED: 'deliverable.updated',
   DELIVERABLE_DEADLINE_EXTENDED: 'deliverable.deadline_extended',
+  DELIVERABLE_TEMPLATE_CREATED: 'deliverable_template.created',
 
   SUBMISSION_CREATED: 'submission.created',
   SUBMISSION_REVIEWED: 'submission.reviewed',
+  SUBMISSION_FINALIZED: 'submission.finalized',
 
   WORKSTREAM_COMMENT_CREATED: 'workstream.comment.created',
 

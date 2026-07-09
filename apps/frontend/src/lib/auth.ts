@@ -1,6 +1,6 @@
 import { jwtDecode } from "jwt-decode";
 
-import type { JwtPayload, UserRole } from "@/types";
+import type { AuthUser, JwtPayload, UserRole } from "@/types";
 
 export const TOKEN_KEY = "fyp_access_token";
 export const TOKEN_COOKIE = "fyp_access_token";
@@ -39,6 +39,27 @@ export function isTokenExpired(token: string): boolean {
   return Date.now() >= payload.exp * 1000;
 }
 
+export function bootstrapAuthUser(): AuthUser | null {
+  const token = getStoredToken();
+  if (!token || isTokenExpired(token)) {
+    clearStoredToken();
+    return null;
+  }
+
+  const payload = decodeToken(token);
+  if (!payload) {
+    clearStoredToken();
+    return null;
+  }
+
+  return {
+    userId: payload.sub,
+    email: payload.email,
+    role: payload.role,
+    workspaceId: payload.workspaceId ?? null,
+  };
+}
+
 export function getDashboardPath(role: UserRole): string {
   switch (role) {
     case "STUDENT":
@@ -47,6 +68,10 @@ export function getDashboardPath(role: UserRole): string {
       return "/supervisor/dashboard";
     case "COORDINATOR":
       return "/coordinator/dashboard";
+    case "EVALUATOR":
+      return "/evaluator/dashboard";
+    case "SUPER_ADMIN":
+      return "/super-admin/workspaces";
     default:
       return "/auth/login";
   }

@@ -152,11 +152,14 @@ export const supervisorPageService = {
     return res.data;
   },
 
-  getWorkStream: async (teamId?: string) => {
+  getWorkStream: async (teamId?: string, phaseId?: string) => {
     const res = await api.get<
       import("@/types/work-stream").SupervisorWorkStreamPageData
     >("/supervisor/work-stream", {
-      params: teamId ? { teamId } : undefined,
+      params: {
+        ...(teamId ? { teamId } : {}),
+        ...(phaseId ? { phaseId } : {}),
+      },
     });
     return res.data;
   },

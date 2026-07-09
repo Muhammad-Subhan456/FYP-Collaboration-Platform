@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { ProposalsService } from '../../proposals/proposals.service';
 import { TeamsService } from '../../teams/teams.service';
-import { NotificationPayload } from '../../common/helpers/notification-payload';
+import { runWithWorkspaceContext } from '../../workspace/workspace-als';
+
+import { ReminderTypes } from './reminder.types';
+import { ScheduledReminderService } from './scheduled-reminder.service';
 
 @Injectable()
 export class RemindersService {
@@ -15,25 +17,13 @@ export class RemindersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationDispatch: NotificationDispatchService,
+    private readonly scheduledReminderService: ScheduledReminderService,
     private readonly proposalsService: ProposalsService,
     private readonly teamsService: TeamsService,
   ) {}
 
-  private async sendNotification(
-    payload: NotificationPayload,
-  ) {
-    try {
-      await this.notificationDispatch.send(payload);
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to notify ${payload.authUserId}: ${error.message}`,
-      );
-    }
-  }
-
   @Cron(CronExpression.EVERY_MINUTE)
-  async expireSupervisorRequests() {
+  async runMinuteJobs() {
     try {
       const result =
         await this.proposalsService.expirePendingSupervisorRequests();
@@ -43,15 +33,31 @@ export class RemindersService {
           `Expired ${result.expired} supervisor request(s)`,
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Failed to expire supervisor requests: ${error.message}`,
+        `Failed to expire supervisor requests: ${message}`,
+      );
+    }
+
+    try {
+      const processed =
+        await this.scheduledReminderService.processDueReminders();
+      if (processed > 0) {
+        this.logger.log(`Processed ${processed} scheduled reminder(s)`);
+      }
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to process scheduled reminders: ${message}`,
       );
     }
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
-  async sendDeadlineReminders() {
+  async enqueueDailyReminders() {
     const now = new Date();
     const in24Hours = new Date(
       now.getTime() + 24 * 60 * 60 * 1000,
@@ -69,45 +75,85 @@ export class RemindersService {
       });
 
     for (const deliverable of dueDeliverables) {
-      await this.sendNotification({
-        authUserId: deliverable.supervisorId,
-        title: 'Deliverable Deadline Approaching',
-        message: `${deliverable.title} is due within 24 hours.`,
-        type: 'DEADLINE_REMINDER',
-        entityType: 'DELIVERABLE',
-        entityId: deliverable.id,
-        route: '/supervisor/work-stream',
-      });
+      await runWithWorkspaceContext(
+        deliverable.workspaceId,
+        async () => {
+          const existing =
+            await this.prisma.scheduledReminder.findFirst({
+              where: {
+                reminderType: ReminderTypes.DELIVERABLE_DEADLINE,
+                entityType: 'DELIVERABLE',
+                entityId: deliverable.id,
+                status: { in: ['PENDING', 'SENT'] },
+              },
+            });
 
-      try {
-        const proposals =
-          await this.proposalsService.getSupervisedProposals(
-            deliverable.supervisorId,
-          );
+          if (existing) {
+            return;
+          }
 
-        for (const proposal of proposals) {
-          const members =
-            await this.teamsService.getTeamMembers(
-              proposal.teamId,
-            );
-
-          for (const member of members) {
-            await this.sendNotification({
-              authUserId: member.authUserId,
-              title: 'Submission Deadline Reminder',
-              message: `${deliverable.title} is due within 24 hours.`,
+          await this.scheduledReminderService.schedule({
+            workspaceId: deliverable.workspaceId,
+            reminderType: ReminderTypes.DELIVERABLE_DEADLINE,
+            entityType: 'DELIVERABLE',
+            entityId: deliverable.id,
+            title: 'Deliverable Deadline Approaching',
+            message: `${deliverable.title} is due within 24 hours.`,
+            route: '/supervisor/work-stream',
+            channels: ['notification'],
+            scheduledFor: now,
+            audienceSpec: { roles: ['SUPERVISOR'] },
+            metadata: {
               type: 'DEADLINE_REMINDER',
               entityType: 'DELIVERABLE',
               entityId: deliverable.id,
-              route: '/student/work-stream',
-            });
+            },
+          });
+
+          try {
+            const proposals =
+              await this.proposalsService.getSupervisedProposals(
+                deliverable.supervisorId,
+              );
+
+            for (const proposal of proposals) {
+              const members =
+                await this.teamsService.getTeamMembers(
+                  proposal.teamId,
+                );
+
+              for (const member of members) {
+                await this.scheduledReminderService.schedule({
+                  workspaceId: deliverable.workspaceId,
+                  reminderType: ReminderTypes.DELIVERABLE_DEADLINE,
+                  entityType: 'DELIVERABLE',
+                  entityId: `${deliverable.id}:${member.authUserId}`,
+                  title: 'Submission Deadline Reminder',
+                  message: `${deliverable.title} is due within 24 hours.`,
+                  route: '/student/work-stream',
+                  channels: ['notification'],
+                  scheduledFor: now,
+                  audienceSpec: {
+                    roles: ['STUDENT'],
+                    userIds: [member.authUserId],
+                  },
+                  metadata: {
+                    type: 'DEADLINE_REMINDER',
+                    entityType: 'DELIVERABLE',
+                    entityId: deliverable.id,
+                  },
+                });
+              }
+            }
+          } catch (error: unknown) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            this.logger.error(
+              `Failed student deliverable reminder enqueue: ${message}`,
+            );
           }
-        }
-      } catch (error: any) {
-        this.logger.error(
-          `Failed student deliverable reminder: ${error.message}`,
-        );
-      }
+        },
+      );
     }
 
     const upcomingEvaluations =
@@ -124,34 +170,68 @@ export class RemindersService {
       });
 
     for (const evaluation of upcomingEvaluations) {
-      for (const assignment of evaluation.assignments) {
-        try {
-          const members =
-            await this.teamsService.getTeamMembers(
-              assignment.teamId,
-            );
+      await runWithWorkspaceContext(
+        evaluation.workspaceId,
+        async () => {
+          for (const assignment of evaluation.assignments) {
+            const existing =
+              await this.prisma.scheduledReminder.findFirst({
+                where: {
+                  reminderType: ReminderTypes.EVALUATION_UPCOMING,
+                  entityType: 'EVALUATION',
+                  entityId: `${evaluation.id}:${assignment.teamId}`,
+                  status: { in: ['PENDING', 'SENT'] },
+                },
+              });
 
-          for (const member of members) {
-            await this.sendNotification({
-              authUserId: member.authUserId,
-              title: 'Evaluation Reminder',
-              message: `${evaluation.title} is scheduled within 24 hours at ${evaluation.venue}.`,
-              type: 'EVALUATION_ASSIGNED',
-              entityType: 'EVALUATION',
-              entityId: evaluation.id,
-              route: '/student/evaluations',
-            });
+            if (existing) {
+              continue;
+            }
+
+            try {
+              const members =
+                await this.teamsService.getTeamMembers(
+                  assignment.teamId,
+                );
+
+              await this.scheduledReminderService.schedule({
+                workspaceId: evaluation.workspaceId,
+                reminderType: ReminderTypes.EVALUATION_UPCOMING,
+                entityType: 'EVALUATION',
+                entityId: `${evaluation.id}:${assignment.teamId}`,
+                title: 'Evaluation Reminder',
+                message: `${evaluation.title} is scheduled within 24 hours at ${evaluation.venue}.`,
+                route: '/student/evaluations',
+                channels: ['notification'],
+                scheduledFor: now,
+                audienceSpec: {
+                  roles: ['STUDENT'],
+                  userIds: members.map(
+                    (member) => member.authUserId,
+                  ),
+                },
+                metadata: {
+                  type: 'EVALUATION_ASSIGNED',
+                  entityType: 'EVALUATION',
+                  entityId: evaluation.id,
+                },
+              });
+            } catch (error: unknown) {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : String(error);
+              this.logger.error(
+                `Failed evaluation reminder enqueue: ${message}`,
+              );
+            }
           }
-        } catch (error: any) {
-          this.logger.error(
-            `Failed evaluation reminder for team ${assignment.teamId}: ${error.message}`,
-          );
-        }
-      }
+        },
+      );
     }
 
     this.logger.log(
-      `Reminders sent: ${dueDeliverables.length} deliverables, ${upcomingEvaluations.length} evaluations`,
+      `Enqueued reminders for ${dueDeliverables.length} deliverables and ${upcomingEvaluations.length} evaluations`,
     );
   }
 }

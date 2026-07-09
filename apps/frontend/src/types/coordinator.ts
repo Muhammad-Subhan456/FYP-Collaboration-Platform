@@ -12,12 +12,34 @@ export interface CoordinatorProposalStats {
   assignedProposals?: number;
 }
 
+export interface GlobalAnnouncementAttachment {
+  id: string;
+  fileUrl: string;
+  fileName: string;
+  createdAt?: string;
+}
+
 export interface GlobalAnnouncement {
   id: string;
   coordinatorId: string;
   title: string;
   message: string;
+  type?: string;
+  audienceRoles: string[];
+  publishAt?: string | null;
+  publishedAt?: string | null;
+  status?: "DRAFT" | "SCHEDULED" | "PUBLISHED";
+  attachments?: GlobalAnnouncementAttachment[];
   createdAt: string;
+}
+
+export interface CreateGlobalAnnouncementInput {
+  title: string;
+  message: string;
+  type?: string;
+  audienceRoles?: string[];
+  publishAt?: string;
+  attachments?: Array<{ fileUrl: string; fileName: string }>;
 }
 
 export interface CoordinatorEvaluation {

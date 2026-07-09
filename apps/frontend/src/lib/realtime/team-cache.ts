@@ -64,11 +64,12 @@ function upsertMember(items: TeamMember[], incoming: TeamMember): TeamMember[] {
 function patchStudentTeam(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   teamId: string,
   updater: (data: StudentTeamOverview) => StudentTeamOverview,
   options?: { syncDashboardMembers?: boolean },
 ) {
-  const queryKey = queryKeys.student.team(userId);
+  const queryKey = queryKeys.student.team(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentTeamOverview>(queryKey);
 
   if (!existing?.team?.id) {
@@ -91,7 +92,7 @@ function patchStudentTeam(
   if (options?.syncDashboardMembers !== false) {
     const updated = queryClient.getQueryData<StudentTeamOverview>(queryKey);
     if (updated?.members) {
-      syncStudentTeamMembers(queryClient, userId, updated.members);
+      syncStudentTeamMembers(queryClient, userId, updated.members, workspaceId);
     }
   }
 }
@@ -99,10 +100,11 @@ function patchStudentTeam(
 function patchSupervisorTeams(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   teamId: string,
   updater: (data: SupervisorTeamsPageData) => SupervisorTeamsPageData,
 ) {
-  const queryKey = queryKeys.supervisor.teams(userId);
+  const queryKey = queryKeys.supervisor.teams(userId, workspaceId);
   const existing = queryClient.getQueryData<SupervisorTeamsPageData>(queryKey);
 
   if (!existing) {
@@ -128,6 +130,7 @@ export function applyJoinRequestReceived(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeTeamJoinRequestReceivedPayload,
 ) {
   if (role !== "STUDENT") {
@@ -135,7 +138,7 @@ export function applyJoinRequestReceived(
   }
 
   const joinRequest = toJoinRequest(payload.joinRequest);
-  patchStudentTeam(queryClient, userId, payload.teamId, (data) => ({
+  patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
     ...data,
     joinRequests: upsertJoinRequest(data.joinRequests, joinRequest),
   }), { syncDashboardMembers: false });
@@ -145,6 +148,7 @@ export function applyJoinRequestResolved(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeTeamJoinRequestResolvedPayload,
 ) {
   if (role !== "STUDENT") {
@@ -152,7 +156,7 @@ export function applyJoinRequestResolved(
   }
 
   const joinRequest = toJoinRequest(payload.joinRequest);
-  patchStudentTeam(queryClient, userId, payload.teamId, (data) => ({
+  patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
     ...data,
     joinRequests: data.joinRequests
       .map((item) =>
@@ -166,12 +170,13 @@ export function applyMemberJoined(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeTeamMemberJoinedPayload,
 ) {
   const member = toTeamMember(payload.member);
 
   if (role === "STUDENT") {
-    patchStudentTeam(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       members: upsertMember(data.members, member),
       joinRequests: data.joinRequests.filter(
@@ -182,7 +187,7 @@ export function applyMemberJoined(
   }
 
   if (role === "SUPERVISOR") {
-    patchSupervisorTeams(queryClient, userId, payload.teamId, (data) => ({
+    patchSupervisorTeams(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       membersByTeamId: {
         ...data.membersByTeamId,
@@ -192,7 +197,7 @@ export function applyMemberJoined(
         ),
       },
     }));
-    void touchSupervisorDashboard(queryClient, userId);
+    void touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
   }
 }
 
@@ -200,10 +205,11 @@ export function applyMemberLeft(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeTeamMemberLeftPayload,
 ) {
   if (role === "STUDENT") {
-    patchStudentTeam(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       members: data.members.filter((item) => item.id !== payload.memberId),
     }));
@@ -211,7 +217,7 @@ export function applyMemberLeft(
   }
 
   if (role === "SUPERVISOR") {
-    patchSupervisorTeams(queryClient, userId, payload.teamId, (data) => ({
+    patchSupervisorTeams(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       membersByTeamId: {
         ...data.membersByTeamId,
@@ -220,7 +226,7 @@ export function applyMemberLeft(
         ),
       },
     }));
-    void touchSupervisorDashboard(queryClient, userId);
+    void touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
   }
 }
 
@@ -228,12 +234,13 @@ export function applyRoleUpdated(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeTeamRoleUpdatedPayload,
 ) {
   const member = toTeamMember(payload.member);
 
   if (role === "STUDENT") {
-    patchStudentTeam(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       members: upsertMember(data.members, member),
     }));
@@ -241,7 +248,7 @@ export function applyRoleUpdated(
   }
 
   if (role === "SUPERVISOR") {
-    patchSupervisorTeams(queryClient, userId, payload.teamId, (data) => ({
+    patchSupervisorTeams(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       membersByTeamId: {
         ...data.membersByTeamId,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '../../auth/auth.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { TeamsModule } from '../../teams/teams.module';
 import { ProgressCommonModule } from '../common/common.module';
@@ -13,6 +14,7 @@ import { SubmissionsService } from './submissions.service';
     ActivityLogsModule,
     ProgressCommonModule,
     NotificationsModule,
+    AuthModule,
   ],
   controllers: [SubmissionsController],
   providers: [SubmissionsService],

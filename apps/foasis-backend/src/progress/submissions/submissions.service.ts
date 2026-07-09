@@ -3,8 +3,10 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuthService } from '../../auth/auth.service';
 
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
@@ -28,6 +30,7 @@ export class SubmissionsService {
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly teamAccessService: TeamAccessService,
     private readonly domainEventService: DomainEventService,
+    private readonly authService: AuthService,
   ) {}
 
   private async notifySupervisor(
@@ -141,7 +144,8 @@ export class SubmissionsService {
       existingSubmissions[0];
 
     if (
-      latestSubmission?.status === 'APPROVED'
+      latestSubmission?.status === 'APPROVED' ||
+      latestSubmission?.status === 'FINALIZED'
     ) {
       throw new BadRequestException(
         'This deliverable is already approved and cannot be re-submitted',
@@ -156,6 +160,7 @@ export class SubmissionsService {
     const submission =
       await this.prisma.submission.create({
         data: {
+          workspaceId: deliverable.workspaceId,
           deliverableId: dto.deliverableId,
           teamId: team.id,
           version: nextVersion,
@@ -377,6 +382,12 @@ export class SubmissionsService {
       );
     }
 
+    if (submission.status !== 'SUBMITTED') {
+      throw new BadRequestException(
+        'Only submitted work can be reviewed',
+      );
+    }
+
     const updatedSubmission =
       await this.prisma.submission.update({
         where: { id: submissionId },
@@ -416,6 +427,129 @@ export class SubmissionsService {
     });
 
     return updatedSubmission;
+  }
+
+  async finalizeSubmission(
+    submissionId: string,
+    supervisorId: string,
+  ) {
+    const submission =
+      await this.prisma.submission.findUnique({
+        where: { id: submissionId },
+        include: {
+          deliverable: {
+            include: { phase: true },
+          },
+        },
+      });
+
+    if (!submission) {
+      throw new BadRequestException('Submission not found');
+    }
+
+    if (submission.deliverable.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only finalize submissions for your own deliverables',
+      );
+    }
+
+    if (submission.status !== 'APPROVED') {
+      throw new BadRequestException(
+        'Only approved submissions can be finalized',
+      );
+    }
+
+    const finalizedAt = new Date();
+    const updatedSubmission =
+      await this.prisma.submission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'FINALIZED',
+          finalizedAt,
+        },
+      });
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Submission Finalized',
+      submission.deliverable.title,
+    );
+
+    const coordinators =
+      await this.authService.listActiveUserIds(
+        submission.workspaceId,
+      );
+    const coordinatorIds = coordinators.filter(
+      (member) => member.role === UserRole.COORDINATOR,
+    );
+
+    if (coordinatorIds.length > 0) {
+      await this.notificationDispatch.sendBulk(
+        coordinatorIds.map((coordinator) => ({
+          authUserId: coordinator.id,
+          title: 'Submission Ready for Review',
+          message: `${submission.deliverable.title} has been finalized and forwarded to the coordinator.`,
+          type: 'SUBMISSION_FINALIZED',
+          entityType: 'SUBMISSION',
+          entityId: submission.id,
+          route: '/coordinator/submissions',
+        })),
+      );
+    }
+
+    this.domainEventService.emitSafe<SubmissionSnapshotPayload>({
+      name: DomainEvents.SUBMISSION_FINALIZED,
+      timestamp: finalizedAt.toISOString(),
+      actorId: supervisorId,
+      scope: { type: 'team', id: submission.teamId },
+      entity: { type: 'SUBMISSION', id: updatedSubmission.id },
+      payload: {
+        teamId: submission.teamId,
+        deliverableId: submission.deliverableId,
+        submission: serializeSubmission(updatedSubmission),
+      },
+    });
+
+    return updatedSubmission;
+  }
+
+  async getFinalizedSubmissions(
+    workspaceId: string,
+    phaseId?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const pagination = getPaginationParams(page, limit);
+
+    const where = {
+      workspaceId,
+      status: 'FINALIZED' as const,
+      ...(phaseId
+        ? { deliverable: { phaseId } }
+        : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.submission.findMany({
+        where,
+        include: {
+          deliverable: {
+            include: { phase: true, template: true },
+          },
+        },
+        orderBy: { finalizedAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.submission.count({ where }),
+    ]);
+
+    return buildPaginatedResponse(
+      data,
+      total,
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   async getLatestSubmission(

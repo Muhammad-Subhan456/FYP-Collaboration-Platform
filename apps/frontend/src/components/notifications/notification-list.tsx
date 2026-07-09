@@ -35,6 +35,7 @@ import {
 } from "@/queries/supervisor";
 import { notificationService } from "@/services/notification.service";
 import type { NotificationReadFilter } from "@/services/notification.service";
+import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
@@ -264,12 +265,13 @@ function GenericNotificationsList({
 }: Required<Pick<NotificationListProps, "fetchNotifications" | "queryKeyPrefix">>) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [readFilter, setReadFilter] =
     useState<NotificationReadFilter>("all");
 
   const notificationsQuery = useQuery({
-    queryKey: [queryKeyPrefix, "me", page, readFilter],
+    queryKey: [queryKeyPrefix, "me", page, readFilter, user?.workspaceId ?? null],
     queryFn: () => fetchNotifications(page, 20, readFilter),
     placeholderData: keepPreviousData,
   });

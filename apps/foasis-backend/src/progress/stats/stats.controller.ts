@@ -22,8 +22,8 @@ export class StatsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('coordinator')
-  getCoordinatorStats() {
-    return this.statsService.getCoordinatorStats();
+  getCoordinatorStats(@Req() req: { workspaceId: string }) {
+    return this.statsService.getCoordinatorStats(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

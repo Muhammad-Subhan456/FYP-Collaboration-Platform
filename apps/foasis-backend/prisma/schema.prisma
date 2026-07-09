@@ -9,10 +9,33 @@ datasource db {
 
 // ─── Auth (from auth-service) ───────────────────────────────────────────────
 
+enum GlobalAnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+enum ReminderStatus {
+  PENDING
+  PROCESSING
+  SENT
+  CANCELLED
+  FAILED
+}
+
 enum UserRole {
   STUDENT
   SUPERVISOR
   COORDINATOR
+  EVALUATOR
+  SUPER_ADMIN
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }
 
 enum SubscriptionPlan {
@@ -31,8 +54,94 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  memberships  WorkspaceMembership[]
+  invitationsSent WorkspaceInvitation[] @relation("InvitedBy")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([role])
+}
+
+model Workspace {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  description      String?
+  coordinatorEmail String
+  isArchived       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  memberships      WorkspaceMembership[]
+  teams            Team[]
+  proposals        Proposal[]
+  supervisorRequests SupervisorRequest[]
+  supervisorInvitations SupervisorInvitation[]
+  notifications    Notification[]
+  announcements    Announcement[]
+  deliverables     Deliverable[]
+  submissions      Submission[]
+  workStreamComments WorkStreamComment[]
+  workStreamAttachments WorkStreamAttachment[]
+  teamIssues       TeamIssue[]
+  teamIssueComments TeamIssueComment[]
+  teamIssueActivities TeamIssueActivity[]
+  activityLogs     ActivityLog[]
+  evaluations      Evaluation[]
+  globalAnnouncements GlobalAnnouncement[]
+  scheduledReminders ScheduledReminder[]
+  invitations      WorkspaceInvitation[]
+  phases           Phase[]
+  deliverableTemplates DeliverableTemplate[]
+
+  @@index([isArchived, createdAt(sort: Desc)])
+}
+
+model WorkspaceMembership {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        UserRole
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, role])
+  @@index([userId])
+  @@index([workspaceId, role])
+}
+
+model WorkspaceInvitation {
+  id          String           @id @default(uuid())
+  workspaceId String
+  email       String
+  fullName    String?
+  role        UserRole
+  tokenHash   String           @unique
+  invitedById String
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([email, status])
+  @@index([workspaceId, email, role, status])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Organization {
@@ -61,6 +170,7 @@ enum ProfileType {
   STUDENT
   SUPERVISOR
   COORDINATOR
+  EVALUATOR
 }
 
 model UserProfile {
@@ -104,6 +214,7 @@ enum JoinRequestStatus {
 
 model Team {
   id              String   @id @default(uuid())
+  workspaceId     String
   name            String
   domain          String
   projectTitle    String?
@@ -113,20 +224,26 @@ model Team {
   leaderId        String
   isOpen          Boolean  @default(true)
   createdAt       DateTime @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
   members         TeamMember[]
   joinRequests    JoinRequest[]
   proposal        Proposal?
+
+  @@index([workspaceId, isOpen])
+  @@index([workspaceId, createdAt(sort: Desc)])
 }
 
 model TeamMember {
   id         String   @id @default(uuid())
   teamId     String
-  authUserId String   @unique
+  authUserId String
   teamRole   String?
   joinedAt   DateTime @default(now())
   team       Team     @relation(fields: [teamId], references: [id])
 
   @@index([teamId])
+  @@unique([teamId, authUserId])
+  @@index([authUserId])
 }
 
 model JoinRequest {
@@ -162,6 +279,7 @@ enum RequestStatus {
 model Proposal {
   id                   String         @id @default(uuid())
   teamId               String         @unique
+  workspaceId          String
   teamLeaderAuthUserId String?
   title                String
   domain               String
@@ -176,9 +294,11 @@ model Proposal {
   reviewedById         String?
   createdAt            DateTime       @default(now())
   team                 Team           @relation(fields: [teamId], references: [id])
+  workspace            Workspace      @relation(fields: [workspaceId], references: [id])
   supervisorRequests   SupervisorRequest[]
   supervisorInvitations SupervisorInvitation[]
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([assignedSupervisorId, status])
   @@index([pendingSupervisorId, status])
 }
@@ -186,6 +306,7 @@ model Proposal {
 model SupervisorRequest {
   id              String        @id @default(uuid())
   proposalId      String
+  workspaceId     String
   supervisorId    String
   status          RequestStatus @default(PENDING)
   rejectionReason String?
@@ -193,7 +314,9 @@ model SupervisorRequest {
   resolvedAt      DateTime?
   createdAt       DateTime      @default(now())
   proposal        Proposal      @relation(fields: [proposalId], references: [id])
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([proposalId, status])
   @@index([status, expiresAt])
   @@index([proposalId, supervisorId])
@@ -203,11 +326,14 @@ model SupervisorInvitation {
   id           String        @id @default(uuid())
   proposalId   String?
   teamId       String?
+  workspaceId  String
   supervisorId String
   status       RequestStatus @default(PENDING)
   createdAt    DateTime      @default(now())
   proposal     Proposal?     @relation(fields: [proposalId], references: [id])
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([proposalId, supervisorId])
   @@index([teamId, supervisorId])
 }
@@ -216,6 +342,7 @@ model SupervisorInvitation {
 
 model Notification {
   id         String   @id @default(uuid())
+  workspaceId String
   authUserId String
   title      String
   message    String
@@ -225,7 +352,9 @@ model Notification {
   route      String?
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId, authUserId, createdAt(sort: Desc)])
   @@index([authUserId, createdAt(sort: Desc)])
   @@index([authUserId, isRead])
 }
@@ -245,6 +374,12 @@ enum SubmissionStatus {
   SUBMITTED
   CHANGES_REQUIRED
   APPROVED
+  FINALIZED
+}
+
+enum PhaseStatus {
+  ACTIVE
+  INACTIVE
 }
 
 enum AnnouncementType {
@@ -285,6 +420,7 @@ enum EvaluationType {
 
 model Announcement {
   id           String           @id @default(uuid())
+  workspaceId   String
   supervisorId String
   teamId       String?
   title        String
@@ -292,28 +428,106 @@ model Announcement {
   type         AnnouncementType @default(GENERAL)
   dueDate      DateTime?
   createdAt    DateTime         @default(now())
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([supervisorId, createdAt(sort: Desc)])
   @@index([teamId, createdAt(sort: Desc)])
 }
 
+model Phase {
+  id           String      @id @default(uuid())
+  workspaceId  String
+  name         String
+  creditHours  Int
+  description  String?
+  status       PhaseStatus @default(ACTIVE)
+  sortOrder    Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  templates    DeliverableTemplate[]
+  deliverables Deliverable[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, status, sortOrder])
+}
+
+model DeliverableTemplate {
+  id             String          @id @default(uuid())
+  workspaceId    String
+  phaseId        String
+  coordinatorId  String
+  title          String
+  description    String
+  type           DeliverableType
+  dueDate        DateTime?
+  totalMarks     Int
+  isLocked       Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  phase          Phase           @relation(fields: [phaseId], references: [id], onDelete: Restrict)
+  rubricCriteria RubricCriterion[]
+  attachments    DeliverableTemplateAttachment[]
+  deliverables   Deliverable[]
+
+  @@index([workspaceId, phaseId])
+  @@index([workspaceId, createdAt(sort: Desc)])
+}
+
+model RubricCriterion {
+  id          String              @id @default(uuid())
+  templateId  String
+  title       String
+  description String?
+  maxMarks    Int
+  sortOrder   Int                 @default(0)
+  template    DeliverableTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, sortOrder])
+}
+
+model DeliverableTemplateAttachment {
+  id         String              @id @default(uuid())
+  templateId String
+  fileUrl    String
+  fileName   String
+  createdAt  DateTime            @default(now())
+  template   DeliverableTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
 model Deliverable {
   id                 String   @id @default(uuid())
+  workspaceId         String
   supervisorId       String
   teamId             String?
+  phaseId            String
+  templateId         String?
   title              String
   description        String
   type               DeliverableType
   dueDate            DateTime
+  totalMarks         Int?
   attachmentUrl      String?
   isActive           Boolean  @default(true)
   submissionsOpen    Boolean  @default(true)
+  publishedAt        DateTime?
   createdAt          DateTime @default(now())
+  workspace           Workspace @relation(fields: [workspaceId], references: [id])
+  phase              Phase    @relation(fields: [phaseId], references: [id], onDelete: Restrict)
+  template           DeliverableTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   submissions        Submission[]
   deadlineExtensions DeliverableDeadlineExtension[]
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([supervisorId, isActive, dueDate])
   @@index([teamId, dueDate])
+  @@index([phaseId, dueDate])
+  @@index([templateId])
+  @@unique([templateId, teamId])
 }
 
 model DeliverableDeadlineExtension {
@@ -329,6 +543,7 @@ model DeliverableDeadlineExtension {
 
 model Submission {
   id            String           @id @default(uuid())
+  workspaceId    String
   deliverableId String
   teamId        String
   version       Int              @default(1)
@@ -338,8 +553,11 @@ model Submission {
   feedback      String?
   grade         Int?
   submittedAt   DateTime         @default(now())
+  finalizedAt   DateTime?
   deliverable   Deliverable      @relation(fields: [deliverableId], references: [id])
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, submittedAt(sort: Desc)])
   @@index([teamId, status])
   @@index([teamId, deliverableId, version(sort: Desc)])
 }
@@ -351,30 +569,37 @@ enum WorkStreamEntityType {
 
 model WorkStreamComment {
   id         String               @id @default(uuid())
+  workspaceId String
   entityType WorkStreamEntityType
   entityId   String
   teamId     String
   authUserId String
   body       String
   createdAt  DateTime             @default(now())
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([entityType, entityId, createdAt])
 }
 
 model WorkStreamAttachment {
   id         String               @id @default(uuid())
+  workspaceId String
   entityType WorkStreamEntityType
   entityId   String
   teamId     String
   fileUrl    String
   fileName   String
   createdAt  DateTime             @default(now())
+  workspace  Workspace            @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([entityType, entityId])
 }
 
 model TeamIssue {
   id              String            @id @default(uuid())
+  workspaceId     String
   teamId          String
   title           String
   description     String
@@ -390,7 +615,9 @@ model TeamIssue {
   completedAt     DateTime?
   comments        TeamIssueComment[]
   activities      TeamIssueActivity[]
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([teamId, status])
   @@index([teamId, createdAt(sort: Desc)])
   @@index([assignedToId, status])
@@ -398,18 +625,22 @@ model TeamIssue {
 
 model TeamIssueComment {
   id         String    @id @default(uuid())
+  workspaceId String
   issueId    String
   teamId     String
   authUserId String
   body       String
   createdAt  DateTime  @default(now())
   issue      TeamIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([issueId, createdAt])
 }
 
 model TeamIssueActivity {
   id          String                @id @default(uuid())
+  workspaceId String
   issueId     String
   teamId      String
   actorId     String
@@ -417,40 +648,96 @@ model TeamIssueActivity {
   description String?
   createdAt   DateTime              @default(now())
   issue       TeamIssue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([issueId, createdAt])
 }
 
 model ActivityLog {
   id          String   @id @default(uuid())
+  workspaceId  String
   authUserId  String
   title       String
   description String?
   createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
+  @@index([workspaceId, createdAt(sort: Desc)])
   @@index([authUserId, createdAt(sort: Desc)])
 }
 
 model GlobalAnnouncement {
-  id            String   @id @default(uuid())
+  id            String                   @id @default(uuid())
+  workspaceId   String
   coordinatorId String
   title         String
   message       String
-  createdAt     DateTime @default(now())
+  type          AnnouncementType         @default(GENERAL)
+  audienceRoles String[]
+  publishAt     DateTime?
+  publishedAt   DateTime?
+  status        GlobalAnnouncementStatus @default(PUBLISHED)
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  workspace     Workspace                @relation(fields: [workspaceId], references: [id])
+  attachments   GlobalAnnouncementAttachment[]
+
+  @@index([workspaceId, status, publishAt])
+  @@index([workspaceId, createdAt(sort: Desc)])
+}
+
+model GlobalAnnouncementAttachment {
+  id             String             @id @default(uuid())
+  announcementId String
+  fileUrl        String
+  fileName       String
+  createdAt      DateTime           @default(now())
+  announcement   GlobalAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId])
+}
+
+model ScheduledReminder {
+  id           String         @id @default(uuid())
+  workspaceId  String
+  reminderType String
+  entityType   String?
+  entityId     String?
+  title        String
+  message      String
+  route        String?
+  channels     String[]       @default(["notification"])
+  audienceSpec Json?
+  scheduledFor DateTime
+  status       ReminderStatus @default(PENDING)
+  sentAt       DateTime?
+  lastError    String?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([workspaceId, reminderType])
 }
 
 model Evaluation {
-  id          String         @id @default(uuid())
+  id            String         @id @default(uuid())
+  workspaceId   String
   coordinatorId String
-  title       String
-  type        EvaluationType
-  date        DateTime
-  venue       String
-  remarks     String?
-  createdAt   DateTime       @default(now())
-  assignments EvaluationAssignment[]
-  results     EvaluationResult[]
-  panels      EvaluationPanel[]
+  title         String
+  type          EvaluationType
+  date          DateTime
+  venue         String
+  remarks       String?
+  createdAt     DateTime       @default(now())
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id])
+  assignments   EvaluationAssignment[]
+  results       EvaluationResult[]
+  panels        EvaluationPanel[]
+
+  @@index([workspaceId, date])
 }
 
 model EvaluationPanel {

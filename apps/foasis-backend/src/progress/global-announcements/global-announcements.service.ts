@@ -1,113 +1,165 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
+import {
+  AnnouncementType,
+  GlobalAnnouncementStatus,
+} from '@prisma/client';
 
-import { AuthService } from '../../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
-import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { ScheduledReminderService } from '../reminders/scheduled-reminder.service';
+import { ReminderTypes } from '../reminders/reminder.types';
 
+import { normalizeAudienceRoles } from './announcement-audience';
+import { AnnouncementAudienceService } from './announcement-audience.service';
+import { GlobalAnnouncementDeliveryService } from './global-announcement-delivery.service';
 import { CreateGlobalAnnouncementDto } from './dto/create-global-announcement.dto';
 
 @Injectable()
 export class GlobalAnnouncementsService {
-  private readonly logger = new Logger(
-    GlobalAnnouncementsService.name,
-  );
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authService: AuthService,
-    private readonly notificationDispatch: NotificationDispatchService,
-    private readonly activityLogsService: ActivityLogsService,
+    private readonly audienceService: AnnouncementAudienceService,
+    private readonly deliveryService: GlobalAnnouncementDeliveryService,
+    @Inject(forwardRef(() => ScheduledReminderService))
+    private readonly scheduledReminderService: ScheduledReminderService,
   ) {}
 
-  private async notifyAllUsers(
-    title: string,
-    message: string,
-    announcementId: string,
-  ) {
-    try {
-      const recipients =
-        await this.authService.listActiveUserIds();
-
-      if (recipients.length === 0) {
-        this.logger.warn(
-          'Global announcement: no active users found to notify',
-        );
-        return;
-      }
-
-      const routeForRole = (role: string) => {
-        switch (role) {
-          case 'COORDINATOR':
-            return '/coordinator/dashboard';
-          case 'SUPERVISOR':
-            return '/supervisor/dashboard';
-          default:
-            return '/student/work-stream';
-        }
-      };
-
-      const notifications = recipients.map((user) => ({
-        authUserId: user.id,
-        title,
-        message,
-        type: 'GLOBAL_ANNOUNCEMENT',
-        entityType: 'ANNOUNCEMENT',
-        entityId: announcementId,
-        route: routeForRole(user.role),
-      }));
-
-      await this.notificationDispatch.sendBulk(
-        notifications,
-      );
-
-      await Promise.allSettled(
-        recipients.map((user) =>
-          this.activityLogsService.logActivity(
-            user.id,
-            title,
-            message,
-          ),
-        ),
-      );
-    } catch (error: any) {
-      this.logger.error(
-        'Failed to deliver global announcement notifications',
-        error?.message ?? error,
-      );
+  private parsePublishAt(value?: string | null): Date | undefined {
+    if (!value) {
+      return undefined;
     }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Invalid publish date');
+    }
+
+    return parsed;
   }
 
   async createAnnouncement(
     coordinatorId: string,
     dto: CreateGlobalAnnouncementDto,
+    workspaceId: string,
   ) {
+    const audienceRoles = normalizeAudienceRoles(
+      dto.audienceRoles,
+    );
+    const publishAt = this.parsePublishAt(dto.publishAt);
+    const scheduleForLater =
+      publishAt && publishAt.getTime() > Date.now() + 30_000;
+
     const announcement =
       await this.prisma.globalAnnouncement.create({
         data: {
           coordinatorId,
+          workspaceId,
           title: dto.title,
           message: dto.message,
+          type: dto.type ?? AnnouncementType.GENERAL,
+          audienceRoles,
+          publishAt: scheduleForLater ? publishAt : null,
+          status: scheduleForLater
+            ? GlobalAnnouncementStatus.SCHEDULED
+            : GlobalAnnouncementStatus.PUBLISHED,
+          publishedAt: scheduleForLater ? null : new Date(),
+          attachments: dto.attachments?.length
+            ? {
+                create: dto.attachments.map((attachment) => ({
+                  fileUrl: attachment.fileUrl,
+                  fileName: attachment.fileName,
+                })),
+              }
+            : undefined,
+        },
+        include: { attachments: true },
+      });
+
+    if (scheduleForLater && publishAt) {
+      await this.scheduledReminderService.schedule({
+        workspaceId,
+        reminderType: ReminderTypes.ANNOUNCEMENT_PUBLISH,
+        entityType: 'GLOBAL_ANNOUNCEMENT',
+        entityId: announcement.id,
+        title: `Publish announcement: ${announcement.title}`,
+        message: announcement.message,
+        scheduledFor: publishAt,
+        channels: ['notification'],
+        audienceSpec: { roles: audienceRoles },
+        metadata: {
+          announcementId: announcement.id,
         },
       });
 
-    const notificationTitle = 'FOASIS Program Announcement';
-    const notificationMessage = `${dto.title}: ${dto.message}`;
+      return announcement;
+    }
 
-    await this.notifyAllUsers(
-      notificationTitle,
-      notificationMessage,
-      announcement.id,
-    );
-
+    await this.deliveryService.deliver(announcement);
     return announcement;
   }
 
-  async getAnnouncements() {
-    return this.prisma.globalAnnouncement.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+  async publishScheduledAnnouncement(announcementId: string) {
+    const announcement =
+      await this.prisma.globalAnnouncement.findFirst({
+        where: { id: announcementId },
+        include: { attachments: true },
+      });
+
+    if (!announcement) {
+      throw new NotFoundException('Announcement not found');
+    }
+
+    if (announcement.status === GlobalAnnouncementStatus.PUBLISHED) {
+      return announcement;
+    }
+
+    const published =
+      await this.deliveryService.markPublished(announcementId);
+
+    await this.deliveryService.deliver(published);
+    return published;
+  }
+
+  async getAnnouncements(
+    workspaceId: string,
+    viewerRole?: string,
+    options?: { coordinatorView?: boolean },
+  ) {
+    const isCoordinatorView =
+      options?.coordinatorView ||
+      viewerRole === 'COORDINATOR';
+
+    const where: {
+      workspaceId: string;
+      status?: GlobalAnnouncementStatus;
+    } = { workspaceId };
+
+    if (!isCoordinatorView) {
+      where.status = GlobalAnnouncementStatus.PUBLISHED;
+    }
+
+    const announcements =
+      await this.prisma.globalAnnouncement.findMany({
+        where: {
+          ...where,
+          ...(isCoordinatorView
+            ? {}
+            : this.audienceService.audienceWhereForRole(
+                viewerRole ?? 'STUDENT',
+              )),
+        },
+        include: { attachments: true },
+        orderBy: [
+          { publishedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      });
+
+    return announcements;
   }
 }

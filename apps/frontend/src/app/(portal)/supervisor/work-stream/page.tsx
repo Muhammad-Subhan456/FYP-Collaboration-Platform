@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Calendar,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
+import { PhaseFilter } from "@/components/common/phase-filter";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
 import { AttachmentList } from "@/components/work-stream/attachment-list";
@@ -23,6 +25,7 @@ import { CommentSection } from "@/components/work-stream/comment-section";
 import { SubmissionRemarks } from "@/components/work-stream/submission-remarks";
 import { RichContent } from "@/components/work-stream/rich-content";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
+import { PublishTemplateDialog } from "@/components/supervisor/publish-template-dialog";
 import { TeamFilterSelect } from "@/components/work-stream/team-filter-select";
 import { TeamMultiSelect } from "@/components/work-stream/team-multi-select";
 import { Button } from "@/components/ui/button";
@@ -50,6 +53,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { queryKeys } from "@/lib/react-query";
+import { deliverableTemplateService } from "@/services/deliverable-template.service";
+import type { DeliverableTemplate } from "@/types/phase";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { cn } from "@/lib/utils";
@@ -73,7 +79,7 @@ import type {
 } from "@/types/work-stream";
 import { workStreamEntityKey } from "@/types/work-stream";
 
-type MainTab = "announcements" | "deliverables";
+type MainTab = "announcements" | "deliverables" | "templates";
 type DeliverableTab = "comments" | "submissions";
 type CreateMode = "announcement" | "deliverable" | null;
 
@@ -129,6 +135,9 @@ export default function SupervisorWorkStreamPage() {
     "APPROVED" | "CHANGES_REQUIRED"
   >("APPROVED");
   const [reviewFeedback, setReviewFeedback] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [publishTemplate, setPublishTemplate] =
+    useState<DeliverableTemplate | null>(null);
 
   const [teamAssignError, setTeamAssignError] = useState<string | undefined>();
 
@@ -159,7 +168,22 @@ export default function SupervisorWorkStreamPage() {
 
   const filterKey = filterTeamId ?? "pending";
 
-  const pageQuery = useSupervisorWorkStreamQuery(filterTeamId);
+  const pageQuery = useSupervisorWorkStreamQuery(
+    filterTeamId,
+    phaseFilter === "all" ? null : phaseFilter,
+  );
+
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.deliverableTemplates.list(
+      phaseFilter === "all" ? undefined : phaseFilter,
+      user?.workspaceId,
+    ),
+    queryFn: () =>
+      deliverableTemplateService.list(
+        phaseFilter === "all" ? undefined : phaseFilter,
+      ),
+    enabled: !!user?.workspaceId,
+  });
 
   const resetForm = () => {
     setCreateMode(null);
@@ -184,6 +208,7 @@ export default function SupervisorWorkStreamPage() {
     deleteDeliverableMutation,
     toggleSubmissionsMutation,
     reviewMutation,
+    finalizeMutation,
     commentMutation,
   } = useSupervisorWorkStreamMutations({
     onFormSuccess: resetForm,
@@ -196,8 +221,12 @@ export default function SupervisorWorkStreamPage() {
   });
 
   useEffect(() => {
-    if (searchParams.get("tab") === "deliverables") {
+    const tab = searchParams.get("tab");
+    if (tab === "deliverables") {
       setMainTab("deliverables");
+    }
+    if (tab === "templates") {
+      setMainTab("templates");
     }
   }, [searchParams]);
 
@@ -701,6 +730,18 @@ export default function SupervisorWorkStreamPage() {
                           Review
                         </Button>
                       )}
+                      {submission.status === "APPROVED" && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={finalizeMutation.isPending}
+                          onClick={() =>
+                            finalizeMutation.mutate(submission.id)
+                          }
+                        >
+                          Finalize
+                        </Button>
+                      )}
                     </div>
                     <SubmissionRemarks
                       remarks={submission.remarks}
@@ -791,20 +832,30 @@ export default function SupervisorWorkStreamPage() {
             <Plus className="h-4 w-4" />
             Announcement
           </Button>
-          <Button onClick={() => openCreate("deliverable")}>
-            <Plus className="h-4 w-4" />
-            Deliverable
-          </Button>
         </div>
       </div>
 
+      <PublishTemplateDialog
+        open={!!publishTemplate}
+        onOpenChange={(open) => !open && setPublishTemplate(null)}
+        template={publishTemplate}
+        teams={allSupervisedTeams}
+        onPublished={() => {
+          void pageQuery.refetch();
+          void templatesQuery.refetch();
+        }}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <TeamFilterSelect
-          teams={allSupervisedTeams}
-          selectedTeamId={filterTeamId ?? allSupervisedTeams[0].id}
-          onChange={(teamId) => dispatch(setSupervisorTeamFilterId(teamId))}
-          label="Filter by team"
-        />
+        <div className="space-y-3">
+          <TeamFilterSelect
+            teams={allSupervisedTeams}
+            selectedTeamId={filterTeamId ?? allSupervisedTeams[0].id}
+            onChange={(teamId) => dispatch(setSupervisorTeamFilterId(teamId))}
+            label="Filter by team"
+          />
+          <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
+        </div>
 
         <div className="space-y-4">
           <SegmentedControl
@@ -812,11 +863,43 @@ export default function SupervisorWorkStreamPage() {
             onChange={setMainTab}
             options={[
               { value: "announcements", label: "Announcements" },
+              { value: "templates", label: "Templates" },
               { value: "deliverables", label: "Deliverables" },
             ]}
           />
 
-          {mainTab === "announcements" ? (
+          {mainTab === "templates" ? (
+            <div className="space-y-3">
+              {(templatesQuery.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No deliverable templates available yet.
+                </p>
+              ) : (
+                (templatesQuery.data ?? []).map((template) => (
+                  <Card key={template.id}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">{template.title}</CardTitle>
+                      <CardDescription>
+                        {template.phase?.name} · {template.totalMarks} marks ·{" "}
+                        {template.rubricCriteria.length} criteria
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
+                        {template.description}
+                      </p>
+                      <Button
+                        size="sm"
+                        onClick={() => setPublishTemplate(template)}
+                      >
+                        Publish to teams
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          ) : mainTab === "announcements" ? (
             data.announcements.length === 0 ? (
               <EmptyState title="No announcements" description="Create one for your teams." />
             ) : (

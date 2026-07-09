@@ -30,7 +30,11 @@ export function useSupervisorMilestonesQuery(
 
   return useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.milestones(user?.userId, filterKey),
+    queryKey: queryKeys.supervisor.milestones(
+      user?.userId,
+      filterKey,
+      user?.workspaceId,
+    ),
     queryFn: () => supervisorPageService.getMilestones(teamId!),
     enabled: !!user?.userId && !!teamId && enabled,
   });
@@ -45,15 +49,26 @@ export function useSupervisorEvaluationsQuery() {
 
 export function useSupervisorWorkStreamQuery(
   teamId?: string | null,
+  phaseId?: string | null,
   enabled = true,
 ) {
   const { user } = useAuth();
   const filterKey = teamId ?? "pending";
+  const phaseKey = phaseId ?? "all";
 
   return useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.workStream(user?.userId, filterKey),
-    queryFn: () => supervisorPageService.getWorkStream(teamId!),
+    queryKey: queryKeys.supervisor.workStream(
+      user?.userId,
+      filterKey,
+      phaseKey,
+      user?.workspaceId,
+    ),
+    queryFn: () =>
+      supervisorPageService.getWorkStream(
+        teamId!,
+        phaseId ?? undefined,
+      ),
     enabled: !!user?.userId && !!teamId && enabled,
   });
 }
@@ -63,7 +78,7 @@ export function useSupervisorProfileQuery() {
 
   return useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.profile(user?.userId),
+    queryKey: queryKeys.supervisor.profile(user?.userId, user?.workspaceId),
     queryFn: supervisorPageService.getProfile,
     enabled: !!user?.userId,
   });
@@ -78,7 +93,11 @@ export function useSupervisorNotificationsQuery(
 
   return useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.notificationsList(page, readFilter),
+    queryKey: queryKeys.supervisor.notificationsList(
+      page,
+      readFilter,
+      user?.workspaceId,
+    ),
     queryFn: () =>
       supervisorPageService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,

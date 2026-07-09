@@ -14,6 +14,7 @@ export function handleTeamEvent(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope,
 ) {
   switch (envelope.event) {
@@ -25,7 +26,8 @@ export function handleTeamEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyJoinRequestReceived>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyJoinRequestReceived>[4],
       );
       break;
     }
@@ -37,7 +39,8 @@ export function handleTeamEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyJoinRequestResolved>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyJoinRequestResolved>[4],
       );
       break;
     }
@@ -46,7 +49,8 @@ export function handleTeamEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyMemberJoined>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyMemberJoined>[4],
       );
       break;
     }
@@ -58,7 +62,8 @@ export function handleTeamEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyMemberLeft>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyMemberLeft>[4],
       );
       break;
     }
@@ -67,7 +72,8 @@ export function handleTeamEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyRoleUpdated>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyRoleUpdated>[4],
       );
       break;
     }

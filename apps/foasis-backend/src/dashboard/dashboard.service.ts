@@ -57,17 +57,17 @@ export class DashboardService {
     };
   }
 
-  async getCoordinatorDashboard() {
+  async getCoordinatorDashboard(workspaceId: string) {
     const [
       userStats,
       totalTeams,
       proposalStats,
       progressStats,
     ] = await Promise.all([
-      this.authService.getUserStats(),
-      this.teamsService.getTeamCountForCoordinator(),
-      this.proposalsService.getProposalStats(),
-      this.statsService.getCoordinatorStats(),
+      this.authService.getUserStats(workspaceId),
+      this.teamsService.getTeamCountForCoordinator(workspaceId),
+      this.proposalsService.getProposalStats(workspaceId),
+      this.statsService.getCoordinatorStats(workspaceId),
     ]);
 
     return {
@@ -153,24 +153,40 @@ export class DashboardService {
     };
   }
 
-  async getStudentOverview(authUserId: string) {
+  async getStudentOverview(
+    authUserId: string,
+    workspaceId: string,
+  ) {
     return {
       role: 'STUDENT' as const,
-      ...(await this.buildStudentOverview(authUserId)),
+      ...(await this.buildStudentOverview(
+        authUserId,
+        workspaceId,
+      )),
     };
   }
 
   async getOverview(
     authUserId: string,
     role: string,
+    workspaceId: string,
   ) {
     switch (role as DashboardRole) {
       case 'STUDENT':
-        return this.getStudentOverview(authUserId);
+        return this.getStudentOverview(
+          authUserId,
+          workspaceId,
+        );
       case 'SUPERVISOR':
-        return this.getSupervisorOverview(authUserId);
+        return this.getSupervisorOverview(
+          authUserId,
+          workspaceId,
+        );
       case 'COORDINATOR':
-        return this.getCoordinatorOverview(authUserId);
+        return this.getCoordinatorOverview(
+          authUserId,
+          workspaceId,
+        );
       default:
         throw new ForbiddenException(
           'Dashboard overview is not available for this role',
@@ -197,7 +213,10 @@ export class DashboardService {
     return { notifications, activityLogs };
   }
 
-  private async buildStudentOverview(authUserId: string) {
+  private async buildStudentOverview(
+    authUserId: string,
+    workspaceId: string,
+  ) {
     const { team, proposal, teamId, supervisorId } =
       await this.studentContextService.load(authUserId);
 
@@ -213,7 +232,7 @@ export class DashboardService {
       supervisor,
     ] = await Promise.all([
       this.globalAnnouncementsService
-        .getAnnouncements()
+        .getAnnouncements(workspaceId, 'STUDENT')
         .catch(() => []),
       this.notificationsService
         .getMyNotifications(authUserId, 1, 20)
@@ -284,7 +303,10 @@ export class DashboardService {
     };
   }
 
-  async getSupervisorOverview(supervisorId: string) {
+  async getSupervisorOverview(
+    supervisorId: string,
+    workspaceId: string,
+  ) {
     const [
       globalAnnouncements,
       notifications,
@@ -294,7 +316,7 @@ export class DashboardService {
       supervised,
     ] = await Promise.all([
       this.globalAnnouncementsService
-        .getAnnouncements()
+        .getAnnouncements(workspaceId, 'SUPERVISOR')
         .catch(() => []),
       this.notificationsService
         .getMyNotifications(supervisorId, 1, 20)
@@ -343,7 +365,10 @@ export class DashboardService {
     };
   }
 
-  async getCoordinatorOverview(authUserId: string) {
+  async getCoordinatorOverview(
+    authUserId: string,
+    workspaceId: string,
+  ) {
     const [
       globalAnnouncements,
       notifications,
@@ -354,7 +379,9 @@ export class DashboardService {
       progressStats,
     ] = await Promise.all([
       this.globalAnnouncementsService
-        .getAnnouncements()
+        .getAnnouncements(workspaceId, 'COORDINATOR', {
+          coordinatorView: true,
+        })
         .catch(() => []),
       this.notificationsService
         .getMyNotifications(authUserId, 1, 20)
@@ -367,10 +394,10 @@ export class DashboardService {
       this.activityLogsService
         .getMyLogs(authUserId)
         .catch(() => []),
-      this.authService.getUserStats(),
-      this.teamsService.getTeamCountForCoordinator(),
-      this.proposalsService.getProposalStats(),
-      this.statsService.getCoordinatorStats(),
+      this.authService.getUserStats(workspaceId),
+      this.teamsService.getTeamCountForCoordinator(workspaceId),
+      this.proposalsService.getProposalStats(workspaceId),
+      this.statsService.getCoordinatorStats(workspaceId),
     ]);
 
     return {

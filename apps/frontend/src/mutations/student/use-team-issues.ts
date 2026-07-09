@@ -119,6 +119,7 @@ export function useStudentTeamIssueCommentMutation() {
           queryClient,
           user.userId,
           user.role,
+          user.workspaceId,
           comment,
         );
       }

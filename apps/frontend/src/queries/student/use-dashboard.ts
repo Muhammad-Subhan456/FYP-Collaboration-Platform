@@ -13,7 +13,7 @@ export function useStudentDashboardQuery() {
 
   const query = useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.student.dashboard(user?.userId),
+    queryKey: queryKeys.student.dashboard(user?.userId, user?.workspaceId),
     queryFn: studentService.getDashboard,
     enabled: !!user?.userId,
   });

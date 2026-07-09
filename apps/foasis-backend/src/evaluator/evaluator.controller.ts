@@ -1,12 +1,15 @@
 import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { NotificationsQueryDto } from '../notifications/dto/notifications-query.dto';
 
 import { EvaluatorPagesService } from './evaluator-pages.service';
 
 @Controller('evaluator')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('EVALUATOR', 'SUPERVISOR', 'COORDINATOR')
 export class EvaluatorController {
   constructor(
     private readonly evaluatorPagesService: EvaluatorPagesService,

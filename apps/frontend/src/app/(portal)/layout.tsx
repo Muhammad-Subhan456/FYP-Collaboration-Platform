@@ -12,6 +12,8 @@ const PORTAL_CONFIG: Record<
   student: { role: "STUDENT", roleLabel: "Student Portal" },
   supervisor: { role: "SUPERVISOR", roleLabel: "Supervisor Portal" },
   coordinator: { role: "COORDINATOR", roleLabel: "Coordinator Portal" },
+  evaluator: { role: "EVALUATOR", roleLabel: "Evaluator Portal" },
+  "super-admin": { role: "SUPER_ADMIN", roleLabel: "Super Admin" },
 };
 
 export default function PortalLayout({

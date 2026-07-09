@@ -172,8 +172,23 @@ export class ProposalsService {
     return canInvite ? 'AVAILABLE' : 'UNAVAILABLE';
   }
 
+  private async getWorkspaceCoordinatorIds(workspaceId: string) {
+    const memberships =
+      await this.prisma.workspaceMembership.findMany({
+        where: {
+          workspaceId,
+          role: 'COORDINATOR',
+          isActive: true,
+        },
+        select: { userId: true },
+      });
+
+    return memberships.map((membership) => membership.userId);
+  }
+
   async getInvitationBrowseTargets(
     supervisorId: string,
+    workspaceId: string,
   ): Promise<InvitationBrowseTarget[]> {
     const atCapacity =
       await this.isSupervisorAtCapacity(supervisorId);
@@ -186,6 +201,7 @@ export class ProposalsService {
     ] = await Promise.all([
       this.prisma.team.findMany({
         where: {
+          workspaceId,
           isOpen: true,
           proposal: null,
         },
@@ -201,6 +217,7 @@ export class ProposalsService {
       }),
       this.prisma.proposal.findMany({
         where: {
+          workspaceId,
           assignedSupervisorId: null,
           status: {
             notIn: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
@@ -224,11 +241,11 @@ export class ProposalsService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.supervisorRequest.findMany({
-        where: { status: 'PENDING' },
+        where: { workspaceId, status: 'PENDING' },
         select: { proposalId: true },
       }),
       this.prisma.supervisorInvitation.findMany({
-        where: { supervisorId },
+        where: { workspaceId, supervisorId },
         select: {
           proposalId: true,
           teamId: true,
@@ -468,6 +485,7 @@ export class ProposalsService {
     const proposal = await this.prisma.proposal.create({
       data: {
         teamId,
+        workspaceId: team.workspaceId,
         teamLeaderAuthUserId: leaderId,
         title: snapshot.title,
         domain: snapshot.domain,
@@ -775,6 +793,7 @@ async submitProposalToSupervisor(
     const request = await tx.supervisorRequest.create({
       data: {
         proposalId: proposal.id,
+        workspaceId: proposal.workspaceId,
         supervisorId,
         expiresAt,
       },
@@ -1007,6 +1026,7 @@ async expressInterest(
   } else {
     invitation = await this.prisma.supervisorInvitation.create({
       data: {
+        workspaceId: team.workspaceId,
         teamId,
         supervisorId,
         proposalId: team.proposal?.id ?? null,
@@ -1248,7 +1268,11 @@ async getAllProposalsForCoordinator() {
   });
 }
 
-async getProposalStats() {
+async getProposalStats(workspaceId?: string) {
+  const workspaceFilter = workspaceId
+    ? { workspaceId }
+    : {};
+
   const [
     total,
     pending,
@@ -1257,21 +1281,21 @@ async getProposalStats() {
     pendingSupervisor,
     supervisorAssigned,
   ] = await Promise.all([
-    this.prisma.proposal.count(),
+    this.prisma.proposal.count({ where: workspaceFilter }),
     this.prisma.proposal.count({
-      where: { status: 'SUPERVISOR_ASSIGNED' },
+      where: { ...workspaceFilter, status: 'SUPERVISOR_ASSIGNED' },
     }),
     this.prisma.proposal.count({
-      where: { status: 'APPROVED' },
+      where: { ...workspaceFilter, status: 'APPROVED' },
     }),
     this.prisma.proposal.count({
-      where: { status: 'REJECTED' },
+      where: { ...workspaceFilter, status: 'REJECTED' },
     }),
     this.prisma.proposal.count({
-      where: { status: 'PENDING_SUPERVISOR' },
+      where: { ...workspaceFilter, status: 'PENDING_SUPERVISOR' },
     }),
     this.prisma.proposal.count({
-      where: { status: 'SUPERVISOR_ASSIGNED' },
+      where: { ...workspaceFilter, status: 'SUPERVISOR_ASSIGNED' },
     }),
   ]);
 
@@ -1437,16 +1461,15 @@ private async notifyCoordinatorsProposalAccepted(
   proposalTitle: string,
   proposalId: string,
   teamId: string,
+  workspaceId: string,
 ) {
-  const coordinators = await this.prisma.user.findMany({
-    where: { role: 'COORDINATOR', isActive: true },
-    select: { id: true },
-  });
+  const coordinatorIds =
+    await this.getWorkspaceCoordinatorIds(workspaceId);
 
   await Promise.allSettled(
-    coordinators.map((coordinator) =>
+    coordinatorIds.map((coordinatorId) =>
       this.notificationDispatch.send({
-        authUserId: coordinator.id,
+        authUserId: coordinatorId,
         title: 'Proposal Accepted',
         message: `A team proposal "${proposalTitle}" was accepted and supervisor assignment is complete.`,
         type: 'PROPOSAL_ACCEPTED_COORDINATOR',
@@ -1642,6 +1665,7 @@ async approveProposal(
     proposal.title,
     proposal.id,
     proposal.teamId,
+    proposal.workspaceId,
   );
 
   await this.activityLogsService.logActivity(
@@ -1676,6 +1700,7 @@ async approveProposal(
     supervisorId,
     acceptedPayload,
     proposal.id,
+    proposal.workspaceId,
   );
 
   return updated;
@@ -1803,17 +1828,16 @@ private async publishProposalEventToCoordinators(
   actorId: string | undefined,
   payload: ProposalSnapshotPayload,
   entityId: string,
+  workspaceId: string,
 ) {
-  const coordinators = await this.prisma.user.findMany({
-    where: { role: 'COORDINATOR', isActive: true },
-    select: { id: true },
-  });
+  const coordinatorIds =
+    await this.getWorkspaceCoordinatorIds(workspaceId);
 
-  for (const coordinator of coordinators) {
+  for (const coordinatorId of coordinatorIds) {
     this.publishProposalEvent(
       name,
       actorId,
-      { type: 'coordinator', id: coordinator.id },
+      { type: 'coordinator', id: coordinatorId },
       payload,
       entityId,
     );

@@ -16,9 +16,12 @@ export class SupervisorController {
   ) {}
 
   @Get('dashboard')
-  getDashboard(@Req() req: { user: { userId: string } }) {
+  getDashboard(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
     return this.supervisorPagesService.getDashboard(
       req.user.userId,
+      req.workspaceId,
     );
   }
 
@@ -33,10 +36,12 @@ export class SupervisorController {
   getWorkStream(
     @Req() req: { user: { userId: string } },
     @Query('teamId') teamId?: string,
+    @Query('phaseId') phaseId?: string,
   ) {
     return this.supervisorPagesService.getWorkStream(
       req.user.userId,
       teamId,
+      phaseId,
     );
   }
 
@@ -82,9 +87,12 @@ export class SupervisorController {
   }
 
   @Get('invitations')
-  getInvitations(@Req() req: { user: { userId: string } }) {
+  getInvitations(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
     return this.supervisorPagesService.getInvitations(
       req.user.userId,
+      req.workspaceId,
     );
   }
 

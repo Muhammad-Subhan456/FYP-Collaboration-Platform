@@ -17,10 +17,12 @@ export class EvaluationsService {
   async createEvaluation(
     coordinatorId: string,
     dto: CreateEvaluationDto,
+    workspaceId: string,
   ) {
     return this.prisma.evaluation.create({
       data: {
         coordinatorId,
+        workspaceId,
         title: dto.title,
         type: dto.type as any,
         date: new Date(dto.date),
@@ -30,8 +32,9 @@ export class EvaluationsService {
     });
   }
 
-  async getAllEvaluations() {
+  async getAllEvaluations(workspaceId: string) {
     return this.prisma.evaluation.findMany({
+      where: { workspaceId },
       orderBy: {
         date: 'asc',
       },
@@ -192,9 +195,12 @@ export class EvaluationsService {
     return this.getTeamEvaluations(resolvedTeamId);
   }
 
-  async getEvaluatorOverview() {
+  async getEvaluatorOverview(workspaceId: string) {
     const panelEvaluators =
       await this.prisma.panelEvaluator.findMany({
+        where: {
+          panel: { evaluation: { workspaceId } },
+        },
         include: {
           panel: {
             include: {

@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 import { ProposalsService } from '../proposals/proposals.service';
@@ -107,12 +108,14 @@ export class TeamsService {
   async createTeam(
     leaderId: string,
     createTeamDto: CreateTeamDto,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ) {
 
     const existingMembership =
-      await this.prisma.teamMember.findUnique({
+      await this.prisma.teamMember.findFirst({
         where: {
-          authUserId: leaderId!
+          authUserId: leaderId,
+          team: { workspaceId },
         },
       });
 
@@ -133,6 +136,7 @@ export class TeamsService {
           maxMembers:
             createTeamDto.maxMembers,
           leaderId,
+          workspaceId,
         },
       });
 
@@ -146,29 +150,30 @@ export class TeamsService {
     return team;
   }
 
-async getAllTeams() {
+async getAllTeams(workspaceId: string) {
   return this.prisma.team.findMany({
-    where: this.browseTeamsWhere(),
+    where: this.browseTeamsWhere(workspaceId),
     orderBy: {
       createdAt: 'desc',
     },
   });
 }
 
-async searchByDomain(domain: string) {
+async searchByDomain(domain: string, workspaceId: string) {
   return this.prisma.team.findMany({
     where: {
       domain: {
         contains: domain,
         mode: 'insensitive',
       },
-      ...this.browseTeamsWhere(),
+      ...this.browseTeamsWhere(workspaceId),
     },
   });
 }
 
-private browseTeamsWhere() {
+private browseTeamsWhere(workspaceId: string) {
   return {
+    workspaceId,
     isOpen: true,
     NOT: {
       proposal: {
@@ -186,28 +191,27 @@ async requestToJoin(
   teamId: string,
   authUserId: string,
 ) {
+  const team = await this.prisma.team.findFirst({
+    where: { id: teamId },
+  });
+
+  if (!team) {
+    throw new BadRequestException(
+      'Team not found',
+    );
+  }
+
   const existingMembership =
     await this.prisma.teamMember.findFirst({
       where: {
         authUserId,
+        team: { workspaceId: team.workspaceId },
       },
     });
 
   if (existingMembership) {
     throw new BadRequestException(
       'User already belongs to a team',
-    );
-  }
-
-  const team = await this.prisma.team.findUnique({
-    where: {
-      id: teamId,
-    },
-  });
-
-  if (!team) {
-    throw new BadRequestException(
-      'Team not found',
     );
   }
 
@@ -298,11 +302,11 @@ private async notifyJoinRequestReceived(
   );
 }
 
-async getBrowseTeamDetails(teamId: string) {
+async getBrowseTeamDetails(teamId: string, workspaceId: string) {
   const team = await this.prisma.team.findFirst({
     where: {
       id: teamId,
-      ...this.browseTeamsWhere(),
+      ...this.browseTeamsWhere(workspaceId),
     },
   });
 
@@ -385,8 +389,11 @@ async approveRequest(
   }
 
   const existingMembership =
-    await this.prisma.teamMember.findUnique({
-      where: { authUserId: request.authUserId },
+    await this.prisma.teamMember.findFirst({
+      where: {
+        authUserId: request.authUserId,
+        team: { workspaceId: team.workspaceId },
+      },
     });
 
   if (existingMembership) {
@@ -412,8 +419,11 @@ async approveRequest(
     );
   }
 
-  const existingMember = await this.prisma.teamMember.findUnique({
-    where: { authUserId: freshRequest.authUserId },
+  const existingMember = await this.prisma.teamMember.findFirst({
+    where: {
+      authUserId: freshRequest.authUserId,
+      team: { workspaceId: team.workspaceId },
+    },
   });
 
   if (existingMember) {
@@ -709,12 +719,15 @@ async getMyTeamMembers(
   });
 }
 
-async getTeamCountForCoordinator() {
-  return this.prisma.team.count();
+async getTeamCountForCoordinator(workspaceId: string) {
+  return this.prisma.team.count({
+    where: { workspaceId },
+  });
 }
 
-async getAllTeamsForCoordinator() {
+async getAllTeamsForCoordinator(workspaceId: string) {
   return this.prisma.team.findMany({
+    where: { workspaceId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -723,21 +736,16 @@ async getAllTeamsForCoordinator() {
 
 async getTeamContextForMember(authUserId: string) {
   const membership =
-    await this.prisma.teamMember.findUnique({
+    await this.prisma.teamMember.findFirst({
       where: { authUserId },
+      include: { team: true },
     });
 
   if (!membership) {
     return null;
   }
 
-  const team = await this.prisma.team.findUnique({
-    where: { id: membership.teamId },
-  });
-
-  if (!team) {
-    return null;
-  }
+  const team = membership.team;
 
   const members = await this.prisma.teamMember.findMany({
     where: { teamId: team.id },
@@ -838,12 +846,15 @@ async updateMemberRole(
   return updated;
 }
 
-async getStudentTeamOverview(authUserId: string) {
+async getStudentTeamOverview(
+  authUserId: string,
+  workspaceId: string,
+) {
   const team = await this.getMyTeam(authUserId);
 
   if (!team) {
     const [browseTeams, pendingRequests] = await Promise.all([
-      this.getAllTeams().catch(() => []),
+      this.getAllTeams(workspaceId).catch(() => []),
       this.prisma.joinRequest
         .findMany({
           where: {
@@ -999,7 +1010,7 @@ async getStudentTeamOverview(authUserId: string) {
 }
 
 async leaveTeam(authUserId: string) {
-  const membership = await this.prisma.teamMember.findUnique({
+  const membership = await this.prisma.teamMember.findFirst({
     where: { authUserId },
     include: { team: true },
   });

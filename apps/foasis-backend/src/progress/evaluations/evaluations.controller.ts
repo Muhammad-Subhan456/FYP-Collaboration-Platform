@@ -30,28 +30,31 @@ export class EvaluationsController {
   @Roles('COORDINATOR')
   @Post()
   createEvaluation(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Body() dto: CreateEvaluationDto,
   ) {
     return this.evaluationsService
       .createEvaluation(
         req.user.userId,
         dto,
+        req.workspaceId,
       );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  getAllEvaluations() {
+  getAllEvaluations(@Req() req: { workspaceId: string }) {
     return this.evaluationsService
-      .getAllEvaluations();
+      .getAllEvaluations(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('evaluator-overview')
-  getEvaluatorOverview() {
-    return this.evaluationsService.getEvaluatorOverview();
+  getEvaluatorOverview(@Req() req: { workspaceId: string }) {
+    return this.evaluationsService.getEvaluatorOverview(
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

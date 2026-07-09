@@ -2,7 +2,8 @@ export type RealtimeScopeType =
   | "user"
   | "team"
   | "supervisor"
-  | "coordinator";
+  | "coordinator"
+  | "workspace";
 
 export interface RealtimeEventEnvelope<T = object> {
   event: string;
@@ -59,6 +60,7 @@ export interface RealtimeIssueCommentPayload {
 }
 
 export const RealtimeEvents = {
+  GLOBAL_ANNOUNCEMENT_PUBLISHED: "global_announcement.published",
   NOTIFICATION_CREATED: "notification.created",
   ISSUE_CREATED: "issue.created",
   ISSUE_UPDATED: "issue.updated",

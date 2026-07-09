@@ -37,7 +37,7 @@ export function invalidateCoordinatorModule(queryClient: QueryClient) {
 
 export function invalidateDashboard(
   queryClient: QueryClient,
-  role?: "STUDENT" | "SUPERVISOR" | "COORDINATOR",
+  role?: "STUDENT" | "SUPERVISOR" | "COORDINATOR" | "EVALUATOR",
 ) {
   if (role === "STUDENT") {
     return queryClient.invalidateQueries({
@@ -52,6 +52,11 @@ export function invalidateDashboard(
   if (role === "COORDINATOR") {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.coordinator.dashboard(),
+    });
+  }
+  if (role === "EVALUATOR") {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.evaluator.dashboard(),
     });
   }
 

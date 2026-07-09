@@ -11,7 +11,7 @@ export function useSupervisorDashboardQuery() {
 
   const query = useQuery({
     ...supervisorPageQueryOptions,
-    queryKey: queryKeys.supervisor.dashboard(user?.userId),
+    queryKey: queryKeys.supervisor.dashboard(user?.userId, user?.workspaceId),
     queryFn: supervisorPageService.getDashboard,
     enabled: !!user?.userId,
   });

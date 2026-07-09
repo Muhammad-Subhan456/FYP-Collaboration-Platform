@@ -32,9 +32,10 @@ export class SupervisorPagesService {
     private readonly workStreamService: WorkStreamService,
   ) {}
 
-  getDashboard(supervisorId: string) {
+  getDashboard(supervisorId: string, workspaceId: string) {
     return this.dashboardService.getSupervisorOverview(
       supervisorId,
+      workspaceId,
     );
   }
 
@@ -47,10 +48,12 @@ export class SupervisorPagesService {
   getWorkStream(
     supervisorId: string,
     teamId?: string,
+    phaseId?: string,
   ) {
     return this.workStreamService.getSupervisorWorkStream(
       supervisorId,
       teamId,
+      phaseId,
     );
   }
 
@@ -98,11 +101,15 @@ export class SupervisorPagesService {
     return { proposals, profiles };
   }
 
-  async getInvitations(supervisorId: string) {
+  async getInvitations(
+    supervisorId: string,
+    workspaceId: string,
+  ) {
     const [browseTargets, invitations, atCapacity] =
       await Promise.all([
         this.proposalsService.getInvitationBrowseTargets(
           supervisorId,
+          workspaceId,
         ),
         this.proposalsService.getSupervisorInvitations(
           supervisorId,

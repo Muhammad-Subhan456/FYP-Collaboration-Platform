@@ -28,7 +28,9 @@ export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
         ? "Manage your FOASIS journey"
         : role === "SUPERVISOR"
           ? "Supervise teams and review work on FOASIS"
-          : "Oversee the FOASIS program";
+          : role === "COORDINATOR"
+            ? "Oversee the FOASIS program"
+            : "Manage FOASIS workspaces";
 
   return (
     <DashboardLayout

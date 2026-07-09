@@ -4,6 +4,8 @@ export const ROLE_ROUTES: Record<UserRole, string> = {
   STUDENT: "/student",
   SUPERVISOR: "/supervisor",
   COORDINATOR: "/coordinator",
+  EVALUATOR: "/evaluator",
+  SUPER_ADMIN: "/super-admin",
 };
 
 const PUBLIC_ROUTES = ["/auth/login", "/auth/register"];

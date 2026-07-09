@@ -19,6 +19,9 @@ import { CoordinatorModule } from './coordinator/coordinator.module';
 import { EvaluatorModule } from './evaluator/evaluator.module';
 import { DomainEventsModule } from './domain-events/domain-events.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { InvitationsModule } from './invitations/invitations.module';
+import { EmailModule } from './email/email.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 /**
  * FOASIS modular monolith root module.
@@ -44,6 +47,9 @@ import { RealtimeModule } from './realtime/realtime.module';
     EvaluatorModule,
     DomainEventsModule,
     RealtimeModule,
+    WorkspaceModule,
+    EmailModule,
+    InvitationsModule,
   ],
 })
 export class AppModule {}

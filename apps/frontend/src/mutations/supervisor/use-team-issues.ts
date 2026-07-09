@@ -25,6 +25,7 @@ export function useSupervisorTeamIssueCommentMutation() {
           queryClient,
           user.userId,
           user.role,
+          user.workspaceId,
           comment,
         );
       }

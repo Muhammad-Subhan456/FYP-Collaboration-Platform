@@ -19,7 +19,7 @@ export function useStudentWorkStreamMutations() {
     mutationFn: workStreamService.createComment,
     onSuccess: (comment, variables) => {
       if (user?.userId && comment.teamId) {
-        patchLocalWorkStreamComment(queryClient, user.userId, user.role, {
+        patchLocalWorkStreamComment(queryClient, user.userId, user.role, user.workspaceId, {
           entityType: variables.entityType,
           entityId: variables.entityId,
           teamId: comment.teamId,

@@ -58,6 +58,22 @@ export class SubmissionsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
+  @Get('finalized')
+  getFinalizedSubmissions(
+    @Req() req: { workspaceId: string },
+    @Query('phaseId') phaseId?: string,
+    @Query() query?: PaginationQueryDto,
+  ) {
+    return this.submissionsService.getFinalizedSubmissions(
+      req.workspaceId,
+      phaseId,
+      query?.page,
+      query?.limit,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
   @Get('deliverable/:id')
   getDeliverableSubmissions(
@@ -78,6 +94,19 @@ export class SubmissionsController {
     @Param('submissionId') submissionId: string,
   ) {
     return this.submissionsService.getSubmissionDetail(
+      submissionId,
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
+  @Patch(':id/finalize')
+  finalizeSubmission(
+    @Req() req: any,
+    @Param('id') submissionId: string,
+  ) {
+    return this.submissionsService.finalizeSubmission(
       submissionId,
       req.user.userId,
     );

@@ -28,6 +28,7 @@ export function handleIssueSnapshotEvent(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope<RealtimeIssueSnapshotPayload>,
 ) {
   if (shouldSkipSelfEvent(envelope.actorId, userId)) {
@@ -45,7 +46,7 @@ export function handleIssueSnapshotEvent(
 
   const snapshot = envelope.payload.issue;
 
-  patchTeamIssueCaches(queryClient, teamId, userId, role, (issues) =>
+  patchTeamIssueCaches(queryClient, teamId, userId, role, workspaceId, (issues) =>
     applyIssueSnapshot(issues, snapshot),
   );
 }
@@ -54,13 +55,14 @@ export function handleIssueCommentCreated(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope<RealtimeIssueCommentPayload>,
 ) {
   // Do not skip the actor — their mutation invalidation may not refetch in time.
   // applyIssueComment is idempotent (dedupes by comment/activity id).
   const { issueId, teamId, comment, activity } = envelope.payload;
 
-  patchTeamIssueCaches(queryClient, teamId, userId, role, (issues) =>
+  patchTeamIssueCaches(queryClient, teamId, userId, role, workspaceId, (issues) =>
     applyIssueComment(issues, issueId, comment, activity),
     { skipDashboard: true },
   );

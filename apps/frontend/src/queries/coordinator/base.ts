@@ -21,7 +21,8 @@ export function useCoordinatorAuthQuery<TData>(
 ): UseQueryResult<TData, Error> {
   const { user } = useAuth();
   const queryKey =
-    options?.queryKey ?? queryKeys.coordinator.page(page, user?.userId);
+    options?.queryKey ??
+    queryKeys.coordinator.page(page, user?.userId, user?.workspaceId);
 
   return useQuery({
     ...coordinatorPageQueryOptions,

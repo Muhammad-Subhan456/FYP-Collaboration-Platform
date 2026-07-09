@@ -114,6 +114,8 @@ export class RealtimeGateway
         return this.roomService.supervisorRoom(scope.id);
       case 'coordinator':
         return this.roomService.coordinatorRoom(scope.id);
+      case 'workspace':
+        return this.roomService.workspaceRoom(scope.id);
       default:
         return null;
     }

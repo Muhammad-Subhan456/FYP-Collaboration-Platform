@@ -2,7 +2,8 @@ export type DomainEventScopeType =
   | 'user'
   | 'team'
   | 'supervisor'
-  | 'coordinator';
+  | 'coordinator'
+  | 'workspace';
 
 export interface DomainEventScope {
   type: DomainEventScopeType;
@@ -99,6 +100,20 @@ export interface WorkstreamCommentCreatedPayload {
   entityId: string;
   teamId: string;
   comment: WorkstreamCommentWire;
+}
+
+export interface GlobalAnnouncementWire {
+  id: string;
+  workspaceId: string;
+  title: string;
+  message: string;
+  audienceRoles: string[];
+  attachmentCount: number;
+  publishedAt: string;
+}
+
+export interface GlobalAnnouncementPublishedPayload {
+  announcement: GlobalAnnouncementWire;
 }
 
 export interface AnnouncementWire {

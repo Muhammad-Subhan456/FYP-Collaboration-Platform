@@ -4,6 +4,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { DeliverablesModule } from './deliverables/deliverables.module';
+import { DeliverableTemplatesModule } from './deliverable-templates/deliverable-templates.module';
+import { PhasesModule } from './phases/phases.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { TeamIssuesModule } from './team-issues/team-issues.module';
 import { GlobalAnnouncementsModule } from './global-announcements/global-announcements.module';
@@ -20,6 +22,8 @@ import { WorkStreamModule } from './work-stream/work-stream.module';
     ScheduleModule.forRoot(),
     ProgressCommonModule,
     WorkStreamModule,
+    PhasesModule,
+    DeliverableTemplatesModule,
     AnnouncementsModule,
     DeliverablesModule,
     SubmissionsModule,

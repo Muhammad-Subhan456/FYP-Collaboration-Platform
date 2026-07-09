@@ -36,12 +36,27 @@ export const COORDINATOR_NAV: NavItemConfig[] = [
   { title: "Teams", href: "/coordinator/teams", icon: "Users" },
   { title: "Proposals", href: "/coordinator/proposals", icon: "FileText" },
   { title: "Announcements", href: "/coordinator/announcements", icon: "Megaphone" },
+  { title: "Phases", href: "/coordinator/phases", icon: "Layers" },
+  { title: "Deliverable Templates", href: "/coordinator/deliverable-templates", icon: "FileStack" },
+  { title: "Submissions", href: "/coordinator/submissions", icon: "FileCheck" },
   { title: "Evaluations", href: "/coordinator/evaluations", icon: "Calendar" },
   { title: "Results", href: "/coordinator/results", icon: "Award" },
   { title: "Analytics", href: "/coordinator/analytics", icon: "BarChart3" },
   { title: "System Health", href: "/coordinator/system-health", icon: "Server" },
   { title: "Notifications", href: "/coordinator/notifications", icon: "Bell" },
   { title: "Profile", href: "/coordinator/profile", icon: "User" },
+];
+
+export const SUPER_ADMIN_NAV: NavItemConfig[] = [
+  { title: "Workspaces", href: "/super-admin/workspaces", icon: "Building2" },
+];
+
+export const EVALUATOR_NAV: NavItemConfig[] = [
+  { title: "Dashboard", href: "/evaluator/dashboard", icon: "LayoutDashboard" },
+  { title: "Evaluations", href: "/evaluator/evaluations", icon: "Calendar" },
+  { title: "Results", href: "/evaluator/results", icon: "Award" },
+  { title: "Notifications", href: "/evaluator/notifications", icon: "Bell" },
+  { title: "Profile", href: "/evaluator/profile", icon: "User" },
 ];
 
 export function getNavForRole(role: UserRole): NavItemConfig[] {
@@ -52,6 +67,10 @@ export function getNavForRole(role: UserRole): NavItemConfig[] {
       return SUPERVISOR_NAV;
     case "COORDINATOR":
       return COORDINATOR_NAV;
+    case "EVALUATOR":
+      return EVALUATOR_NAV;
+    case "SUPER_ADMIN":
+      return SUPER_ADMIN_NAV;
     default:
       return [];
   }

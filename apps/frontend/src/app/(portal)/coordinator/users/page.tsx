@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Shield, ShieldOff, UserCheck, UserMinus, Eye } from "lucide-react";
 
 import { CoordinatorUserProfileDialog } from "@/components/coordinator/coordinator-user-profile-dialog";
+import { CoordinatorInvitePanel } from "@/components/coordinator/coordinator-invite-panel";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { ErrorState } from "@/components/common/state-blocks";
@@ -99,10 +100,12 @@ export default function CoordinatorUsersPage() {
 
   return (
     <div className="space-y-6">
+      <CoordinatorInvitePanel />
       <div>
         <h2 className="text-lg font-semibold">User Management</h2>
         <p className="text-sm text-muted-foreground">
-          Promote, demote, and view complete user profiles
+          Manage workspace memberships by role. Users with multiple roles appear
+          once per role.
         </p>
       </div>
 
@@ -122,25 +125,31 @@ export default function CoordinatorUsersPage() {
             <SelectItem value="STUDENT">Students</SelectItem>
             <SelectItem value="SUPERVISOR">Supervisors</SelectItem>
             <SelectItem value="COORDINATOR">Coordinators</SelectItem>
+            <SelectItem value="EVALUATOR">Evaluators</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Users ({users.length})</CardTitle>
+          <CardTitle>Memberships ({users.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {users.map((user) => (
+          {users.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No memberships match your search or filter.
+            </p>
+          ) : (
+            users.map((user) => (
             <div
-              key={user.id}
+              key={user.membershipId}
               className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
                 <p className="font-medium">{user.fullName}</p>
                 <p className="text-sm text-muted-foreground">{user.email}</p>
                 <p className="text-xs text-muted-foreground">
-                  Joined {formatDate(user.createdAt)}
+                  Membership created {formatDate(user.createdAt)}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -210,7 +219,8 @@ export default function CoordinatorUsersPage() {
                 )}
               </div>
             </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 

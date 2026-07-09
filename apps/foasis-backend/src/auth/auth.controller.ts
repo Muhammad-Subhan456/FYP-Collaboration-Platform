@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,10 +15,19 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  SelectContextDto,
+  SwitchContextDto,
+} from './dto/password.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { InternalApiKeyGuard } from '../common/guards/internal-api-key.guard';
+import { SkipWorkspace } from '../common/decorators/skip-workspace.decorator';
+import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
 
 @Controller('auth')
 export class AuthController {
@@ -25,6 +35,7 @@ export class AuthController {
     private readonly authService: AuthService,
   ) {}
 
+  @SkipWorkspace()
   @Post('register')
   async register(
     @Body() registerDto: RegisterDto,
@@ -32,6 +43,7 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
+  @SkipWorkspace()
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
@@ -39,6 +51,66 @@ export class AuthController {
     return this.authService.login(
       loginDto.email,
       loginDto.password,
+    );
+  }
+
+  @SkipWorkspace()
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @SkipWorkspace()
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      dto.token,
+      dto.password,
+    );
+  }
+
+  @SkipWorkspace()
+  @Post('select-context')
+  selectContext(@Body() dto: SelectContextDto) {
+    return this.authService.selectContext(
+      dto.selectionToken,
+      dto.workspaceId,
+      dto.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipWorkspace()
+  @Get('contexts')
+  listContexts(@Req() req: { user: { userId: string } }) {
+    return this.authService.listContexts(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipWorkspace()
+  @Post('switch-context')
+  switchContext(
+    @Req() req: { user: { userId: string } },
+    @Body() dto: SwitchContextDto,
+  ) {
+    return this.authService.switchContext(
+      req.user.userId,
+      dto.workspaceId,
+      dto.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @SkipWorkspace()
+  changePassword(
+    @Req() req: { user: { userId: string } },
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      req.user.userId,
+      dto.currentPassword,
+      dto.newPassword,
     );
   }
 
@@ -78,35 +150,36 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('stats')
-  getUserStats() {
-    return this.authService.getUserStats();
+  getUserStats(@Req() req: { workspaceId: string }) {
+    return this.authService.getUserStats(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('supervisors')
-  listSupervisors() {
-    return this.authService.listSupervisors();
+  listSupervisors(@Req() req: { workspaceId: string }) {
+    return this.authService.listSupervisors(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('users')
-  listAllUsers() {
-    return this.authService.listAllUsers();
+  listAllUsers(@Req() req: { workspaceId: string }) {
+    return this.authService.listAllUsers(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Patch('users/:userId/role')
   updateUserRole(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Param('userId') userId: string,
     @Body() dto: UpdateUserRoleDto,
   ) {
     return this.authService.updateUserRole(
       userId,
-      dto.role,
+      dto.role as 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR' | 'EVALUATOR',
       req.user.userId,
+      req.workspaceId,
     );
   }
 
@@ -114,7 +187,7 @@ export class AuthController {
   @Roles('COORDINATOR')
   @Patch('users/:userId/status')
   updateUserStatus(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Param('userId') userId: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
@@ -122,12 +195,18 @@ export class AuthController {
       userId,
       dto.isActive,
       req.user.userId,
+      req.workspaceId,
     );
   }
 
+  @SkipWorkspace()
   @UseGuards(InternalApiKeyGuard)
   @Get('internal/active-users')
-  listActiveUserIds() {
-    return this.authService.listActiveUserIds();
+  listActiveUserIds(
+    @Query('workspaceId') workspaceId?: string,
+  ) {
+    return this.authService.listActiveUserIds(
+      workspaceId ?? DEFAULT_WORKSPACE_ID,
+    );
   }
 }

@@ -17,8 +17,13 @@ export function useSupervisorPageQuery<T>(
     ...supervisorPageQueryOptions,
     queryKey:
       queryKeyExtra !== undefined
-        ? queryKeys.supervisor.page(page, user?.userId, queryKeyExtra)
-        : queryKeys.supervisor.page(page, user?.userId),
+        ? queryKeys.supervisor.page(
+            page,
+            user?.userId,
+            queryKeyExtra,
+            user?.workspaceId,
+          )
+        : queryKeys.supervisor.page(page, user?.userId, undefined, user?.workspaceId),
     queryFn,
     enabled: !!user?.userId,
   });

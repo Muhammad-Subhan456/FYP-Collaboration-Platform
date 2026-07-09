@@ -94,9 +94,18 @@ export class WorkStreamService {
       return;
     }
 
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId },
+      select: { workspaceId: true },
+    });
+    if (!team) {
+      throw new BadRequestException('Team not found');
+    }
+
     await this.prisma.workStreamAttachment.createMany({
       data: attachments.map((attachment) => ({
         id: randomUUID(),
+        workspaceId: team.workspaceId,
         entityType,
         entityId,
         teamId,
@@ -468,8 +477,17 @@ export class WorkStreamService {
       throw new ForbiddenException('Invalid role');
     }
 
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId },
+      select: { workspaceId: true },
+    });
+    if (!team) {
+      throw new BadRequestException('Team not found');
+    }
+
     const comment = await this.prisma.workStreamComment.create({
       data: {
+        workspaceId: team.workspaceId,
         entityType: dto.entityType,
         entityId: dto.entityId,
         teamId,
@@ -607,6 +625,7 @@ export class WorkStreamService {
     authUserId: string,
     team: { id: string; name: string } | null,
     supervisorId: string | null,
+    phaseId?: string,
   ) {
     if (!team?.id || !supervisorId) {
       return {
@@ -633,8 +652,10 @@ export class WorkStreamService {
           where: {
             supervisorId,
             isActive: true,
+            ...(phaseId ? { phaseId } : {}),
             ...this.teamVisibilityWhere(team.id),
           },
+          include: { phase: true, template: true },
           orderBy: { createdAt: 'desc' },
         }),
         this.prisma.submission.findMany({
@@ -729,6 +750,7 @@ export class WorkStreamService {
   async getSupervisorWorkStream(
     supervisorId: string,
     filterTeamId?: string,
+    phaseId?: string,
   ) {
     const allTeamIds =
       await this.getSupervisedTeamIds(supervisorId);
@@ -781,7 +803,12 @@ export class WorkStreamService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.deliverable.findMany({
-        where: { supervisorId, ...teamFilter },
+        where: {
+          supervisorId,
+          ...(phaseId ? { phaseId } : {}),
+          ...teamFilter,
+        },
+        include: { phase: true, template: true },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -948,7 +975,8 @@ export class WorkStreamService {
       item.isActive &&
       item.submissionsOpen &&
       now <= item.dueDate &&
-      latestSubmission?.status !== 'APPROVED';
+      latestSubmission?.status !== 'APPROVED' &&
+      latestSubmission?.status !== 'FINALIZED';
 
     return {
       ...item,
@@ -971,8 +999,9 @@ export class WorkStreamService {
             ? 'CLOSED'
             : now > item.dueDate
               ? 'PAST_DUE'
-              : latestSubmission?.status === 'APPROVED'
-                ? 'APPROVED'
+              : latestSubmission?.status === 'APPROVED' ||
+                  latestSubmission?.status === 'FINALIZED'
+                ? latestSubmission.status
                 : 'CLOSED',
     };
   }

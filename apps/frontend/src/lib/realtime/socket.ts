@@ -9,6 +9,7 @@ import {
 
 let socket: Socket | null = null;
 let activeUserId: string | null = null;
+let activeWorkspaceId: string | null = null;
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -26,16 +27,20 @@ export function connectRealtime(
   token: string,
   userId: string,
   role: string,
+  workspaceId: string | null | undefined,
   queryClient: QueryClient,
 ) {
+  const normalizedWorkspaceId = workspaceId ?? null;
   const needsNewSocket =
-    !socket?.connected || activeUserId !== userId;
+    !socket?.connected ||
+    activeUserId !== userId ||
+    activeWorkspaceId !== normalizedWorkspaceId;
 
   if (needsNewSocket) {
     disconnectRealtime();
 
     const url = getRealtimeServerUrl();
-    log("connecting", { url, userId, role });
+    log("connecting", { url, userId, role, workspaceId: normalizedWorkspaceId });
 
     socket = io(`${url}/realtime`, {
       auth: { token },
@@ -48,6 +53,7 @@ export function connectRealtime(
     });
 
     activeUserId = userId;
+    activeWorkspaceId = normalizedWorkspaceId;
 
     socket.on("connect", () => {
       log("socket connected", socket?.id);
@@ -79,7 +85,13 @@ export function connectRealtime(
   // Always refresh handlers so queryClient closures stay current.
   if (socket) {
     unregisterRealtimeHandlers(socket);
-    registerRealtimeHandlers(socket, queryClient, userId, role);
+    registerRealtimeHandlers(
+      socket,
+      queryClient,
+      userId,
+      role,
+      normalizedWorkspaceId,
+    );
   }
 
   return socket;
@@ -96,5 +108,6 @@ export function disconnectRealtime() {
     socket.disconnect();
     socket = null;
     activeUserId = null;
+    activeWorkspaceId = null;
   }
 }

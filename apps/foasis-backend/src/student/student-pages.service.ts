@@ -36,15 +36,24 @@ export class StudentPagesService {
     private readonly workStreamService: WorkStreamService,
   ) {}
 
-  getDashboard(authUserId: string) {
-    return this.dashboardService.getStudentOverview(authUserId);
+  getDashboard(
+    authUserId: string,
+    workspaceId: string,
+  ) {
+    return this.dashboardService.getStudentOverview(
+      authUserId,
+      workspaceId,
+    );
   }
 
-  getTeam(authUserId: string) {
-    return this.teamsService.getStudentTeamOverview(authUserId);
+  getTeam(authUserId: string, workspaceId: string) {
+    return this.teamsService.getStudentTeamOverview(
+      authUserId,
+      workspaceId,
+    );
   }
 
-  async getWorkStream(authUserId: string) {
+  async getWorkStream(authUserId: string, phaseId?: string) {
     const ctx =
       await this.studentContextService.load(authUserId);
 
@@ -54,6 +63,7 @@ export class StudentPagesService {
         ? { id: ctx.team.id, name: ctx.team.name }
         : null,
       ctx.supervisorId,
+      phaseId,
     );
   }
 
@@ -249,7 +259,10 @@ export class StudentPagesService {
     return profile;
   }
 
-  async getProposal(authUserId: string) {
+  async getProposal(
+    authUserId: string,
+    workspaceId: string,
+  ) {
     const ctx =
       await this.studentContextService.load(authUserId);
 
@@ -294,7 +307,7 @@ export class StudentPagesService {
 
     const supervisors = canBrowseSupervisors
       ? await this.authService
-          .listSupervisorsForBrowsing()
+          .listSupervisorsForBrowsing(workspaceId)
           .catch(() => [])
       : [];
 

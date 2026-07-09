@@ -103,7 +103,7 @@ export class StatsService {
     };
   }
 
-  async getCoordinatorStats() {
+  async getCoordinatorStats(workspaceId: string) {
     const now = new Date();
 
     const [
@@ -113,18 +113,20 @@ export class StatsService {
       publishedResults,
     ] = await Promise.all([
       this.prisma.submission.count({
-        where: { status: 'SUBMITTED' },
+        where: { workspaceId, status: 'SUBMITTED' },
       }),
 
       this.prisma.evaluation.count({
-        where: { date: { gte: now } },
+        where: { workspaceId, date: { gte: now } },
       }),
 
       this.prisma.deliverable.count({
-        where: { isActive: true },
+        where: { workspaceId, isActive: true },
       }),
 
-      this.prisma.evaluationResult.count(),
+      this.prisma.evaluationResult.findMany({
+        where: { evaluation: { workspaceId } },
+      }).then((rows) => rows.length),
     ]);
 
     return {

@@ -236,16 +236,19 @@ export class EvaluationResultsService {
     });
   }
 
-  async getCoordinatorOverview() {
+  async getCoordinatorOverview(workspaceId: string) {
     const [assignments, results] = await Promise.all([
       this.prisma.evaluationAssignment.findMany({
+        where: { evaluation: { workspaceId } },
         include: { evaluation: true },
         orderBy: [
           { evaluation: { date: 'asc' } },
           { teamId: 'asc' },
         ],
       }),
-      this.prisma.evaluationResult.findMany(),
+      this.prisma.evaluationResult.findMany({
+        where: { evaluation: { workspaceId } },
+      }),
     ]);
 
     const resultMap = new Map(

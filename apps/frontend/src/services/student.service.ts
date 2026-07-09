@@ -153,9 +153,10 @@ export const studentService = {
     return res.data;
   },
 
-  getWorkStream: async () => {
+  getWorkStream: async (phaseId?: string) => {
     const res = await api.get<import("@/types/work-stream").StudentWorkStreamPageData>(
       "/student/work-stream",
+      { params: phaseId ? { phaseId } : undefined },
     );
     return res.data;
   },

@@ -93,10 +93,11 @@ function upsertRequestHistory(
 function patchStudentProposal(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   teamId: string,
   updater: (data: StudentProposalPageData) => StudentProposalPageData,
 ) {
-  const queryKey = queryKeys.student.proposal(userId);
+  const queryKey = queryKeys.student.proposal(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentProposalPageData>(queryKey);
 
   if (!existing?.team?.id) {
@@ -120,10 +121,11 @@ function patchStudentProposal(
 function patchSupervisorRequests(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   updater: (data: SupervisorRequestsPageData) => SupervisorRequestsPageData,
   options?: { skipDashboard?: boolean },
 ) {
-  const queryKey = queryKeys.supervisor.requests(userId);
+  const queryKey = queryKeys.supervisor.requests(userId, workspaceId);
   const existing = queryClient.getQueryData<SupervisorRequestsPageData>(queryKey);
 
   if (!existing) {
@@ -138,18 +140,19 @@ function patchSupervisorRequests(
   });
 
   if (!options?.skipDashboard) {
-    touchSupervisorDashboard(queryClient, userId);
+    touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
   }
 }
 
 function patchSupervisorInvitations(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   updater: (
     data: SupervisorInvitationsPageData,
   ) => SupervisorInvitationsPageData,
 ) {
-  const queryKey = queryKeys.supervisor.invitations(userId);
+  const queryKey = queryKeys.supervisor.invitations(userId, workspaceId);
   const existing =
     queryClient.getQueryData<SupervisorInvitationsPageData>(queryKey);
 
@@ -168,11 +171,12 @@ function patchSupervisorInvitations(
 function patchCoordinatorProposals(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   updater: (
     data: CoordinatorProposalsPageData,
   ) => CoordinatorProposalsPageData,
 ) {
-  const queryKey = queryKeys.coordinator.proposals(userId);
+  const queryKey = queryKeys.coordinator.proposals(userId, workspaceId);
   const existing =
     queryClient.getQueryData<CoordinatorProposalsPageData>(queryKey);
 
@@ -187,20 +191,21 @@ function patchCoordinatorProposals(
     return updater(current);
   });
 
-  void touchCoordinatorDashboard(queryClient, userId);
+  void touchCoordinatorDashboard(queryClient, userId, undefined, workspaceId);
 }
 
 export function applyProposalSubmitted(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   scopeType: string,
   payload: RealtimeProposalSubmittedPayload,
 ) {
   const proposal = toProposal(payload.proposal);
 
   if (scopeType === "team" && role === "STUDENT") {
-    patchStudentProposal(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       proposal,
       pendingSupervisorId: proposal.pendingSupervisorId ?? null,
@@ -213,7 +218,7 @@ export function applyProposalSubmitted(
   }
 
   if (scopeType === "supervisor" && role === "SUPERVISOR") {
-    patchSupervisorRequests(queryClient, userId, (data) => ({
+    patchSupervisorRequests(queryClient, userId, workspaceId, (data) => ({
       ...data,
       proposals: upsertProposal(data.proposals, proposal),
     }));
@@ -225,6 +230,7 @@ export function applyProposalSnapshot(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   scopeType: string,
   payload: RealtimeProposalSnapshotPayload,
   options?: { removeFromSupervisorQueue?: boolean },
@@ -236,7 +242,7 @@ export function applyProposalSnapshot(
       proposal.status === "APPROVED" ||
       proposal.status === "SUPERVISOR_ASSIGNED";
 
-    patchStudentProposal(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       proposal,
       pendingSupervisorId: proposal.pendingSupervisorId ?? null,
@@ -250,7 +256,7 @@ export function applyProposalSnapshot(
 
     if (isAccepted) {
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.student.dashboard(userId),
+        queryKey: queryKeys.student.dashboard(userId, workspaceId),
       });
     }
     return;
@@ -260,6 +266,7 @@ export function applyProposalSnapshot(
     patchSupervisorRequests(
       queryClient,
       userId,
+      workspaceId,
       (data) => ({
         ...data,
         proposals: options?.removeFromSupervisorQueue
@@ -272,14 +279,14 @@ export function applyProposalSnapshot(
     if (options?.removeFromSupervisorQueue) {
       syncSupervisorProposalResolved(queryClient, userId, proposal);
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.supervisor.teams(userId),
+        queryKey: queryKeys.supervisor.teams(userId, workspaceId),
       });
     }
     return;
   }
 
   if (scopeType === "coordinator" && role === "COORDINATOR") {
-    patchCoordinatorProposals(queryClient, userId, (data) => ({
+    patchCoordinatorProposals(queryClient, userId, workspaceId, (data) => ({
       ...data,
       proposals: upsertProposal(data.proposals, proposal),
     }));
@@ -297,13 +304,14 @@ export function applyProposalInterest(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   scopeType: string,
   payload: RealtimeProposalInterestPayload,
 ) {
   const invitation = toInvitation(payload.invitation);
 
   if (scopeType === "team" && role === "STUDENT") {
-    patchStudentProposal(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       interests: upsertInvitation(data.interests, invitation),
       invitations: upsertInvitation(data.invitations, invitation),
@@ -312,7 +320,7 @@ export function applyProposalInterest(
   }
 
   if (scopeType === "supervisor" && role === "SUPERVISOR") {
-    patchSupervisorInvitations(queryClient, userId, (data) => ({
+    patchSupervisorInvitations(queryClient, userId, workspaceId, (data) => ({
       ...data,
       invitations: upsertInvitation(data.invitations, invitation),
       browseTargets: data.browseTargets.map((target) =>
@@ -328,11 +336,12 @@ export function applyProposalInterestDismissed(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   scopeType: string,
   payload: RealtimeProposalInterestDismissedPayload,
 ) {
   if (scopeType === "team" && role === "STUDENT") {
-    patchStudentProposal(queryClient, userId, payload.teamId, (data) => ({
+    patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       interests: data.interests.filter(
         (item) => item.id !== payload.invitationId,
@@ -345,7 +354,7 @@ export function applyProposalInterestDismissed(
   }
 
   if (scopeType === "supervisor" && role === "SUPERVISOR") {
-    patchSupervisorInvitations(queryClient, userId, (data) => ({
+    patchSupervisorInvitations(queryClient, userId, workspaceId, (data) => ({
       ...data,
       invitations: data.invitations.map((item) =>
         item.id === payload.invitationId
@@ -365,6 +374,7 @@ export function applyProposalResubmitted(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   payload: RealtimeProposalSnapshotPayload,
 ) {
   if (role !== "STUDENT") {
@@ -372,7 +382,7 @@ export function applyProposalResubmitted(
   }
 
   const proposal = toProposal(payload.proposal);
-  patchStudentProposal(queryClient, userId, payload.teamId, (data) => ({
+  patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
     ...data,
     proposal,
     hasPendingProposal: false,

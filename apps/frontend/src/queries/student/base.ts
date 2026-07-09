@@ -21,7 +21,8 @@ export function useStudentAuthQuery<TData>(
 ): UseQueryResult<TData, Error> {
   const { user } = useAuth();
   const queryKey =
-    options?.queryKey ?? queryKeys.student.page(page, user?.userId);
+    options?.queryKey ??
+    queryKeys.student.page(page, user?.userId, user?.workspaceId);
 
   return useQuery({
     ...studentPageQueryOptions,

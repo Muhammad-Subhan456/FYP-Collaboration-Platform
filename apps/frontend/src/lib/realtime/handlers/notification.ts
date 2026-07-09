@@ -15,6 +15,7 @@ export function handleNotificationCreated(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope<RealtimeNotificationPayload>,
 ) {
   const incoming = envelope.payload.notification;
@@ -25,10 +26,10 @@ export function handleNotificationCreated(
 
   if (!incoming.id) {
     void queryClient.invalidateQueries({
-      queryKey: queryKeys.notifications.unreadCount(userId),
+      queryKey: queryKeys.notifications.unreadCount(userId, workspaceId),
     });
     void queryClient.invalidateQueries({
-      queryKey: queryKeys.notifications.unreadPreview(userId),
+      queryKey: queryKeys.notifications.unreadPreview(userId, workspaceId),
     });
     return;
   }
@@ -46,7 +47,7 @@ export function handleNotificationCreated(
     createdAt: incoming.createdAt,
   };
 
-  const previewKey = queryKeys.notifications.unreadPreview(userId);
+  const previewKey = queryKeys.notifications.unreadPreview(userId, workspaceId);
   const preview = queryClient.getQueryData<PaginatedResponse<Notification>>(
     previewKey,
   );
@@ -56,7 +57,7 @@ export function handleNotificationCreated(
 
   if (!notification.isRead && !existingInPreview) {
     queryClient.setQueryData<{ count: number }>(
-      queryKeys.notifications.unreadCount(userId),
+      queryKeys.notifications.unreadCount(userId, workspaceId),
       (previous) => ({
         count: (previous?.count ?? 0) + 1,
       }),
@@ -93,7 +94,8 @@ export function handleNotificationCreated(
         (query.queryKey[0] === "student" ||
           query.queryKey[0] === "supervisor" ||
           query.queryKey[0] === "coordinator") &&
-        query.queryKey[1] === "me",
+        query.queryKey[1] === "me" &&
+        (workspaceId == null || query.queryKey.includes(workspaceId)),
     }).forEach((query) => {
     queryClient.setQueryData<PaginatedResponse<Notification>>(
       query.queryKey,
@@ -143,11 +145,11 @@ export function handleNotificationCreated(
     role === "SUPERVISOR" ||
     role === "COORDINATOR"
   ) {
-    prependDashboardNotification(queryClient, role, userId, notification);
+    prependDashboardNotification(queryClient, role, userId, notification, workspaceId);
   }
 
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.recentActivity(),
+    queryKey: queryKeys.notifications.recentActivity(workspaceId),
   });
 
   if (!existingInPreview) {

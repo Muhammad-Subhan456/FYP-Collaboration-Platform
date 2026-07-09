@@ -22,6 +22,7 @@ import {
   useUnreadNotifications,
   useUnreadNotificationsPreview,
 } from "@/hooks/use-unread-notifications";
+import { useAuth } from "@/providers/auth-provider";
 import { notificationService } from "@/services/notification.service";
 import { queryKeys } from "@/lib/react-query";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ function getNotificationPath(role: UserRole) {
 export function NotificationBell({ role }: NotificationBellProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const unreadCountQuery = useUnreadNotifications();
   const previewQuery = useUnreadNotificationsPreview();
   const unreadCount = unreadCountQuery.data?.count ?? 0;
@@ -51,14 +53,23 @@ export function NotificationBell({ role }: NotificationBellProps) {
       if (!notification.isRead) {
         await notificationService.markAsRead(notification.id);
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.notifications.unreadCount(),
+          queryKey: queryKeys.notifications.unreadCount(
+            user?.userId,
+            user?.workspaceId,
+          ),
         });
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.notifications.unreadPreview(),
+          queryKey: queryKeys.notifications.unreadPreview(
+            user?.userId,
+            user?.workspaceId,
+          ),
         });
         void queryClient.invalidateQueries({
           predicate: (query) =>
-            Array.isArray(query.queryKey) && query.queryKey[1] === "me",
+            Array.isArray(query.queryKey) &&
+            query.queryKey[1] === "me" &&
+            (user?.workspaceId == null ||
+              query.queryKey.includes(user.workspaceId)),
         });
       }
     } catch {

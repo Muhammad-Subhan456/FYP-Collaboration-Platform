@@ -28,9 +28,10 @@ function log(...args: unknown[]) {
 function patchStudentDashboard(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null | undefined,
   updater: (data: StudentDashboardOverview) => StudentDashboardOverview,
 ): boolean {
-  const queryKey = queryKeys.student.dashboard(userId);
+  const queryKey = queryKeys.student.dashboard(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentDashboardOverview>(queryKey);
   if (!existing) {
     return false;
@@ -48,9 +49,10 @@ function patchStudentDashboard(
 function patchSupervisorDashboard(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null | undefined,
   updater: (data: SupervisorDashboardOverview) => SupervisorDashboardOverview,
 ): boolean {
-  const queryKey = queryKeys.supervisor.dashboard(userId);
+  const queryKey = queryKeys.supervisor.dashboard(userId, workspaceId);
   const existing =
     queryClient.getQueryData<SupervisorDashboardOverview>(queryKey);
   if (!existing) {
@@ -69,11 +71,12 @@ function patchSupervisorDashboard(
 function patchCoordinatorDashboard(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null | undefined,
   updater: (
     data: CoordinatorDashboardOverview,
   ) => CoordinatorDashboardOverview,
 ): boolean {
-  const queryKey = queryKeys.coordinator.dashboard(userId);
+  const queryKey = queryKeys.coordinator.dashboard(userId, workspaceId);
   const existing =
     queryClient.getQueryData<CoordinatorDashboardOverview>(queryKey);
   if (!existing) {
@@ -93,8 +96,9 @@ export function touchStudentDashboard(
   queryClient: QueryClient,
   userId: string,
   updater?: (data: StudentDashboardOverview) => StudentDashboardOverview,
+  workspaceId?: string | null,
 ) {
-  if (updater && patchStudentDashboard(queryClient, userId, updater)) {
+  if (updater && patchStudentDashboard(queryClient, userId, workspaceId, updater)) {
     return;
   }
   log("student dashboard fallback invalidate", userId);
@@ -105,8 +109,9 @@ export function touchSupervisorDashboard(
   queryClient: QueryClient,
   userId: string,
   updater?: (data: SupervisorDashboardOverview) => SupervisorDashboardOverview,
+  workspaceId?: string | null,
 ) {
-  if (updater && patchSupervisorDashboard(queryClient, userId, updater)) {
+  if (updater && patchSupervisorDashboard(queryClient, userId, workspaceId, updater)) {
     return;
   }
   log("supervisor dashboard fallback invalidate", userId);
@@ -119,8 +124,9 @@ export function touchCoordinatorDashboard(
   updater?: (
     data: CoordinatorDashboardOverview,
   ) => CoordinatorDashboardOverview,
+  workspaceId?: string | null,
 ) {
-  if (updater && patchCoordinatorDashboard(queryClient, userId, updater)) {
+  if (updater && patchCoordinatorDashboard(queryClient, userId, workspaceId, updater)) {
     return;
   }
   log("coordinator dashboard fallback invalidate", userId);
@@ -255,11 +261,12 @@ export function syncStudentTeamMembers(
   queryClient: QueryClient,
   userId: string,
   members: TeamMember[],
+  workspaceId?: string | null,
 ) {
   touchStudentDashboard(queryClient, userId, (dashboard) => ({
     ...dashboard,
     teamMembers: members,
-  }));
+  }), workspaceId);
 }
 
 function upsertDeliverable(
@@ -357,6 +364,7 @@ export function prependDashboardNotification(
   role: DashboardRole,
   userId: string,
   notification: Notification,
+  workspaceId?: string | null,
 ) {
   const prependNotifications = <
     T extends StudentDashboardOverview | SupervisorDashboardOverview | CoordinatorDashboardOverview,
@@ -386,14 +394,14 @@ export function prependDashboardNotification(
   };
 
   if (role === "STUDENT") {
-    patchStudentDashboard(queryClient, userId, prependNotifications);
+    patchStudentDashboard(queryClient, userId, workspaceId, prependNotifications);
     return;
   }
   if (role === "SUPERVISOR") {
-    patchSupervisorDashboard(queryClient, userId, prependNotifications);
+    patchSupervisorDashboard(queryClient, userId, workspaceId, prependNotifications);
     return;
   }
   if (role === "COORDINATOR") {
-    patchCoordinatorDashboard(queryClient, userId, prependNotifications);
+    patchCoordinatorDashboard(queryClient, userId, workspaceId, prependNotifications);
   }
 }

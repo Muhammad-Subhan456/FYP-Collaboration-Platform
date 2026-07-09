@@ -30,25 +30,32 @@ export class TeamsController {
   @Roles('STUDENT')
   @Post()
   createTeam(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Body() createTeamDto: CreateTeamDto,
   ) {
     return this.teamsService.createTeam(
       req.user.userId,
       createTeamDto,
+      req.workspaceId,
     );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  getAllTeams() {
-    return this.teamsService.getAllTeams();
+  getAllTeams(@Req() req: { workspaceId: string }) {
+    return this.teamsService.getAllTeams(req.workspaceId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('search')
-  searchTeams(@Query('domain') domain: string) {
-    return this.teamsService.searchByDomain(domain);
+  searchTeams(
+    @Query('domain') domain: string,
+    @Req() req: { workspaceId: string },
+  ) {
+    return this.teamsService.searchByDomain(
+      domain,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -66,9 +73,12 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get('my-team/overview')
-  getStudentTeamOverview(@Req() req: any) {
+  getStudentTeamOverview(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
     return this.teamsService.getStudentTeamOverview(
       req.user.userId,
+      req.workspaceId,
     );
   }
 
@@ -88,8 +98,14 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get(':teamId/browse')
-  getBrowseTeamDetails(@Param('teamId') teamId: string) {
-    return this.teamsService.getBrowseTeamDetails(teamId);
+  getBrowseTeamDetails(
+    @Param('teamId') teamId: string,
+    @Req() req: { workspaceId: string },
+  ) {
+    return this.teamsService.getBrowseTeamDetails(
+      teamId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -177,8 +193,12 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('all')
-  getAllTeamsForCoordinator() {
-    return this.teamsService.getAllTeamsForCoordinator();
+  getAllTeamsForCoordinator(
+    @Req() req: { workspaceId: string },
+  ) {
+    return this.teamsService.getAllTeamsForCoordinator(
+      req.workspaceId,
+    );
   }
 
   @UseGuards(InternalOrJwtAuthGuard)

@@ -15,6 +15,7 @@ import {
   Upload,
 } from "lucide-react";
 
+import { PhaseFilter } from "@/components/common/phase-filter";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -75,6 +76,7 @@ function submissionStatusLabel(
   history: Submission[] | undefined,
 ) {
   const latest = history?.[0];
+  if (latest?.status === "FINALIZED") return "Finalized";
   if (latest?.status === "APPROVED") return "Approved";
   if (latest?.status === "CHANGES_REQUIRED") return "Changes required";
   if (latest) return `Submitted (v${latest.version})`;
@@ -98,8 +100,11 @@ export default function StudentWorkStreamPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitFile, setSubmitFile] = useState<File | null>(null);
   const [submitRemarks, setSubmitRemarks] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState("all");
 
-  const pageQuery = useStudentWorkStreamQuery();
+  const pageQuery = useStudentWorkStreamQuery(
+    phaseFilter === "all" ? null : phaseFilter,
+  );
   const { commentMutation, submitMutation } = useStudentWorkStreamMutations();
 
   useEffect(() => {
@@ -429,11 +434,14 @@ export default function StudentWorkStreamPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Work Stream</h2>
-        <p className="text-sm text-muted-foreground">
-          Announcements and deliverables for {data.team.name}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Work Stream</h2>
+          <p className="text-sm text-muted-foreground">
+            Announcements and deliverables for {data.team.name}
+          </p>
+        </div>
+        <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
       </div>
 
       <SegmentedControl

@@ -8,11 +8,13 @@ import type { Socket } from 'socket.io';
 
 import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
+import { runWithWorkspaceContext } from '../workspace/workspace-als';
 
 export interface RealtimeUser {
   userId: string;
   email: string;
   role: string;
+  workspaceId?: string;
 }
 
 @Injectable()
@@ -55,6 +57,7 @@ export class RealtimeRoomService {
         sub: string;
         email: string;
         role: string;
+        workspaceId?: string | null;
       }>(token, {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
       });
@@ -63,6 +66,7 @@ export class RealtimeRoomService {
         userId: payload.sub,
         email: payload.email,
         role: payload.role,
+        workspaceId: payload.workspaceId ?? undefined,
       };
     } catch {
       throw new UnauthorizedException('Invalid WebSocket token');
@@ -85,43 +89,53 @@ export class RealtimeRoomService {
     return `coordinator:${userId}`;
   }
 
+  workspaceRoom(workspaceId: string) {
+    return `workspace:${workspaceId}`;
+  }
+
   /** Server-side room membership — never trust client-supplied room names. */
   async resolveRooms(user: RealtimeUser): Promise<string[]> {
-    const rooms = new Set<string>([this.userRoom(user.userId)]);
+    return runWithWorkspaceContext(user.workspaceId, async () => {
+      const rooms = new Set<string>([this.userRoom(user.userId)]);
 
-    if (user.role === 'COORDINATOR') {
-      rooms.add(this.coordinatorRoom(user.userId));
-      return [...rooms];
-    }
-
-    if (user.role === 'STUDENT') {
-      const team = await this.teamsService
-        .getMyTeam(user.userId)
-        .catch(() => null);
-
-      if (team?.id) {
-        rooms.add(this.teamRoom(team.id));
+      if (user.workspaceId) {
+        rooms.add(this.workspaceRoom(user.workspaceId));
       }
 
-      return [...rooms];
-    }
+      if (user.role === 'COORDINATOR') {
+        rooms.add(this.coordinatorRoom(user.userId));
+        return [...rooms];
+      }
 
-    if (user.role === 'SUPERVISOR') {
-      rooms.add(this.supervisorRoom(user.userId));
+      if (user.role === 'STUDENT') {
+        const team = await this.teamsService
+          .getMyTeam(user.userId)
+          .catch(() => null);
 
-      const proposals = await this.proposalsService
-        .getSupervisedProposals(user.userId)
-        .catch(() => []);
-
-      for (const proposal of proposals) {
-        if (proposal.teamId) {
-          rooms.add(this.teamRoom(proposal.teamId));
+        if (team?.id) {
+          rooms.add(this.teamRoom(team.id));
         }
+
+        return [...rooms];
+      }
+
+      if (user.role === 'SUPERVISOR') {
+        rooms.add(this.supervisorRoom(user.userId));
+
+        const proposals = await this.proposalsService
+          .getSupervisedProposals(user.userId)
+          .catch(() => []);
+
+        for (const proposal of proposals) {
+          if (proposal.teamId) {
+            rooms.add(this.teamRoom(proposal.teamId));
+          }
+        }
+
+        return [...rooms];
       }
 
       return [...rooms];
-    }
-
-    return [...rooms];
+    });
   }
 }

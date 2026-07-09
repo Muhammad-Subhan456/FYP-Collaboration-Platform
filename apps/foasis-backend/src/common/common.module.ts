@@ -1,7 +1,10 @@
 import { Global, Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 import { AuthContextService } from './auth-context.service';
 import { GatewayHttpService } from './gateway-http.service';
@@ -9,11 +12,15 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { InternalApiKeyGuard } from './guards/internal-api-key.guard';
 import { InternalOrJwtAuthGuard } from './guards/internal-or-jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { SuperAdminGuard } from './guards/super-admin.guard';
+import { WorkspaceGuard } from './guards/workspace.guard';
+import { WorkspaceContextInterceptor } from './interceptors/workspace-context.interceptor';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Global()
 @Module({
   imports: [
+    WorkspaceModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -30,6 +37,16 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtStrategy,
     JwtAuthGuard,
     RolesGuard,
+    SuperAdminGuard,
+    WorkspaceGuard,
+    {
+      provide: APP_GUARD,
+      useClass: WorkspaceGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: WorkspaceContextInterceptor,
+    },
     InternalApiKeyGuard,
     InternalOrJwtAuthGuard,
     GatewayHttpService,
@@ -41,6 +58,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtStrategy,
     JwtAuthGuard,
     RolesGuard,
+    SuperAdminGuard,
+    WorkspaceGuard,
     InternalApiKeyGuard,
     InternalOrJwtAuthGuard,
     GatewayHttpService,

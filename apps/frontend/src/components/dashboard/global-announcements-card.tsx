@@ -38,6 +38,12 @@ export function GlobalAnnouncementsCard({
                 <p className="line-clamp-2 text-muted-foreground">
                   {item.message}
                 </p>
+                {item.attachments && item.attachments.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {item.attachments.length} attachment
+                    {item.attachments.length === 1 ? "" : "s"}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatDateTime(item.createdAt)}
                 </p>

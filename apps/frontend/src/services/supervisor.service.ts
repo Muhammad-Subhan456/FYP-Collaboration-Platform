@@ -114,6 +114,13 @@ export const supervisorService = {
     return res.data;
   },
 
+  finalizeSubmission: async (submissionId: string) => {
+    const res = await api.patch<Submission>(
+      `/submissions/${submissionId}/finalize`,
+    );
+    return res.data;
+  },
+
   getMyAnnouncements: async () => {
     const res = await api.get<Announcement[]>("/announcements/my");
     return res.data;

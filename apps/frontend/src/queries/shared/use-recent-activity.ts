@@ -12,14 +12,14 @@ export function useRecentActivityFeedQuery(fetchLimit = 20, enabled = true) {
 
   const notificationsQuery = useQuery({
     ...portalPageQueryOptions,
-    queryKey: queryKeys.notifications.recentActivity(),
+    queryKey: queryKeys.notifications.recentActivity(user?.workspaceId),
     queryFn: () => notificationService.getMyNotifications(1, fetchLimit),
     enabled: enabled && !!user?.userId,
   });
 
   const activityQuery = useQuery({
     ...portalPageQueryOptions,
-    queryKey: queryKeys.activityLogs.mine(),
+    queryKey: queryKeys.activityLogs.mine(user?.workspaceId),
     queryFn: progressService.getMyActivityLogs,
     enabled: enabled && !!user?.userId,
   });

@@ -34,10 +34,12 @@ export interface UserProfile {
 }
 
 export interface AuthUserRecord {
+  membershipId: string;
   id: string;
   fullName: string;
   email: string;
   role: UserRole;
   isActive: boolean;
+  userIsActive?: boolean;
   createdAt: string;
 }

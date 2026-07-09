@@ -4,8 +4,8 @@
  * Keys are hierarchical tuples so prefix invalidation works:
  *   queryClient.invalidateQueries({ queryKey: queryKeys.student.all })
  *
- * During migration, existing inline keys should be replaced page-by-page
- * with these factories. Do not bulk-replace until each page is validated.
+ * Workspace-scoped keys include workspaceId as the last segment so cache
+ * does not bleed across tenant switches.
  */
 
 export const queryKeys = {
@@ -18,110 +18,172 @@ export const queryKeys = {
 
   student: {
     all: ["student"] as const,
-    page: (page: string, userId?: string) =>
-      ["student", page, userId] as const,
-    dashboard: (userId?: string) =>
-      ["student", "dashboard", userId] as const,
-    team: (userId?: string) => ["student", "team", userId] as const,
-    proposal: (userId?: string) => ["student", "proposal", userId] as const,
-    workStream: (userId?: string) =>
-      ["student", "work-stream", userId] as const,
+    page: (page: string, userId?: string, workspaceId?: string | null) =>
+      ["student", page, userId, workspaceId ?? null] as const,
+    dashboard: (userId?: string, workspaceId?: string | null) =>
+      ["student", "dashboard", userId, workspaceId ?? null] as const,
+    team: (userId?: string, workspaceId?: string | null) =>
+      ["student", "team", userId, workspaceId ?? null] as const,
+    proposal: (userId?: string, workspaceId?: string | null) =>
+      ["student", "proposal", userId, workspaceId ?? null] as const,
+    workStream: (userId?: string, phaseId?: string | null, workspaceId?: string | null) =>
+      ["student", "work-stream", userId, phaseId ?? "all", workspaceId ?? null] as const,
     workStreamPrefix: () => ["student", "work-stream"] as const,
-    tasks: (userId?: string) => ["student", "tasks", userId] as const,
-    milestones: (userId?: string) =>
-      ["student", "milestones", userId] as const,
-    /** Prefix for invalidating every student milestones query (any userId). */
+    tasks: (userId?: string, workspaceId?: string | null) =>
+      ["student", "tasks", userId, workspaceId ?? null] as const,
+    milestones: (userId?: string, workspaceId?: string | null) =>
+      ["student", "milestones", userId, workspaceId ?? null] as const,
     milestonesPrefix: () => ["student", "milestones"] as const,
-    evaluations: (userId?: string) =>
-      ["student", "evaluations", userId] as const,
-    results: (userId?: string) => ["student", "results", userId] as const,
+    evaluations: (userId?: string, workspaceId?: string | null) =>
+      ["student", "evaluations", userId, workspaceId ?? null] as const,
+    results: (userId?: string, workspaceId?: string | null) =>
+      ["student", "results", userId, workspaceId ?? null] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["student", "notifications", userId, page, limit] as const,
-    notificationsList: (page: number, readFilter = "all") =>
-      ["student", "me", page, readFilter] as const,
-    profile: (userId?: string) => ["student", "profile", userId] as const,
+    notificationsList: (
+      page: number,
+      readFilter = "all",
+      workspaceId?: string | null,
+    ) => ["student", "me", page, readFilter, workspaceId ?? null] as const,
+    profile: (userId?: string, workspaceId?: string | null) =>
+      ["student", "profile", userId, workspaceId ?? null] as const,
   },
 
   supervisor: {
     all: ["supervisor"] as const,
-    page: (page: string, userId?: string, extra?: unknown) =>
+    page: (
+      page: string,
+      userId?: string,
+      extra?: unknown,
+      workspaceId?: string | null,
+    ) =>
       extra !== undefined
-        ? (["supervisor", page, userId, extra] as const)
-        : (["supervisor", page, userId] as const),
-    dashboard: (userId?: string) =>
-      ["supervisor", "dashboard", userId] as const,
-    teams: (userId?: string) => ["supervisor", "teams", userId] as const,
-    workStream: (userId?: string, teamFilterKey?: string) =>
+        ? (["supervisor", page, userId, extra, workspaceId ?? null] as const)
+        : (["supervisor", page, userId, workspaceId ?? null] as const),
+    dashboard: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "dashboard", userId, workspaceId ?? null] as const,
+    teams: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "teams", userId, workspaceId ?? null] as const,
+    workStream: (
+      userId?: string,
+      teamFilterKey?: string,
+      phaseFilterKey?: string,
+      workspaceId?: string | null,
+    ) =>
       teamFilterKey !== undefined
-        ? (["supervisor", "work-stream", userId, teamFilterKey] as const)
-        : (["supervisor", "work-stream", userId] as const),
-    requests: (userId?: string) =>
-      ["supervisor", "requests", userId] as const,
-    invitations: (userId?: string) =>
-      ["supervisor", "invitations", userId] as const,
-    milestones: (userId?: string, teamFilterKey?: string) =>
+        ? (["supervisor", "work-stream", userId, teamFilterKey, phaseFilterKey ?? "all", workspaceId ?? null] as const)
+        : (["supervisor", "work-stream", userId, workspaceId ?? null] as const),
+    requests: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "requests", userId, workspaceId ?? null] as const,
+    invitations: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "invitations", userId, workspaceId ?? null] as const,
+    milestones: (
+      userId?: string,
+      teamFilterKey?: string,
+      workspaceId?: string | null,
+    ) =>
       teamFilterKey !== undefined
-        ? (["supervisor", "milestones", userId, teamFilterKey] as const)
-        : (["supervisor", "milestones", userId] as const),
-    /** Prefix for invalidating every supervisor milestones query. */
+        ? (["supervisor", "milestones", userId, teamFilterKey, workspaceId ?? null] as const)
+        : (["supervisor", "milestones", userId, workspaceId ?? null] as const),
     milestonesPrefix: () => ["supervisor", "milestones"] as const,
     workStreamPrefix: () => ["supervisor", "work-stream"] as const,
-    evaluations: (userId?: string) =>
-      ["supervisor", "evaluations", userId] as const,
+    evaluations: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "evaluations", userId, workspaceId ?? null] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["supervisor", "notifications", userId, page, limit] as const,
-    notificationsList: (page: number, readFilter = "all") =>
-      ["supervisor", "me", page, readFilter] as const,
-    profile: (userId?: string) => ["supervisor", "profile", userId] as const,
-    overview: (supervisorId: string) =>
-      ["supervisor-overview", supervisorId] as const,
+    notificationsList: (
+      page: number,
+      readFilter = "all",
+      workspaceId?: string | null,
+    ) => ["supervisor", "me", page, readFilter, workspaceId ?? null] as const,
+    profile: (userId?: string, workspaceId?: string | null) =>
+      ["supervisor", "profile", userId, workspaceId ?? null] as const,
+    overview: (supervisorId: string, workspaceId?: string | null) =>
+      ["supervisor-overview", supervisorId, workspaceId ?? null] as const,
   },
 
   coordinator: {
     all: ["coordinator"] as const,
-    page: (page: string, userId?: string) =>
-      ["coordinator", page, userId] as const,
-    dashboard: (userId?: string) =>
-      ["coordinator", "dashboard", userId] as const,
-    profile: (userId?: string) =>
-      ["coordinator", "profile", userId] as const,
-    analytics: (userId?: string) =>
-      ["coordinator", "analytics", userId] as const,
-    users: (userId?: string) => ["coordinator", "users", userId] as const,
-    teams: (userId?: string) => ["coordinator", "teams", userId] as const,
-    proposals: (userId?: string) =>
-      ["coordinator", "proposals", userId] as const,
-    evaluations: (userId?: string) =>
-      ["coordinator", "evaluations", userId] as const,
-    results: (userId?: string) => ["coordinator", "results", userId] as const,
-    announcements: (userId?: string) =>
-      ["coordinator", "announcements", userId] as const,
-    notificationsList: (page: number, readFilter = "all") =>
-      ["coordinator", "me", page, readFilter] as const,
-    systemHealth: (userId?: string) =>
-      ["coordinator", "system-health", userId] as const,
-    userDetail: (userId: string) =>
-      ["coordinator", "user-detail", userId] as const,
-    /** Panel evaluator assignment overview (coordinator evaluations UI). */
-    evaluatorOverview: () => ["coordinator", "evaluator-overview"] as const,
-    allTeams: () => ["coordinator", "all-teams"] as const,
+    page: (page: string, userId?: string, workspaceId?: string | null) =>
+      ["coordinator", page, userId, workspaceId ?? null] as const,
+    dashboard: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "dashboard", userId, workspaceId ?? null] as const,
+    profile: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "profile", userId, workspaceId ?? null] as const,
+    analytics: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "analytics", userId, workspaceId ?? null] as const,
+    users: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "users", userId, workspaceId ?? null] as const,
+    teams: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "teams", userId, workspaceId ?? null] as const,
+    proposals: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "proposals", userId, workspaceId ?? null] as const,
+    evaluations: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "evaluations", userId, workspaceId ?? null] as const,
+    results: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "results", userId, workspaceId ?? null] as const,
+    announcements: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "announcements", userId, workspaceId ?? null] as const,
+    notificationsList: (
+      page: number,
+      readFilter = "all",
+      workspaceId?: string | null,
+    ) => ["coordinator", "me", page, readFilter, workspaceId ?? null] as const,
+    systemHealth: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "system-health", userId, workspaceId ?? null] as const,
+    userDetail: (userId: string, workspaceId?: string | null) =>
+      ["coordinator", "user-detail", userId, workspaceId ?? null] as const,
+    evaluatorOverview: (workspaceId?: string | null) =>
+      ["coordinator", "evaluator-overview", workspaceId ?? null] as const,
+    invitations: (workspaceId?: string | null) =>
+      ["coordinator", "invitations", workspaceId ?? null] as const,
+    allTeams: (workspaceId?: string | null) =>
+      ["coordinator", "all-teams", workspaceId ?? null] as const,
+    phases: (workspaceId?: string | null) =>
+      ["coordinator", "phases", workspaceId ?? null] as const,
+    deliverableTemplates: (phaseId?: string, workspaceId?: string | null) =>
+      ["coordinator", "deliverable-templates", phaseId ?? null, workspaceId ?? null] as const,
+    finalizedSubmissions: (phaseId?: string, page = 1, workspaceId?: string | null) =>
+      ["coordinator", "finalized-submissions", phaseId ?? null, page, workspaceId ?? null] as const,
+    submissionOverview: (phaseId?: string, workspaceId?: string | null) =>
+      ["coordinator", "submission-overview", phaseId ?? null, workspaceId ?? null] as const,
+  },
+
+  phases: {
+    all: ["phases"] as const,
+    list: (workspaceId?: string | null) =>
+      ["phases", "list", workspaceId ?? null] as const,
+  },
+
+  deliverableTemplates: {
+    all: ["deliverable-templates"] as const,
+    list: (phaseId?: string, workspaceId?: string | null) =>
+      ["deliverable-templates", "list", phaseId ?? null, workspaceId ?? null] as const,
+  },
+
+  evaluator: {
+    all: ["evaluator"] as const,
+    dashboard: (workspaceId?: string | null) =>
+      ["evaluator", "dashboard", workspaceId ?? null] as const,
   },
 
   teams: {
     all: ["teams"] as const,
-    browse: (search: string) => ["teams", "browse", search] as const,
-    browseDetails: (teamId: string) =>
-      ["teams", "browse-details", teamId] as const,
-    mine: () => ["team"] as const,
+    browse: (search: string, workspaceId?: string | null) =>
+      ["teams", "browse", search, workspaceId ?? null] as const,
+    browseDetails: (teamId: string, workspaceId?: string | null) =>
+      ["teams", "browse-details", teamId, workspaceId ?? null] as const,
+    mine: (workspaceId?: string | null) => ["team", workspaceId ?? null] as const,
   },
 
   notifications: {
     all: ["notifications"] as const,
-    unreadCount: (userId?: string) =>
-      ["notifications", "unread-count", userId] as const,
-    unreadPreview: (userId?: string) =>
-      ["notifications", "unread-preview", userId] as const,
-    recentActivity: () => ["notifications", "recent-activity"] as const,
+    unreadCount: (userId?: string, workspaceId?: string | null) =>
+      ["notifications", "unread-count", userId, workspaceId ?? null] as const,
+    unreadPreview: (userId?: string, workspaceId?: string | null) =>
+      ["notifications", "unread-preview", userId, workspaceId ?? null] as const,
+    recentActivity: (workspaceId?: string | null) =>
+      ["notifications", "recent-activity", workspaceId ?? null] as const,
   },
 
   profiles: {
@@ -133,7 +195,8 @@ export const queryKeys = {
 
   activityLogs: {
     all: ["activity-logs"] as const,
-    mine: () => ["activity-logs", "my"] as const,
+    mine: (workspaceId?: string | null) =>
+      ["activity-logs", "my", workspaceId ?? null] as const,
   },
 
   proposal: {
@@ -142,11 +205,17 @@ export const queryKeys = {
 
   submissions: {
     all: ["submissions"] as const,
-    detail: (submissionId: string) =>
-      ["submissions", "detail", submissionId] as const,
+    detail: (submissionId: string, workspaceId?: string | null) =>
+      ["submissions", "detail", submissionId, workspaceId ?? null] as const,
   },
 
   organizations: {
     plans: () => ["organizations", "plans"] as const,
+  },
+
+  superAdmin: {
+    all: ["super-admin"] as const,
+    workspaces: (includeArchived = false) =>
+      ["super-admin", "workspaces", includeArchived] as const,
   },
 } as const;

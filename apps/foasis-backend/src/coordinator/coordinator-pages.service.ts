@@ -26,23 +26,28 @@ export class CoordinatorPagesService {
     private readonly prisma: PrismaService,
   ) {}
 
-  getDashboard(coordinatorId: string) {
+  getDashboard(coordinatorId: string, workspaceId: string) {
     return this.dashboardService.getCoordinatorOverview(
       coordinatorId,
+      workspaceId,
     );
   }
 
-  getAnalytics() {
-    return this.dashboardService.getCoordinatorDashboard();
+  getAnalytics(workspaceId: string) {
+    return this.dashboardService.getCoordinatorDashboard(
+      workspaceId,
+    );
   }
 
-  getUsers() {
-    return this.authService.listAllUsers();
+  getUsers(workspaceId: string) {
+    return this.authService.listAllUsers(workspaceId);
   }
 
-  async getTeams() {
+  async getTeams(workspaceId: string) {
     const teams =
-      await this.teamsService.getAllTeamsForCoordinator();
+      await this.teamsService.getAllTeamsForCoordinator(
+        workspaceId,
+      );
 
     const teamIds = teams.map((team) => team.id);
     const membersByTeamId: Record<string, unknown[]> =
@@ -97,12 +102,12 @@ export class CoordinatorPagesService {
     return { proposals, profiles };
   }
 
-  async getEvaluations() {
+  async getEvaluations(workspaceId: string) {
     const [evaluations, teams, supervisors] =
       await Promise.all([
-        this.evaluationsService.getAllEvaluations(),
-        this.teamsService.getAllTeamsForCoordinator(),
-        this.authService.listSupervisors(),
+        this.evaluationsService.getAllEvaluations(workspaceId),
+        this.teamsService.getAllTeamsForCoordinator(workspaceId),
+        this.authService.listSupervisors(workspaceId),
       ]);
 
     const evaluationIds = evaluations.map((e) => e.id);
@@ -164,17 +169,21 @@ export class CoordinatorPagesService {
     };
   }
 
-  async getResults() {
+  async getResults(workspaceId: string) {
     const [teams, overview] = await Promise.all([
-      this.teamsService.getAllTeamsForCoordinator(),
-      this.evaluationResultsService.getCoordinatorOverview(),
+      this.teamsService.getAllTeamsForCoordinator(workspaceId),
+      this.evaluationResultsService.getCoordinatorOverview(workspaceId),
     ]);
 
     return { teams, overview };
   }
 
-  getAnnouncements() {
-    return this.globalAnnouncementsService.getAnnouncements();
+  getAnnouncements(workspaceId: string) {
+    return this.globalAnnouncementsService.getAnnouncements(
+      workspaceId,
+      'COORDINATOR',
+      { coordinatorView: true },
+    );
   }
 
   getNotifications(

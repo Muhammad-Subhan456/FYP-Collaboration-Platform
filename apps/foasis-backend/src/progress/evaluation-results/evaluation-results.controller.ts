@@ -74,8 +74,10 @@ export class EvaluationResultsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('overview')
-  getCoordinatorOverview() {
-    return this.evaluationResultsService.getCoordinatorOverview();
+  getCoordinatorOverview(@Req() req: { workspaceId: string }) {
+    return this.evaluationResultsService.getCoordinatorOverview(
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

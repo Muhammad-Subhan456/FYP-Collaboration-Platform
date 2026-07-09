@@ -101,13 +101,15 @@ export default function LoginPage() {
             Sign in
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
             <Link
-              href="/auth/register"
+              href="/auth/forgot-password"
               className="font-medium text-primary hover:underline"
             >
-              Create one
+              Forgot password?
             </Link>
+          </p>
+          <p className="text-center text-sm text-muted-foreground">
+            Need an account? Contact your coordinator for an invitation.
           </p>
         </CardFooter>
       </form>

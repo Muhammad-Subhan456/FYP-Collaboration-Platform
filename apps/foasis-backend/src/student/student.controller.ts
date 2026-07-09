@@ -13,6 +13,11 @@ import { NotificationsQueryDto } from '../notifications/dto/notifications-query.
 
 import { StudentPagesService } from './student-pages.service';
 
+type StudentRequest = {
+  user: { userId: string };
+  workspaceId: string;
+};
+
 @Controller('student')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('STUDENT')
@@ -22,21 +27,29 @@ export class StudentController {
   ) {}
 
   @Get('dashboard')
-  getDashboard(@Req() req: { user: { userId: string } }) {
+  getDashboard(@Req() req: StudentRequest) {
     return this.studentPagesService.getDashboard(
       req.user.userId,
+      req.workspaceId,
     );
   }
 
   @Get('team')
-  getTeam(@Req() req: { user: { userId: string } }) {
-    return this.studentPagesService.getTeam(req.user.userId);
+  getTeam(@Req() req: StudentRequest) {
+    return this.studentPagesService.getTeam(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @Get('work-stream')
-  getWorkStream(@Req() req: { user: { userId: string } }) {
+  getWorkStream(
+    @Req() req: { user: { userId: string } },
+    @Query('phaseId') phaseId?: string,
+  ) {
     return this.studentPagesService.getWorkStream(
       req.user.userId,
+      phaseId,
     );
   }
 
@@ -103,9 +116,10 @@ export class StudentController {
   }
 
   @Get('proposal')
-  getProposal(@Req() req: { user: { userId: string } }) {
+  getProposal(@Req() req: StudentRequest) {
     return this.studentPagesService.getProposal(
       req.user.userId,
+      req.workspaceId,
     );
   }
 }

@@ -77,10 +77,11 @@ function patchStudentMilestones(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   updateIssues: (issues: TeamIssue[]) => TeamIssue[],
   options?: { skipDashboard?: boolean },
 ) {
-  const queryKey = queryKeys.student.milestones(userId);
+  const queryKey = queryKeys.student.milestones(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentMilestonesPageData>(queryKey);
 
   if (!existing) {
@@ -167,6 +168,7 @@ export function patchTeamIssueCaches(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   updateIssues: (issues: TeamIssue[]) => TeamIssue[],
   options?: { skipDashboard?: boolean },
 ) {
@@ -175,6 +177,7 @@ export function patchTeamIssueCaches(
     teamId,
     userId,
     role,
+    workspaceId,
     updateIssues,
     options,
   );
@@ -232,6 +235,7 @@ export function patchLocalIssueComment(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null | undefined,
   comment: TeamIssueComment,
 ) {
   patchTeamIssueCaches(
@@ -239,6 +243,7 @@ export function patchLocalIssueComment(
     comment.teamId,
     userId,
     role,
+    workspaceId ?? null,
     (issues) => applyIssueComment(issues, comment.issueId, comment),
     { skipDashboard: true },
   );

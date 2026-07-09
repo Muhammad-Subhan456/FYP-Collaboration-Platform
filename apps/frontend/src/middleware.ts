@@ -31,7 +31,13 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  const protectedPrefixes = ["/student", "/supervisor", "/coordinator"];
+  const protectedPrefixes = [
+    "/student",
+    "/supervisor",
+    "/coordinator",
+    "/evaluator",
+    "/super-admin",
+  ];
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
   const isOnboarding = pathname.startsWith(ONBOARDING_PREFIX);
 
@@ -59,5 +65,7 @@ export const config = {
     "/student/:path*",
     "/supervisor/:path*",
     "/coordinator/:path*",
+    "/evaluator/:path*",
+    "/super-admin/:path*",
   ],
 };

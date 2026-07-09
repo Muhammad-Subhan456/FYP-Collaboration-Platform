@@ -11,7 +11,7 @@ export function useUnreadNotifications(enabled = true) {
 
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.notifications.unreadCount(user?.userId),
+    queryKey: queryKeys.notifications.unreadCount(user?.userId, user?.workspaceId),
     queryFn: notificationService.getUnreadCount,
     enabled: enabled && !!user?.userId,
     staleTime: 2 * 60 * 1000,
@@ -23,7 +23,7 @@ export function useUnreadNotificationsPreview(enabled = true) {
 
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.notifications.unreadPreview(user?.userId),
+    queryKey: queryKeys.notifications.unreadPreview(user?.userId, user?.workspaceId),
     queryFn: () => notificationService.getUnreadPreview(20),
     enabled: enabled && !!user?.userId,
     staleTime: 60 * 1000,

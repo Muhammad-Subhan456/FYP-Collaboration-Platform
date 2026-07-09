@@ -19,6 +19,7 @@ import {
   Users,
   Video,
   BarChart3,
+  Building2,
   UserCog,
   Server,
   type LucideIcon,
@@ -46,6 +47,7 @@ const iconMap: Record<string, LucideIcon> = {
   Video,
   Flag,
   BarChart3,
+  Building2,
   UserCog,
   Server,
 };

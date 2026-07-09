@@ -54,7 +54,10 @@ export function useCoordinatorSystemHealthQuery() {
   return useQuery({
     ...coordinatorPageQueryOptions,
     staleTime: 0,
-    queryKey: queryKeys.coordinator.systemHealth(user?.userId),
+    queryKey: queryKeys.coordinator.systemHealth(
+      user?.userId,
+      user?.workspaceId,
+    ),
     queryFn: coordinatorPageService.getSystemHealth,
     enabled: !!user?.userId,
     refetchInterval: 30_000,
@@ -66,7 +69,7 @@ export function useCoordinatorProfileQuery() {
 
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.profile(user?.userId),
+    queryKey: queryKeys.coordinator.profile(user?.userId, user?.workspaceId),
     queryFn: coordinatorPageService.getProfile,
     enabled: !!user?.userId,
   });
@@ -81,7 +84,11 @@ export function useCoordinatorNotificationsQuery(
 
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.notificationsList(page, readFilter),
+    queryKey: queryKeys.coordinator.notificationsList(
+      page,
+      readFilter,
+      user?.workspaceId,
+    ),
     queryFn: () =>
       coordinatorPageService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,
@@ -93,26 +100,35 @@ export function useCoordinatorUserDetailQuery(
   user: AuthUserRecord | null | undefined,
   enabled: boolean,
 ) {
+  const { user: authUser } = useAuth();
+
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.userDetail(user?.id ?? ""),
+    queryKey: queryKeys.coordinator.userDetail(
+      user?.id ?? "",
+      authUser?.workspaceId,
+    ),
     queryFn: () => coordinatorService.getUserDetail(user!),
     enabled: enabled && !!user,
   });
 }
 
 export function useCoordinatorEvaluatorOverviewQuery() {
+  const { user } = useAuth();
+
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.evaluatorOverview(),
+    queryKey: queryKeys.coordinator.evaluatorOverview(user?.workspaceId),
     queryFn: coordinatorService.getEvaluatorOverview,
   });
 }
 
 export function useCoordinatorAllTeamsQuery() {
+  const { user } = useAuth();
+
   return useQuery({
     ...coordinatorPageQueryOptions,
-    queryKey: queryKeys.coordinator.allTeams(),
+    queryKey: queryKeys.coordinator.allTeams(user?.workspaceId),
     queryFn: coordinatorService.getAllTeams,
   });
 }

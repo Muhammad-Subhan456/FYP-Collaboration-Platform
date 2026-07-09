@@ -29,6 +29,7 @@ export function handleWorkstreamEvent(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope,
 ) {
   const teamId = teamIdFromEnvelope(envelope);
@@ -47,6 +48,7 @@ export function handleWorkstreamEvent(
         teamId,
         userId,
         role,
+        workspaceId,
         payload.entityType,
         payload.entityId,
         payload.comment,
@@ -61,6 +63,7 @@ export function handleWorkstreamEvent(
         teamId,
         userId,
         role,
+        workspaceId,
         payload.announcement,
       );
       break;
@@ -72,6 +75,7 @@ export function handleWorkstreamEvent(
         teamId,
         userId,
         role,
+        workspaceId,
         payload.announcementId,
       );
       break;
@@ -85,6 +89,7 @@ export function handleWorkstreamEvent(
         teamId,
         userId,
         role,
+        workspaceId,
         payload.deliverable,
       );
       break;
@@ -97,6 +102,7 @@ export function handleWorkstreamEvent(
         teamId,
         userId,
         role,
+        workspaceId,
         payload.deliverableId,
         payload.submission,
         {

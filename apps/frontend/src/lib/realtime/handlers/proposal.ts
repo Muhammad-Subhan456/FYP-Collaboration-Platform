@@ -14,6 +14,7 @@ export function handleProposalEvent(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null,
   envelope: RealtimeEventEnvelope,
 ) {
   const scopeType = envelope.scope.type;
@@ -27,8 +28,9 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
+        workspaceId,
         scopeType,
-        envelope.payload as Parameters<typeof applyProposalSubmitted>[4],
+        envelope.payload as Parameters<typeof applyProposalSubmitted>[5],
       );
       break;
     }
@@ -37,8 +39,9 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
+        workspaceId,
         scopeType,
-        envelope.payload as Parameters<typeof applyProposalSnapshot>[4],
+        envelope.payload as Parameters<typeof applyProposalSnapshot>[5],
         { removeFromSupervisorQueue: scopeType === "supervisor" },
       );
       break;
@@ -51,8 +54,9 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
+        workspaceId,
         scopeType,
-        envelope.payload as Parameters<typeof applyProposalSnapshot>[4],
+        envelope.payload as Parameters<typeof applyProposalSnapshot>[5],
         { removeFromSupervisorQueue: scopeType === "supervisor" },
       );
       break;
@@ -65,8 +69,9 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
+        workspaceId,
         scopeType,
-        envelope.payload as Parameters<typeof applyProposalInterest>[4],
+        envelope.payload as Parameters<typeof applyProposalInterest>[5],
       );
       break;
     }
@@ -78,8 +83,9 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
+        workspaceId,
         scopeType,
-        envelope.payload as Parameters<typeof applyProposalInterestDismissed>[4],
+        envelope.payload as Parameters<typeof applyProposalInterestDismissed>[5],
       );
       break;
     }
@@ -88,7 +94,8 @@ export function handleProposalEvent(
         queryClient,
         userId,
         role,
-        envelope.payload as Parameters<typeof applyProposalResubmitted>[3],
+        workspaceId,
+        envelope.payload as Parameters<typeof applyProposalResubmitted>[4],
       );
       break;
     }

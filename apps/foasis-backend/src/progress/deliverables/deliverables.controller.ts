@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import { DeliverablesService } from './deliverables.service';
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
 import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
 import { UpdateDeliverableDto } from './dto/update-deliverable.dto';
+import { PublishDeliverableTemplateDto } from '../deliverable-templates/dto/publish-deliverable-template.dto';
 
 @Controller('deliverables')
 export class DeliverablesController {
@@ -44,12 +46,28 @@ export class DeliverablesController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
+  @Post('publish-template')
+  publishFromTemplate(
+    @Req() req: any,
+    @Body() dto: PublishDeliverableTemplateDto,
+  ) {
+    return this.deliverablesService.publishFromTemplate(
+      req.user.userId,
+      dto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Get('my')
-  getMyDeliverables(@Req() req: any) {
-    return this.deliverablesService
-      .getMyDeliverables(
-        req.user.userId,
-      );
+  getMyDeliverables(
+    @Req() req: any,
+    @Query('phaseId') phaseId?: string,
+  ) {
+    return this.deliverablesService.getMyDeliverables(
+      req.user.userId,
+      phaseId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -57,9 +75,12 @@ export class DeliverablesController {
   @Get('for-my-team')
   getForMyTeam(
     @Headers('authorization') authorization: string,
+    @Query('phaseId') phaseId?: string,
   ) {
-    return this.deliverablesService
-      .getForMyTeam(authorization);
+    return this.deliverablesService.getForMyTeam(
+      authorization,
+      phaseId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

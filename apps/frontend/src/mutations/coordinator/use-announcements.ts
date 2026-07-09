@@ -14,8 +14,12 @@ export function useCoordinatorCreateAnnouncementMutation(options?: {
 
   return useMutation({
     mutationFn: coordinatorService.createGlobalAnnouncement,
-    onSuccess: () => {
-      toast.success("Announcement published");
+    onSuccess: (announcement) => {
+      toast.success(
+        announcement.status === "SCHEDULED"
+          ? "Announcement scheduled"
+          : "Announcement published",
+      );
       invalidateCoordinatorAnnouncements(queryClient);
       options?.onSuccess?.();
     },

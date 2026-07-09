@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import {
@@ -23,11 +24,22 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
   ) {}
 
+  private requireWorkspaceId(): string {
+    const workspaceId = getWorkspaceIdFromContext();
+    if (!workspaceId) {
+      throw new Error('Workspace context missing');
+    }
+    return workspaceId;
+  }
+
   create(
     createNotificationDto: CreateNotificationDto,
   ) {
     return this.prisma.notification.create({
-      data: createNotificationDto,
+      data: {
+        ...createNotificationDto,
+        workspaceId: this.requireWorkspaceId(),
+      },
     });
   }
 
@@ -102,8 +114,12 @@ export class NotificationsService {
   createBulk(
     notifications: CreateNotificationDto[],
   ) {
+    const workspaceId = this.requireWorkspaceId();
     return this.prisma.notification.createMany({
-      data: notifications,
+      data: notifications.map((n) => ({
+        ...n,
+        workspaceId,
+      })),
     });
   }
 

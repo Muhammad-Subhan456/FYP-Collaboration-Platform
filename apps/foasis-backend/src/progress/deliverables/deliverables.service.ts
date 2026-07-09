@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { WorkStreamEntityType } from '@prisma/client';
 import type { Deliverable } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -16,6 +17,8 @@ import { DomainEvents } from '../../domain-events/domain-event.constants';
 import { DomainEventService } from '../../domain-events/domain-event.service';
 import type { DeliverableSnapshotPayload } from '../../domain-events/domain-event.types';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { DeliverableTemplatesService } from '../deliverable-templates/deliverable-templates.service';
+import type { PublishDeliverableTemplateDto } from '../deliverable-templates/dto/publish-deliverable-template.dto';
 import { TeamAccessService } from '../common/team-access.service';
 import type { NotificationContext } from '../common/team-access.service';
 import { WorkStreamService } from '../work-stream/work-stream.service';
@@ -29,7 +32,23 @@ export class DeliverablesService {
     private readonly teamAccessService: TeamAccessService,
     private readonly workStreamService: WorkStreamService,
     private readonly domainEventService: DomainEventService,
+    private readonly templatesService: DeliverableTemplatesService,
   ) {}
+
+  private async resolveDefaultPhaseId(workspaceId: string) {
+    const phase = await this.prisma.phase.findFirst({
+      where: { workspaceId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    if (!phase) {
+      throw new BadRequestException(
+        'No academic phase exists in this workspace. Create a phase first.',
+      );
+    }
+
+    return phase.id;
+  }
 
   private publishDeliverableEvent(
     eventName: string,
@@ -88,16 +107,27 @@ export class DeliverablesService {
     >[] = [];
 
     for (const teamId of teamIds) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId },
+        select: { workspaceId: true },
+      });
+      if (!team) {
+        throw new BadRequestException('Team not found');
+      }
+
       const deliverable =
         await this.prisma.deliverable.create({
           data: {
+            workspaceId: team.workspaceId,
             supervisorId,
             teamId,
+            phaseId: await this.resolveDefaultPhaseId(team.workspaceId),
             title: dto.title,
             description: dto.description,
             type: dto.type,
             dueDate: new Date(dto.dueDate),
             attachmentUrl: dto.attachmentUrl,
+            publishedAt: new Date(),
           },
         });
 
@@ -137,14 +167,18 @@ export class DeliverablesService {
     return created.length === 1 ? created[0] : created;
   }
 
-  async getMyDeliverables(supervisorId: string) {
+  async getMyDeliverables(supervisorId: string, phaseId?: string) {
     return this.prisma.deliverable.findMany({
-      where: { supervisorId },
+      where: {
+        supervisorId,
+        ...(phaseId ? { phaseId } : {}),
+      },
+      include: { phase: true, template: true },
       orderBy: { dueDate: 'asc' },
     });
   }
 
-  async getForMyTeam(authorization: string) {
+  async getForMyTeam(authorization: string, phaseId?: string) {
     const supervisorId =
       await this.teamAccessService.getAssignedSupervisorId(
         authorization,
@@ -156,6 +190,7 @@ export class DeliverablesService {
     return this.getDeliverablesForSupervisor(
       supervisorId,
       team?.id ?? null,
+      phaseId,
     );
   }
 
@@ -163,6 +198,7 @@ export class DeliverablesService {
     authUserId: string,
     supervisorId?: string | null,
     teamId?: string | null,
+    phaseId?: string,
   ) {
     const resolvedSupervisorId =
       supervisorId !== undefined
@@ -185,12 +221,14 @@ export class DeliverablesService {
     return this.getDeliverablesForSupervisor(
       resolvedSupervisorId,
       resolvedTeamId,
+      phaseId,
     );
   }
 
   getDeliverablesForSupervisor(
     supervisorId: string | null,
     teamId: string | null = null,
+    phaseId?: string,
   ) {
     if (!supervisorId) {
       return [];
@@ -200,12 +238,143 @@ export class DeliverablesService {
       where: {
         supervisorId,
         isActive: true,
+        ...(phaseId ? { phaseId } : {}),
         ...(teamId
           ? this.teamVisibilityWhere(teamId)
           : {}),
       },
+      include: { phase: true, template: true },
       orderBy: { dueDate: 'asc' },
     });
+  }
+
+  async publishFromTemplate(
+    supervisorId: string,
+    dto: PublishDeliverableTemplateDto,
+  ) {
+    const template = await this.templatesService.getTemplate(
+      dto.templateId,
+    );
+
+    const teamIds =
+      await this.workStreamService.resolveTeamIdsForSupervisor(
+        supervisorId,
+        dto.teamIds,
+      );
+
+    if (teamIds.length === 0) {
+      throw new BadRequestException(
+        'At least one team must be selected',
+      );
+    }
+
+    const dueDateByTeam = new Map(
+      (dto.teamDueDates ?? []).map((entry) => [
+        entry.teamId,
+        new Date(entry.dueDate),
+      ]),
+    );
+
+    const defaultDueDate = dto.dueDate
+      ? new Date(dto.dueDate)
+      : template.dueDate;
+
+    if (!defaultDueDate && dueDateByTeam.size === 0) {
+      throw new BadRequestException(
+        'A due date is required when publishing this template',
+      );
+    }
+
+    const created: Deliverable[] = [];
+
+    for (const teamId of teamIds) {
+      const existing = await this.prisma.deliverable.findFirst({
+        where: { templateId: template.id, teamId },
+      });
+
+      if (existing) {
+        throw new BadRequestException(
+          `Template already published to team ${teamId}`,
+        );
+      }
+
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId },
+        select: { workspaceId: true },
+      });
+
+      if (!team || team.workspaceId !== template.workspaceId) {
+        throw new BadRequestException('Team not found in workspace');
+      }
+
+      const dueDate =
+        dueDateByTeam.get(teamId) ?? defaultDueDate;
+
+      if (!dueDate || Number.isNaN(dueDate.getTime())) {
+        throw new BadRequestException(
+          `Due date is required for team ${teamId}`,
+        );
+      }
+
+      const deliverable = await this.prisma.deliverable.create({
+        data: {
+          workspaceId: team.workspaceId,
+          supervisorId,
+          teamId,
+          phaseId: template.phaseId,
+          templateId: template.id,
+          title: template.title,
+          description: template.description,
+          type: template.type,
+          dueDate,
+          totalMarks: template.totalMarks,
+          publishedAt: new Date(),
+        },
+      });
+
+      if (template.attachments.length > 0) {
+        await this.prisma.workStreamAttachment.createMany({
+          data: template.attachments.map((attachment) => ({
+            id: randomUUID(),
+            workspaceId: team.workspaceId,
+            entityType: WorkStreamEntityType.DELIVERABLE,
+            entityId: deliverable.id,
+            teamId,
+            fileUrl: attachment.fileUrl,
+            fileName: attachment.fileName,
+          })),
+        });
+      }
+
+      void this.notifyTeam(teamId, {
+        title: 'New Deliverable Assigned',
+        message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
+        type: 'DELIVERABLE_CREATED',
+        entityType: 'DELIVERABLE',
+        entityId: deliverable.id,
+        route: '/student/work-stream',
+      }).catch(() => undefined);
+
+      this.publishDeliverableEvent(
+        DomainEvents.DELIVERABLE_CREATED,
+        supervisorId,
+        teamId,
+        deliverable,
+        { attachmentCount: template.attachments.length },
+      );
+
+      created.push(deliverable);
+    }
+
+    await this.templatesService.lockTemplate(template.id);
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Deliverable Published',
+      template.title,
+    );
+
+    return created.length === 1 ? created[0] : created;
   }
 
   async updateDeliverable(

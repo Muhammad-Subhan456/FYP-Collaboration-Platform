@@ -9,7 +9,8 @@ export type ProposalStatus =
 export type SubmissionStatus =
   | "SUBMITTED"
   | "CHANGES_REQUIRED"
-  | "APPROVED";
+  | "APPROVED"
+  | "FINALIZED";
 
 export type DeliverableType =
   | "SRS"
@@ -86,14 +87,22 @@ export interface Deliverable {
   id: string;
   supervisorId: string;
   teamId?: string | null;
+  phaseId?: string;
+  templateId?: string | null;
   title: string;
   description: string;
   type: DeliverableType;
   dueDate: string;
+  totalMarks?: number | null;
   attachmentUrl?: string | null;
   isActive: boolean;
   submissionsOpen?: boolean;
+  publishedAt?: string | null;
   createdAt: string;
+  phase?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface Submission {
@@ -107,6 +116,7 @@ export interface Submission {
   grade?: number | null;
   status: SubmissionStatus;
   submittedAt: string;
+  finalizedAt?: string | null;
   deliverable?: Deliverable;
 }
 

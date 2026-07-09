@@ -12,18 +12,22 @@ export function useStudentTeamQuery() {
 }
 
 export function useBrowseTeamsQuery(search: string, enabled: boolean) {
+  const { user } = useAuth();
+
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.teams.browse(search),
+    queryKey: queryKeys.teams.browse(search, user?.workspaceId),
     queryFn: () => teamService.searchTeams(search),
     enabled,
   });
 }
 
 export function useBrowseTeamDetailsQuery(teamId: string | null) {
+  const { user } = useAuth();
+
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.teams.browseDetails(teamId ?? ""),
+    queryKey: queryKeys.teams.browseDetails(teamId ?? "", user?.workspaceId),
     queryFn: () => teamService.getBrowseTeamDetails(teamId!),
     enabled: !!teamId,
   });
@@ -33,8 +37,19 @@ export function useStudentProposalQuery() {
   return useStudentAuthQuery("proposal", studentService.getProposal);
 }
 
-export function useStudentWorkStreamQuery() {
-  return useStudentAuthQuery("work-stream", studentService.getWorkStream);
+export function useStudentWorkStreamQuery(phaseId?: string | null) {
+  const { user } = useAuth();
+
+  return useQuery({
+    ...studentPageQueryOptions,
+    queryKey: queryKeys.student.workStream(
+      user?.userId,
+      phaseId,
+      user?.workspaceId,
+    ),
+    queryFn: () => studentService.getWorkStream(phaseId ?? undefined),
+    enabled: !!user?.userId,
+  });
 }
 
 export function useStudentMilestonesQuery() {
@@ -54,7 +69,7 @@ export function useStudentProfileQuery() {
 
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.student.profile(user?.userId),
+    queryKey: queryKeys.student.profile(user?.userId, user?.workspaceId),
     queryFn: studentService.getProfile,
     enabled: !!user?.userId,
   });
@@ -69,7 +84,11 @@ export function useStudentNotificationsQuery(
 
   return useQuery({
     ...studentPageQueryOptions,
-    queryKey: queryKeys.student.notificationsList(page, readFilter),
+    queryKey: queryKeys.student.notificationsList(
+      page,
+      readFilter,
+      user?.workspaceId,
+    ),
     queryFn: () => studentService.getNotifications(page, limit, readFilter),
     enabled: !!user?.userId,
     placeholderData: keepPreviousData,

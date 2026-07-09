@@ -211,11 +211,22 @@ export function useSupervisorWorkStreamMutations(options?: {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const finalizeMutation = useMutation({
+    mutationFn: (submissionId: string) =>
+      supervisorService.finalizeSubmission(submissionId),
+    onSuccess: () => {
+      toast.success("Submission finalized and forwarded to coordinator");
+      options?.onReviewSuccess?.();
+      invalidate();
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   const commentMutation = useMutation({
     mutationFn: workStreamService.createComment,
     onSuccess: (comment, variables) => {
       if (user?.userId && comment.teamId) {
-        patchLocalWorkStreamComment(queryClient, user.userId, user.role, {
+        patchLocalWorkStreamComment(queryClient, user.userId, user.role, user.workspaceId, {
           entityType: variables.entityType,
           entityId: variables.entityId,
           teamId: comment.teamId,
@@ -235,6 +246,7 @@ export function useSupervisorWorkStreamMutations(options?: {
     deleteDeliverableMutation,
     toggleSubmissionsMutation,
     reviewMutation,
+    finalizeMutation,
     commentMutation,
     invalidateWorkStream: invalidate,
   };

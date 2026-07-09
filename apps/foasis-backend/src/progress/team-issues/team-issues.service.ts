@@ -63,8 +63,17 @@ export class TeamIssuesService {
     type: TeamIssueActivityType,
     description: string,
   ) {
+    const issue = await this.prisma.teamIssue.findFirst({
+      where: { id: issueId },
+      select: { workspaceId: true },
+    });
+    if (!issue) {
+      throw new BadRequestException('Issue not found');
+    }
+
     return this.prisma.teamIssueActivity.create({
       data: {
+        workspaceId: issue.workspaceId,
         issueId,
         teamId,
         actorId,
@@ -212,7 +221,7 @@ export class TeamIssuesService {
   ) {
     const issue = await this.prisma.teamIssue.findUnique({
       where: { id: issueId },
-      select: { id: true, teamId: true, title: true },
+      select: { id: true, teamId: true, title: true, workspaceId: true },
     });
 
     if (!issue) {
@@ -387,6 +396,7 @@ export class TeamIssuesService {
 
     const issue = await this.prisma.teamIssue.create({
       data: {
+        workspaceId: team.workspaceId,
         teamId: team.id,
         title: dto.title.trim(),
         description: dto.description.trim(),
@@ -652,6 +662,7 @@ export class TeamIssuesService {
     const [comment, name] = await Promise.all([
       this.prisma.teamIssueComment.create({
         data: {
+          workspaceId: issue.workspaceId,
           issueId,
           teamId: issue.teamId,
           authUserId,

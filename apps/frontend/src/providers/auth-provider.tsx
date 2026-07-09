@@ -6,25 +6,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 
-import {
-  clearStoredToken,
-  decodeToken,
-  getDashboardPath,
-  getStoredToken,
-  isTokenExpired,
-  setStoredToken,
-} from "@/lib/auth";
-import { clearAuthenticatedQueries } from "@/lib/react-query";
+import { bootstrapAuthUser, clearStoredToken } from "@/lib/auth";
 import { resetAppState } from "@/store";
 import { useAppDispatch } from "@/store/hooks";
 import { authService } from "@/services/auth.service";
 import { profileService } from "@/services/profile.service";
-import { getOnboardingPath } from "@/constants/navigation";
+import { useAuthSession } from "@/hooks/use-auth-session";
 import type { UserProfile } from "@/types/profile";
 import type { AuthUser, UserRole } from "@/types";
 
@@ -39,23 +31,28 @@ interface AuthContextValue {
     email: string;
     password: string;
   }) => Promise<void>;
+  selectContext: (workspaceId: string, role: UserRole) => Promise<void>;
+  switchContext: (workspaceId: string, role: UserRole) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<UserProfile | null>;
+  syncSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const dispatch = useAppDispatch();
+  const {
+    login: sessionLogin,
+    selectContext: sessionSelectContext,
+    switchContext: sessionSwitchContext,
+    clearUserQueries,
+  } = useAuthSession();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const clearUserQueries = useCallback(() => {
-    clearAuthenticatedQueries(queryClient);
-  }, [queryClient]);
+  const bootstrapStarted = useRef(false);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -68,63 +65,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const bootstrap = useCallback(async () => {
-    const token = getStoredToken();
-    if (!token || isTokenExpired(token)) {
-      clearStoredToken();
+  const syncSession = useCallback(async () => {
+    const authUser = bootstrapAuthUser();
+    if (!authUser) {
       setUser(null);
       setProfile(null);
-      setIsLoading(false);
       return;
     }
 
-    const payload = decodeToken(token);
-    if (!payload) {
-      clearStoredToken();
-      setIsLoading(false);
+    setUser(authUser);
+
+    if (authUser.role === "SUPER_ADMIN") {
+      setProfile(null);
       return;
     }
-
-    setUser({
-      userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
-    });
 
     await loadProfile();
-    setIsLoading(false);
   }, [loadProfile]);
 
   useEffect(() => {
+    if (bootstrapStarted.current) return;
+    bootstrapStarted.current = true;
+
+    let cancelled = false;
+
+    async function bootstrap() {
+      await syncSession();
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    }
+
     bootstrap();
-  }, [bootstrap]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [syncSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const { accessToken } = await authService.login({ email, password });
-      setStoredToken(accessToken);
-
-      const payload = decodeToken(accessToken);
-      if (!payload) throw new Error("Invalid token received");
-
-      const authUser: AuthUser = {
-        userId: payload.sub,
-        email: payload.email,
-        role: payload.role,
-      };
-
-      clearUserQueries();
-      setUser(authUser);
-
-      const existingProfile = await loadProfile();
-      if (!existingProfile) {
-        router.push(getOnboardingPath(authUser.role));
-        return;
-      }
-
-      router.push(getDashboardPath(authUser.role));
+      await sessionLogin(email, password);
+      await syncSession();
     },
-    [clearUserQueries, loadProfile, router],
+    [sessionLogin, syncSession],
+  );
+
+  const selectContext = useCallback(
+    async (workspaceId: string, role: UserRole) => {
+      // Workspace switch must isolate all workspace-scoped UI state.
+      resetAppState(dispatch);
+      await sessionSelectContext(workspaceId, role);
+      await syncSession();
+    },
+    [dispatch, sessionSelectContext, syncSession],
+  );
+
+  const switchContext = useCallback(
+    async (workspaceId: string, role: UserRole) => {
+      // Workspace switch must isolate all workspace-scoped UI state.
+      resetAppState(dispatch);
+      await sessionSwitchContext(workspaceId, role);
+      await syncSession();
+    },
+    [dispatch, sessionSwitchContext, syncSession],
   );
 
   const register = useCallback(
@@ -155,10 +159,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: !!user,
       login,
       register,
+      selectContext,
+      switchContext,
       logout,
       refreshProfile: loadProfile,
+      syncSession,
     }),
-    [user, profile, isLoading, login, register, logout, loadProfile],
+    [
+      user,
+      profile,
+      isLoading,
+      login,
+      register,
+      selectContext,
+      switchContext,
+      logout,
+      loadProfile,
+      syncSession,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

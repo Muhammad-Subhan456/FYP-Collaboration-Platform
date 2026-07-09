@@ -34,12 +34,19 @@ export function RealtimeProvider({
       return;
     }
 
-    connectRealtime(token, user.userId, user.role, queryClient);
+    connectRealtime(token, user.userId, user.role, user.workspaceId, queryClient);
 
     return () => {
       disconnectRealtime();
     };
-  }, [isLoading, isAuthenticated, user?.userId, user?.role, queryClient]);
+  }, [
+    isLoading,
+    isAuthenticated,
+    user?.userId,
+    user?.role,
+    user?.workspaceId,
+    queryClient,
+  ]);
 
   return children;
 }

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { WorkspaceSwitcher } from "@/components/auth/workspace-switcher";
 import { useAuth } from "@/providers/auth-provider";
 import { openMobileMenu } from "@/store/slices/ui-slice";
 import { useAppDispatch } from "@/store/hooks";
@@ -64,6 +65,7 @@ export function DashboardHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        <WorkspaceSwitcher />
         <ThemeToggle />
         <NotificationBell role={role} />
 

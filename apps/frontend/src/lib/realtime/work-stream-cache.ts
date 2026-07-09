@@ -225,12 +225,13 @@ function supervisorItemVisible(
 function patchStudentWorkStream(
   queryClient: QueryClient,
   userId: string,
+  workspaceId: string | null,
   role: string,
   teamId: string,
   updater: (data: StudentWorkStreamPageData) => StudentWorkStreamPageData | undefined,
   options?: { skipDashboard?: boolean },
 ) {
-  const queryKey = queryKeys.student.workStream(userId);
+  const queryKey = queryKeys.student.workStream(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentWorkStreamPageData>(queryKey);
   if (!existing?.team?.id || existing.team.id !== teamId) {
     return;
@@ -287,6 +288,7 @@ export function patchWorkStreamCaches(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   itemTeamId: string | null | undefined,
   updater: {
     student?: (data: StudentWorkStreamPageData) => StudentWorkStreamPageData;
@@ -300,6 +302,7 @@ export function patchWorkStreamCaches(
     patchStudentWorkStream(
       queryClient,
       userId,
+      workspaceId,
       role,
       teamId,
       updater.student,
@@ -323,6 +326,7 @@ export function patchLocalWorkStreamComment(
   queryClient: QueryClient,
   userId: string,
   role: string,
+  workspaceId: string | null | undefined,
   input: {
     entityType: WorkStreamEntityType;
     entityId: string;
@@ -336,6 +340,7 @@ export function patchLocalWorkStreamComment(
     teamId,
     userId,
     role,
+    workspaceId ?? null,
     teamId,
     {
       student: (data) => ({
@@ -356,6 +361,7 @@ export function applyWorkStreamCommentEvent(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   entityType: WorkStreamEntityType,
   entityId: string,
   comment: WorkStreamComment,
@@ -365,6 +371,7 @@ export function applyWorkStreamCommentEvent(
     teamId,
     userId,
     role,
+    workspaceId,
     teamId,
     {
       student: (data) => ({
@@ -385,6 +392,7 @@ export function applyAnnouncementDeleted(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   announcementId: string,
 ) {
   patchWorkStreamCaches(
@@ -392,6 +400,7 @@ export function applyAnnouncementDeleted(
     teamId,
     userId,
     role,
+    workspaceId,
     teamId,
     {
       student: (data) => ({
@@ -424,6 +433,7 @@ export function applyAnnouncementSnapshot(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   announcement: RealtimeAnnouncementWire,
 ) {
   const incoming = toAnnouncementItem(announcement);
@@ -432,6 +442,7 @@ export function applyAnnouncementSnapshot(
     teamId,
     userId,
     role,
+    workspaceId,
     incoming.teamId,
     {
       student: (data) => ({
@@ -465,6 +476,7 @@ export function applyDeliverableSnapshot(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   deliverable: RealtimeDeliverableWire,
 ) {
   const incoming = toDeliverableItem(deliverable);
@@ -475,6 +487,7 @@ export function applyDeliverableSnapshot(
     teamId,
     userId,
     role,
+    workspaceId,
     incoming.teamId,
     {
       student: (data) => ({
@@ -545,6 +558,7 @@ export function applySubmissionSnapshot(
   teamId: string,
   userId: string,
   role: string,
+  workspaceId: string | null,
   deliverableId: string,
   wire: RealtimeSubmissionWire,
   options?: { created?: boolean; reviewed?: boolean },
@@ -582,6 +596,7 @@ export function applySubmissionSnapshot(
     teamId,
     userId,
     role,
+    workspaceId,
     teamId,
     {
       student: (data) => {

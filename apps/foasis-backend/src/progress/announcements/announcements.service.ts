@@ -84,9 +84,18 @@ export class AnnouncementsService {
     >[] = [];
 
     for (const teamId of teamIds) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId },
+        select: { workspaceId: true },
+      });
+      if (!team) {
+        throw new BadRequestException('Team not found');
+      }
+
       const announcement =
         await this.prisma.announcement.create({
           data: {
+            workspaceId: team.workspaceId,
             supervisorId,
             teamId,
             title: dto.title,

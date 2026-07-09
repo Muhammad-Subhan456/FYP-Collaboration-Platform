@@ -3,21 +3,27 @@ import { Injectable } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EvaluationPanelsService } from '../progress/evaluation-panels/evaluation-panels.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
+import { GlobalAnnouncementsService } from '../progress/global-announcements/global-announcements.service';
 import { ProfilesService } from '../users/profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 @Injectable()
 export class EvaluatorPagesService {
   constructor(
     private readonly evaluationPanelsService: EvaluationPanelsService,
     private readonly evaluationResultsService: EvaluationResultsService,
+    private readonly globalAnnouncementsService: GlobalAnnouncementsService,
     private readonly notificationsService: NotificationsService,
     private readonly profilesService: ProfilesService,
     private readonly prisma: PrismaService,
   ) {}
 
   async getDashboard(evaluatorId: string) {
-    const [panels, notifications] = await Promise.all([
+    const workspaceId = getWorkspaceIdFromContext();
+
+    const [panels, notifications, globalAnnouncements] =
+      await Promise.all([
       this.evaluationPanelsService.getMyPanels(evaluatorId),
       this.notificationsService
         .getMyNotifications(evaluatorId, 1, 5)
@@ -27,6 +33,11 @@ export class EvaluatorPagesService {
           page: 1,
           limit: 5,
         })),
+      workspaceId
+        ? this.globalAnnouncementsService
+            .getAnnouncements(workspaceId, 'EVALUATOR')
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const teamIds = [
@@ -44,6 +55,7 @@ export class EvaluatorPagesService {
       panels,
       teamNameById,
       recentNotifications: notifications,
+      globalAnnouncements,
     };
   }
 

@@ -1,7 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
 
+import { SkipWorkspace } from '../common/decorators/skip-workspace.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
+@SkipWorkspace()
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

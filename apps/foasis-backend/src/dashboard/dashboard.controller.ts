@@ -28,8 +28,12 @@ export class DashboardController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('coordinator')
-  getCoordinatorDashboard() {
-    return this.dashboardService.getCoordinatorDashboard();
+  getCoordinatorDashboard(
+    @Req() req: { workspaceId: string },
+  ) {
+    return this.dashboardService.getCoordinatorDashboard(
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,11 +51,15 @@ export class DashboardController {
   @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get('overview')
   getOverview(
-    @Req() req: { user: { userId: string; role: string } },
+    @Req() req: {
+      user: { userId: string; role: string };
+      workspaceId: string;
+    },
   ) {
     return this.dashboardService.getOverview(
       req.user.userId,
       req.user.role,
+      req.workspaceId,
     );
   }
 
