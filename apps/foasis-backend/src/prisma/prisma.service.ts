@@ -63,6 +63,33 @@ function modelDelegateName(model: string) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenUniqueWhere(where: any): any {
+  if (!where || typeof where !== 'object') {
+    return where ?? {};
+  }
+
+  if (where.id !== undefined && Object.keys(where).length === 1) {
+    return where;
+  }
+
+  const keys = Object.keys(where);
+  if (keys.length === 1) {
+    const key = keys[0];
+    const value = where[key];
+    if (
+      key !== 'id' &&
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      return value;
+    }
+  }
+
+  return where;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ensureWhereWorkspace(args: any, model: string, workspaceId: string) {
   const relationScope = relationScopeForModel(model, workspaceId);
   args.where = args.where ?? {};
@@ -113,25 +140,30 @@ function applyWorkspaceScoping(
 
   if (operation === 'create') {
     nextArgs.data = nextArgs.data ?? {};
-    if (nextArgs.data.workspaceId === undefined) {
-      nextArgs.data.workspaceId = workspaceId;
-    } else if (nextArgs.data.workspaceId !== workspaceId) {
-      throw new Error('Cross-workspace write blocked');
+    // Only direct tenant models have workspaceId on the row itself.
+    if (TENANT_MODELS.has(model)) {
+      if (nextArgs.data.workspaceId === undefined) {
+        nextArgs.data.workspaceId = workspaceId;
+      } else if (nextArgs.data.workspaceId !== workspaceId) {
+        throw new Error('Cross-workspace write blocked');
+      }
     }
     return nextArgs;
   }
 
   if (operation === 'createMany') {
     nextArgs.data = nextArgs.data ?? [];
-    nextArgs.data = nextArgs.data.map((row: { workspaceId?: string }) => {
-      if (row.workspaceId === undefined) {
-        return { ...row, workspaceId };
-      }
-      if (row.workspaceId !== workspaceId) {
-        throw new Error('Cross-workspace write blocked');
-      }
-      return row;
-    });
+    if (TENANT_MODELS.has(model)) {
+      nextArgs.data = nextArgs.data.map((row: { workspaceId?: string }) => {
+        if (row.workspaceId === undefined) {
+          return { ...row, workspaceId };
+        }
+        if (row.workspaceId !== workspaceId) {
+          throw new Error('Cross-workspace write blocked');
+        }
+        return row;
+      });
+    }
     return nextArgs;
   }
 
@@ -166,7 +198,10 @@ function createWorkspaceIsolationExtension(
           const scopedArgs = applyWorkspaceScoping(
             model,
             'findUnique',
-            args,
+            {
+              ...args,
+              where: flattenUniqueWhere(args.where),
+            },
             workspaceId!,
           );
           const delegate = modelDelegateName(model);

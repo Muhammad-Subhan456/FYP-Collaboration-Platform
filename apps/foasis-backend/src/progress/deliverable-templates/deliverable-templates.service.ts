@@ -12,6 +12,7 @@ import { DomainEventService } from '../../domain-events/domain-event.service';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { GpaCalculationService } from '../gpa/gpa-calculation.service';
 
 import { CreateDeliverableTemplateDto } from './dto/create-deliverable-template.dto';
 import { UpdateDeliverableTemplateDto } from './dto/update-deliverable-template.dto';
@@ -32,6 +33,7 @@ export class DeliverableTemplatesService {
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly domainEventService: DomainEventService,
+    private readonly gpaCalculationService: GpaCalculationService,
   ) {}
 
   listTemplates(workspaceId: string, phaseId?: string) {
@@ -110,6 +112,7 @@ export class DeliverableTemplatesService {
         type: dto.type,
         dueDate: this.parseDueDate(dto.dueDate),
         totalMarks: dto.totalMarks,
+        weightagePercent: dto.weightagePercent ?? 0,
         rubricCriteria: {
           create: dto.rubricCriteria.map((criterion, index) => ({
             id: randomUUID(),
@@ -226,6 +229,9 @@ export class DeliverableTemplatesService {
           ...(dto.totalMarks !== undefined && {
             totalMarks: dto.totalMarks,
           }),
+          ...(dto.weightagePercent !== undefined && {
+            weightagePercent: dto.weightagePercent,
+          }),
           ...(dto.rubricCriteria && {
             rubricCriteria: {
               create: dto.rubricCriteria.map((criterion, index) => ({
@@ -250,7 +256,18 @@ export class DeliverableTemplatesService {
       });
     });
 
-    return this.getTemplate(templateId);
+    const updatedTemplate = await this.getTemplate(templateId);
+    if (
+      dto.weightagePercent !== undefined &&
+      updatedTemplate.phase.isConfigurationPublished
+    ) {
+      await this.gpaCalculationService.recalculateForPhase(
+        updatedTemplate.workspaceId,
+        updatedTemplate.phaseId,
+      );
+    }
+
+    return updatedTemplate;
   }
 
   async deleteTemplate(templateId: string) {

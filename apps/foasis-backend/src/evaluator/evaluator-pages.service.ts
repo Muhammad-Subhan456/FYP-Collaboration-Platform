@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { SubmissionEvaluationStatus } from '@prisma/client';
 
 import { NotificationsService } from '../notifications/notifications.service';
-import { EvaluationPanelsService } from '../progress/evaluation-panels/evaluation-panels.service';
-import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
 import { GlobalAnnouncementsService } from '../progress/global-announcements/global-announcements.service';
+import { SubmissionEvaluationsService } from '../progress/submission-evaluations/submission-evaluations.service';
 import { ProfilesService } from '../users/profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
@@ -11,8 +11,7 @@ import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 @Injectable()
 export class EvaluatorPagesService {
   constructor(
-    private readonly evaluationPanelsService: EvaluationPanelsService,
-    private readonly evaluationResultsService: EvaluationResultsService,
+    private readonly submissionEvaluationsService: SubmissionEvaluationsService,
     private readonly globalAnnouncementsService: GlobalAnnouncementsService,
     private readonly notificationsService: NotificationsService,
     private readonly profilesService: ProfilesService,
@@ -22,66 +21,71 @@ export class EvaluatorPagesService {
   async getDashboard(evaluatorId: string) {
     const workspaceId = getWorkspaceIdFromContext();
 
-    const [panels, notifications, globalAnnouncements] =
+    const [evaluations, notifications, globalAnnouncements] =
       await Promise.all([
-      this.evaluationPanelsService.getMyPanels(evaluatorId),
-      this.notificationsService
-        .getMyNotifications(evaluatorId, 1, 5)
-        .catch(() => ({
-          data: [],
-          total: 0,
-          page: 1,
-          limit: 5,
-        })),
-      workspaceId
-        ? this.globalAnnouncementsService
-            .getAnnouncements(workspaceId, 'EVALUATOR')
-            .catch(() => [])
-        : Promise.resolve([]),
-    ]);
+        workspaceId
+          ? this.submissionEvaluationsService.getMyEvaluations(
+              workspaceId,
+              evaluatorId,
+            )
+          : Promise.resolve([]),
+        this.notificationsService
+          .getMyNotifications(evaluatorId, 1, 5)
+          .catch(() => ({
+            data: [],
+            total: 0,
+            page: 1,
+            limit: 5,
+          })),
+        workspaceId
+          ? this.globalAnnouncementsService
+              .getAnnouncements(workspaceId, 'EVALUATOR')
+              .catch(() => [])
+          : Promise.resolve([]),
+      ]);
 
     const teamIds = [
-      ...new Set(
-        panels.flatMap(
-          (panel) =>
-            panel.assignments?.map((a) => a.teamId) ?? [],
-        ),
-      ),
+      ...new Set(evaluations.map((evaluation) => evaluation.teamId)),
     ];
-
     const teamNameById = await this.loadTeamNameMap(teamIds);
 
+    const pendingCount = evaluations.filter(
+      (evaluation) =>
+        evaluation.status !== SubmissionEvaluationStatus.SUBMITTED,
+    ).length;
+    const submittedCount = evaluations.filter(
+      (evaluation) =>
+        evaluation.status === SubmissionEvaluationStatus.SUBMITTED,
+    ).length;
+
     return {
-      panels,
+      evaluations,
       teamNameById,
+      pendingCount,
+      submittedCount,
       recentNotifications: notifications,
       globalAnnouncements,
     };
   }
 
   async getEvaluations(evaluatorId: string) {
-    const panels =
-      await this.evaluationPanelsService.getMyPanels(
+    const workspaceId = getWorkspaceIdFromContext();
+    if (!workspaceId) {
+      return { evaluations: [], teamNameById: {} };
+    }
+
+    const evaluations =
+      await this.submissionEvaluationsService.getMyEvaluations(
+        workspaceId,
         evaluatorId,
       );
 
     const teamIds = [
-      ...new Set(
-        panels.flatMap(
-          (panel) =>
-            panel.assignments?.map((a) => a.teamId) ?? [],
-        ),
-      ),
+      ...new Set(evaluations.map((evaluation) => evaluation.teamId)),
     ];
+    const teamNameById = await this.loadTeamNameMap(teamIds);
 
-    const [teamNameById, results] = await Promise.all([
-      this.loadTeamNameMap(teamIds),
-      this.evaluationResultsService.getResultsByTeamIds(
-        teamIds,
-      ),
-    ]);
-
-    return { panels, teamNameById, results };
+    return { evaluations, teamNameById };
   }
 
   getNotifications(
@@ -103,28 +107,24 @@ export class EvaluatorPagesService {
   }
 
   async getResults(evaluatorId: string) {
-    const panels =
-      await this.evaluationPanelsService.getMyPanels(
+    const workspaceId = getWorkspaceIdFromContext();
+    if (!workspaceId) {
+      return { evaluations: [], teamNameById: {} };
+    }
+
+    const evaluations =
+      await this.submissionEvaluationsService.getMyEvaluations(
+        workspaceId,
         evaluatorId,
+        SubmissionEvaluationStatus.SUBMITTED,
       );
 
     const teamIds = [
-      ...new Set(
-        panels.flatMap(
-          (panel) =>
-            panel.assignments?.map((a) => a.teamId) ?? [],
-        ),
-      ),
+      ...new Set(evaluations.map((evaluation) => evaluation.teamId)),
     ];
+    const teamNameById = await this.loadTeamNameMap(teamIds);
 
-    const [teamNameById, results] = await Promise.all([
-      this.loadTeamNameMap(teamIds),
-      this.evaluationResultsService.getResultsByTeamIds(
-        teamIds,
-      ),
-    ]);
-
-    return { panels, teamNameById, results };
+    return { evaluations, teamNameById };
   }
 
   private async loadTeamNameMap(teamIds: string[]) {
@@ -134,11 +134,14 @@ export class EvaluatorPagesService {
 
     const teams = await this.prisma.team.findMany({
       where: { id: { in: teamIds } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, projectTitle: true },
     });
 
     return Object.fromEntries(
-      teams.map((team) => [team.id, team.name]),
+      teams.map((team) => [
+        team.id,
+        team.name || team.projectTitle || 'Team',
+      ]),
     );
   }
 }

@@ -34,4 +34,23 @@ export const phaseService = {
     const res = await api.delete(`/phases/${id}`);
     return res.data;
   },
+
+  validateWeightages: async (id: string) => {
+    const res = await api.get<{
+      totalWeightage: number;
+      templateCount: number;
+      isValid: boolean;
+      templates: Array<{
+        id: string;
+        title: string;
+        weightagePercent: number;
+      }>;
+    }>(`/phases/${id}/weightage-validation`);
+    return res.data;
+  },
+
+  publishConfiguration: async (id: string) => {
+    const res = await api.post<Phase>(`/phases/${id}/publish-configuration`);
+    return res.data;
+  },
 };

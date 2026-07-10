@@ -1,7 +1,16 @@
+import type { SubmissionEvaluationStatus } from "@/types/submission-evaluation";
+
 export interface CoordinatorSubmissionPerson {
   id: string;
   fullName: string;
   email: string;
+}
+
+export interface SubmissionEvaluatorAssignment {
+  evaluationId: string;
+  evaluatorId: string;
+  evaluator: CoordinatorSubmissionPerson | null;
+  status: SubmissionEvaluationStatus;
 }
 
 export interface CoordinatorFinalizedSubmission {
@@ -22,7 +31,8 @@ export interface CoordinatorFinalizedSubmission {
     name: string;
   };
   supervisor: CoordinatorSubmissionPerson;
-  evaluator: null;
+  evaluationStatus: SubmissionEvaluationStatus;
+  evaluators: SubmissionEvaluatorAssignment[];
 }
 
 export interface CoordinatorSubmissionOverviewRow {

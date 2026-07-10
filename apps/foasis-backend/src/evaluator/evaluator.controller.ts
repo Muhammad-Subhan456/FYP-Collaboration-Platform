@@ -9,7 +9,7 @@ import { EvaluatorPagesService } from './evaluator-pages.service';
 
 @Controller('evaluator')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('EVALUATOR', 'SUPERVISOR', 'COORDINATOR')
+@Roles('EVALUATOR')
 export class EvaluatorController {
   constructor(
     private readonly evaluatorPagesService: EvaluatorPagesService,

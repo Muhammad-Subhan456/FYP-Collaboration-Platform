@@ -10,6 +10,7 @@ import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { evaluatorPageService } from "@/services/evaluator-page.service";
+import type { GlobalAnnouncement } from "@/types/coordinator";
 
 export default function EvaluatorDashboardPage() {
   const { user } = useAuth();
@@ -30,21 +31,32 @@ export default function EvaluatorDashboardPage() {
     );
   }
 
-  const data = dashboardQuery.data;
-  const panelCount = data?.panels?.length ?? 0;
+  const data = dashboardQuery.data as {
+    pendingCount?: number;
+    submittedCount?: number;
+    globalAnnouncements?: GlobalAnnouncement[];
+  };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Evaluator Dashboard</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          You are assigned to {panelCount} evaluation panel
-          {panelCount === 1 ? "" : "s"}. Review assigned panels and submit
-          results from the evaluations section.
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending evaluations</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {data?.pendingCount ?? 0}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Submitted evaluations</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {data?.submittedCount ?? 0}
+          </CardContent>
+        </Card>
+      </div>
 
       <GlobalAnnouncementsCard
         announcements={data?.globalAnnouncements ?? []}

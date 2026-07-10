@@ -91,6 +91,8 @@ model Workspace {
   invitations      WorkspaceInvitation[]
   phases           Phase[]
   deliverableTemplates DeliverableTemplate[]
+  submissionEvaluations SubmissionEvaluation[]
+  studentPhaseResults StudentPhaseResult[]
 
   @@index([isArchived, createdAt(sort: Desc)])
 }
@@ -380,6 +382,13 @@ enum SubmissionStatus {
 enum PhaseStatus {
   ACTIVE
   INACTIVE
+  PUBLISHED
+}
+
+enum SubmissionEvaluationStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
 }
 
 enum AnnouncementType {
@@ -443,11 +452,14 @@ model Phase {
   description  String?
   status       PhaseStatus @default(ACTIVE)
   sortOrder    Int         @default(0)
+  isConfigurationPublished Boolean @default(false)
+  publishedAt  DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   templates    DeliverableTemplate[]
   deliverables Deliverable[]
+  studentResults StudentPhaseResult[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, status, sortOrder])
@@ -463,6 +475,7 @@ model DeliverableTemplate {
   type           DeliverableType
   dueDate        DateTime?
   totalMarks     Int
+  weightagePercent Decimal       @default(0) @db.Decimal(5, 2)
   isLocked       Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -471,6 +484,7 @@ model DeliverableTemplate {
   rubricCriteria RubricCriterion[]
   attachments    DeliverableTemplateAttachment[]
   deliverables   Deliverable[]
+  submissionEvaluations SubmissionEvaluation[]
 
   @@index([workspaceId, phaseId])
   @@index([workspaceId, createdAt(sort: Desc)])
@@ -484,6 +498,7 @@ model RubricCriterion {
   maxMarks    Int
   sortOrder   Int                 @default(0)
   template    DeliverableTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  criterionScores SubmissionCriterionScore[]
 
   @@index([templateId, sortOrder])
 }
@@ -521,6 +536,7 @@ model Deliverable {
   template           DeliverableTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   submissions        Submission[]
   deadlineExtensions DeliverableDeadlineExtension[]
+  submissionEvaluations SubmissionEvaluation[]
 
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([supervisorId, isActive, dueDate])
@@ -556,6 +572,7 @@ model Submission {
   finalizedAt   DateTime?
   deliverable   Deliverable      @relation(fields: [deliverableId], references: [id])
   workspace     Workspace        @relation(fields: [workspaceId], references: [id])
+  evaluations   SubmissionEvaluation[]
 
   @@index([workspaceId, submittedAt(sort: Desc)])
   @@index([teamId, status])
@@ -784,4 +801,75 @@ model EvaluationResult {
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
   @@unique([evaluationId, teamId])
   @@index([teamId, createdAt(sort: Desc)])
+}
+
+model SubmissionEvaluation {
+  id            String                     @id @default(uuid())
+  workspaceId   String
+  submissionId  String
+  deliverableId String
+  teamId        String
+  templateId    String
+  evaluatorId   String
+  assignedById  String
+  status        SubmissionEvaluationStatus @default(ASSIGNED)
+  submittedAt   DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  workspace     Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  submission    Submission                 @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  deliverable   Deliverable                @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  template      DeliverableTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  studentScores StudentSubmissionEvaluation[]
+
+  @@unique([submissionId, evaluatorId])
+  @@index([workspaceId, evaluatorId, status])
+  @@index([workspaceId, teamId])
+  @@index([deliverableId, status])
+  @@index([templateId, teamId])
+}
+
+model StudentSubmissionEvaluation {
+  id                     String   @id @default(uuid())
+  submissionEvaluationId String
+  studentId              String
+  totalMarks             Float
+  remarks                String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  submissionEvaluation   SubmissionEvaluation @relation(fields: [submissionEvaluationId], references: [id], onDelete: Cascade)
+  criterionScores        SubmissionCriterionScore[]
+
+  @@unique([submissionEvaluationId, studentId])
+  @@index([studentId])
+}
+
+model SubmissionCriterionScore {
+  id                          String @id @default(uuid())
+  studentSubmissionEvaluationId String
+  rubricCriterionId           String
+  marksAwarded                Float
+  studentSubmissionEvaluation StudentSubmissionEvaluation @relation(fields: [studentSubmissionEvaluationId], references: [id], onDelete: Cascade)
+  rubricCriterion             RubricCriterion @relation(fields: [rubricCriterionId], references: [id], onDelete: Restrict)
+
+  @@unique([studentSubmissionEvaluationId, rubricCriterionId])
+}
+
+model StudentPhaseResult {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  phaseId        String
+  studentId      String
+  weightedMarks  Float
+  gpa            Float
+  isComplete     Boolean  @default(false)
+  breakdown      Json?
+  calculatedAt   DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  phase          Phase    @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@unique([phaseId, studentId])
+  @@index([workspaceId, studentId])
+  @@index([phaseId, isComplete])
 }

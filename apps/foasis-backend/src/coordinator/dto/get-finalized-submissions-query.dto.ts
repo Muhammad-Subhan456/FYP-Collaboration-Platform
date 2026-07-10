@@ -8,6 +8,26 @@ export class GetFinalizedSubmissionsQueryDto extends PaginationQueryDto {
   phaseId?: string;
 
   @IsOptional()
+  @IsString()
+  templateId?: string;
+
+  @IsOptional()
+  @IsString()
+  supervisorId?: string;
+
+  @IsOptional()
+  @IsString()
+  teamId?: string;
+
+  @IsOptional()
+  @IsIn(['UNASSIGNED', 'ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'])
+  evaluationStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  evaluatorId?: string;
+
+  @IsOptional()
   @IsIn(['finalizedAt', 'deliverable', 'team', 'supervisor'])
   sortBy?: 'finalizedAt' | 'deliverable' | 'team' | 'supervisor';
 

@@ -113,6 +113,11 @@ export class CoordinatorController {
       req.workspaceId,
       {
         phaseId: query.phaseId,
+        templateId: query.templateId,
+        supervisorId: query.supervisorId,
+        teamId: query.teamId,
+        evaluationStatus: query.evaluationStatus,
+        evaluatorId: query.evaluatorId,
         page: query.page,
         limit: query.limit,
         sortBy: query.sortBy,

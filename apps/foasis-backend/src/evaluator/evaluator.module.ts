@@ -1,21 +1,21 @@
 import { Module } from '@nestjs/common';
 
 import { NotificationsModule } from '../notifications/notifications.module';
-import { EvaluationPanelsModule } from '../progress/evaluation-panels/evaluation-panels.module';
-import { EvaluationResultsModule } from '../progress/evaluation-results/evaluation-results.module';
 import { GlobalAnnouncementsModule } from '../progress/global-announcements/global-announcements.module';
+import { SubmissionEvaluationsModule } from '../progress/submission-evaluations/submission-evaluations.module';
 import { UsersModule } from '../users/users.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 import { EvaluatorController } from './evaluator.controller';
 import { EvaluatorPagesService } from './evaluator-pages.service';
 
 @Module({
   imports: [
-    EvaluationPanelsModule,
-    EvaluationResultsModule,
+    SubmissionEvaluationsModule,
     GlobalAnnouncementsModule,
     NotificationsModule,
     UsersModule,
+    PrismaModule,
   ],
   controllers: [EvaluatorController],
   providers: [EvaluatorPagesService],

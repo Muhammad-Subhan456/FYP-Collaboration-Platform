@@ -1,4 +1,4 @@
-export type PhaseStatus = "ACTIVE" | "INACTIVE";
+export type PhaseStatus = "ACTIVE" | "INACTIVE" | "PUBLISHED";
 
 export interface Phase {
   id: string;
@@ -8,6 +8,8 @@ export interface Phase {
   description?: string | null;
   status: PhaseStatus;
   sortOrder: number;
+  isConfigurationPublished?: boolean;
+  publishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -59,6 +61,7 @@ export interface DeliverableTemplate {
   type: string;
   dueDate?: string | null;
   totalMarks: number;
+  weightagePercent?: number;
   isLocked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -83,6 +86,7 @@ export interface CreateDeliverableTemplateInput {
   type: string;
   dueDate?: string;
   totalMarks: number;
+  weightagePercent?: number;
   rubricCriteria: RubricCriterionInput[];
   attachments?: Array<{ fileUrl: string; fileName: string }>;
 }
@@ -94,6 +98,7 @@ export interface UpdateDeliverableTemplateInput {
   type?: string;
   dueDate?: string | null;
   totalMarks?: number;
+  weightagePercent?: number;
   rubricCriteria?: RubricCriterionInput[];
   attachments?: Array<{ fileUrl: string; fileName: string }>;
 }

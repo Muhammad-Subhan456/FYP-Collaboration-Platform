@@ -1,22 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Calendar,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  Plus,
-  UserPlus,
-  Users,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
+import { EvaluatorMultiSelect } from "@/components/coordinator/evaluator-multi-select";
+import { PhaseFilter } from "@/components/common/phase-filter";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { EmptyState, ErrorState } from "@/components/common/state-blocks";
+import { ErrorState } from "@/components/common/state-blocks";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -27,6 +21,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -38,671 +33,430 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDate, formatDateTime, pluralize } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
-import { getDisplayName, useProfilesLookup } from "@/hooks/use-profiles";
-import { useCoordinatorEvaluationMutations } from "@/mutations/coordinator";
-import {
-  isCoordinatorQueryInitialLoading,
-  useCoordinatorEvaluationsQuery,
-} from "@/queries/coordinator";
-import type { CoordinatorEvaluation, EvaluationPanel } from "@/types/coordinator";
+import { queryKeys } from "@/lib/react-query";
+import { useAuth } from "@/providers/auth-provider";
+import { coordinatorPageService } from "@/services/coordinator-page.service";
+import { deliverableTemplateService } from "@/services/deliverable-template.service";
+import { submissionEvaluationService } from "@/services/submission-evaluation.service";
+import type { SubmissionEvaluationStatus } from "@/types/submission-evaluation";
 
-function EvaluationPanels({
-  panels,
-  teamNameById,
-  onAssignTeam,
-}: {
-  panels: EvaluationPanel[];
-  teamNameById: Map<string, string>;
-  onAssignTeam: (panelId?: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
+const STATUS_OPTIONS: Array<{
+  value: SubmissionEvaluationStatus | "all";
+  label: string;
+}> = [
+  { value: "all", label: "All statuses" },
+  { value: "UNASSIGNED", label: "Unassigned" },
+  { value: "ASSIGNED", label: "Assigned" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "SUBMITTED", label: "Submitted" },
+];
 
-  const evaluatorIds = panels.flatMap(
-    (p) => p.evaluators?.map((e) => e.evaluatorId) ?? [],
-  );
-  const profilesQuery = useProfilesLookup(evaluatorIds);
-
-  const filteredPanels = panels.filter((panel) => {
-    const query = search.trim().toLowerCase();
-    if (!query) return true;
-
-    const evaluatorNames = (panel.evaluators ?? [])
-      .map((ev) => getDisplayName(profilesQuery.data, ev.evaluatorId))
-      .join(" ");
-    const teamNames = (panel.assignments ?? [])
-      .map((assignment) => teamNameById.get(assignment.teamId) ?? "")
-      .join(" ");
-
-    return (
-      `room ${panel.room}`.includes(query) ||
-      evaluatorNames.toLowerCase().includes(query) ||
-      teamNames.toLowerCase().includes(query)
-    );
-  });
-
-  if (panels.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No panels yet. Create a panel to assign evaluators and teams.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-      <div className="relative">
-        <Input
-          className="pl-9"
-          placeholder="Search panels, evaluators, or teams..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <Users className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      </div>
-
-      <div className="space-y-3">
-        {filteredPanels.map((panel) => {
-          const expanded = expandedPanelId === panel.id;
-          const assignedTeams =
-            panel.assignments?.map(
-              (assignment) =>
-                teamNameById.get(assignment.teamId) ?? "Unknown Team",
-            ) ?? [];
-
-          return (
-            <Card key={panel.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base">
-                      Panel · Room {panel.room}
-                    </CardTitle>
-                    <CardDescription>
-                      {panel.scheduledAt
-                        ? formatDateTime(panel.scheduledAt)
-                        : "Schedule not set"}
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAssignTeam(panel.id)}
-                  >
-                    Assign team
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {panel.remarks && (
-                  <p className="text-sm text-muted-foreground">{panel.remarks}</p>
-                )}
-
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Assigned Evaluators
-                  </p>
-                  {(panel.evaluators?.length ?? 0) === 0 ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      No evaluators assigned yet.
-                    </p>
-                  ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {panel.evaluators!.map((ev) => (
-                        <li key={ev.id} className="rounded-md border px-3 py-2">
-                          {getDisplayName(profilesQuery.data, ev.evaluatorId)} ·{" "}
-                          {ev.role.replace(/_/g, " ")}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="px-0"
-                  onClick={() =>
-                    setExpandedPanelId(expanded ? null : panel.id)
-                  }
-                >
-                  {expanded ? (
-                    <>
-                      <ChevronUp className="h-4 w-4" />
-                      Hide assigned teams
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-4 w-4" />
-                      View assigned teams ({assignedTeams.length})
-                    </>
-                  )}
-                </Button>
-
-                {expanded && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Assigned Teams
-                    </p>
-                    {assignedTeams.length === 0 ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        No teams assigned to this panel yet.
-                      </p>
-                    ) : (
-                      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
-                        {assignedTeams.map((teamName) => (
-                          <li
-                            key={`${panel.id}-${teamName}`}
-                            className="rounded-md border bg-background px-3 py-2 text-sm"
-                          >
-                            {teamName}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+const ALL_FILTER = "all";
 
 export default function CoordinatorEvaluationsPage() {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState<CoordinatorEvaluation | null>(
-    null,
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] =
+    useState<SubmissionEvaluationStatus | "all">("all");
+  const [templateFilter, setTemplateFilter] = useState(ALL_FILTER);
+  const [supervisorFilter, setSupervisorFilter] = useState(ALL_FILTER);
+  const [teamFilter, setTeamFilter] = useState(ALL_FILTER);
+  const [evaluatorFilter, setEvaluatorFilter] = useState(ALL_FILTER);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<
+    string | null
+  >(null);
+  const [selectedEvaluatorIds, setSelectedEvaluatorIds] = useState<string[]>(
+    [],
   );
-  const [assignOpen, setAssignOpen] = useState<{
-    evaluation: CoordinatorEvaluation;
-    panelId?: string;
-  } | null>(null);
-  const [evaluatorOpen, setEvaluatorOpen] = useState<string | null>(null);
+  const [assignedEvaluatorIds, setAssignedEvaluatorIds] = useState<string[]>(
+    [],
+  );
 
-  const [evalTitle, setEvalTitle] = useState("");
-  const [evalType, setEvalType] = useState<"MID_VIVA" | "FINAL_VIVA">("MID_VIVA");
-  const [evalDate, setEvalDate] = useState("");
-  const [evalVenue, setEvalVenue] = useState("");
-  const [evalRemarks, setEvalRemarks] = useState("");
+  const phaseId = phaseFilter === "all" ? undefined : phaseFilter;
+  const templateId =
+    templateFilter === ALL_FILTER ? undefined : templateFilter;
+  const supervisorId =
+    supervisorFilter === ALL_FILTER ? undefined : supervisorFilter;
+  const teamId = teamFilter === ALL_FILTER ? undefined : teamFilter;
+  const evaluatorId =
+    evaluatorFilter === ALL_FILTER ? undefined : evaluatorFilter;
 
-  const [panelRoom, setPanelRoom] = useState("");
-  const [panelScheduledAt, setPanelScheduledAt] = useState("");
-  const [panelRemarks, setPanelRemarks] = useState("");
-
-  const [assignTeamIds, setAssignTeamIds] = useState<string[]>([]);
-  const [evaluatorId, setEvaluatorId] = useState("");
-  const [evaluatorRole, setEvaluatorRole] = useState("EVALUATOR");
-  const [evaluationSearch, setEvaluationSearch] = useState("");
-
-  const pageQuery = useCoordinatorEvaluationsQuery();
-
-  const {
-    createEvalMutation,
-    createPanelMutation,
-    addEvaluatorMutation,
-    assignTeamsMutation,
-  } = useCoordinatorEvaluationMutations({
-    onCreateEvaluationSuccess: () => {
-      setCreateOpen(false);
-      setEvalTitle("");
-      setEvalDate("");
-      setEvalVenue("");
-      setEvalRemarks("");
-    },
-    onCreatePanelSuccess: () => {
-      setPanelOpen(null);
-      setPanelRoom("");
-      setPanelScheduledAt("");
-      setPanelRemarks("");
-    },
-    onAddEvaluatorSuccess: () => {
-      setEvaluatorOpen(null);
-      setEvaluatorId("");
-    },
-    onAssignTeamsSuccess: () => {
-      setAssignOpen(null);
-      setAssignTeamIds([]);
-    },
+  const eligibleQuery = useQuery({
+    queryKey: [
+      ...queryKeys.coordinator.submissionEvaluations(
+        phaseId,
+        statusFilter,
+        user?.workspaceId,
+      ),
+      templateId,
+      supervisorId,
+      teamId,
+      evaluatorId,
+    ],
+    queryFn: () =>
+      submissionEvaluationService.listEligible({
+        phaseId,
+        templateId,
+        supervisorId,
+        teamId,
+        evaluatorId,
+        evaluationStatus:
+          statusFilter === "all" ? undefined : statusFilter,
+      }),
+    enabled: !!user?.workspaceId,
   });
 
-  if (isCoordinatorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
+  const evaluatorsQuery = useQuery({
+    queryKey: queryKeys.coordinator.evaluators(user?.workspaceId),
+    queryFn: submissionEvaluationService.listEvaluators,
+    enabled: !!user?.workspaceId,
+  });
 
-  if (pageQuery.isError) {
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.coordinator.deliverableTemplates(
+      phaseId,
+      user?.workspaceId,
+    ),
+    queryFn: () => deliverableTemplateService.list(phaseId),
+    enabled: !!user?.workspaceId,
+  });
+
+  const teamsQuery = useQuery({
+    queryKey: queryKeys.coordinator.teams(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getTeams,
+    enabled: !!user?.workspaceId,
+  });
+
+  const usersQuery = useQuery({
+    queryKey: queryKeys.coordinator.users(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getUsers,
+    enabled: !!user?.workspaceId,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: submissionEvaluationService.assignEvaluators,
+    onSuccess: (created) => {
+      const count = Array.isArray(created) ? created.length : 1;
+      toast.success(
+        count === 1
+          ? "Evaluator assigned"
+          : `${count} evaluators assigned`,
+      );
+      setAssignDialogOpen(false);
+      setSelectedSubmissionId(null);
+      setSelectedEvaluatorIds([]);
+      setAssignedEvaluatorIds([]);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.coordinator.submissionEvaluations(),
+      });
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const pendingCount = useMemo(
+    () =>
+      (eligibleQuery.data ?? []).filter(
+        (row) => row.evaluationStatus !== "SUBMITTED",
+      ).length,
+    [eligibleQuery.data],
+  );
+
+  const supervisors = useMemo(
+    () =>
+      (usersQuery.data ?? []).filter((userRecord) => userRecord.role === "SUPERVISOR"),
+    [usersQuery.data],
+  );
+
+  const availableEvaluators = useMemo(
+    () =>
+      (evaluatorsQuery.data ?? []).filter(
+        (evaluator) => !assignedEvaluatorIds.includes(evaluator.id),
+      ),
+    [assignedEvaluatorIds, evaluatorsQuery.data],
+  );
+
+  if (eligibleQuery.isLoading) return <DashboardSkeleton />;
+
+  if (eligibleQuery.isError) {
     return (
       <ErrorState
-        message={getErrorMessage(pageQuery.error)}
-        onRetry={() => pageQuery.refetch()}
+        message={getErrorMessage(eligibleQuery.error)}
+        onRetry={() => eligibleQuery.refetch()}
       />
     );
   }
 
-  const {
-    evaluations = [],
-    teams = [],
-    supervisors = [],
-    panelsByEvaluationId = {},
-    assignmentsByEvaluationId = {},
-  } = pageQuery.data ?? {};
+  const rows = eligibleQuery.data ?? [];
+  const teams = teamsQuery.data?.teams ?? [];
 
-  const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
-
-  const assignEvaluationId = assignOpen?.evaluation.id;
-  const assignments = assignEvaluationId
-    ? assignmentsByEvaluationId[assignEvaluationId] ?? []
-    : [];
-  const assignedTeamIds = new Set(assignments.map((assignment) => assignment.teamId));
-  const availableTeams = teams.filter((team) => !assignedTeamIds.has(team.id));
-
-  const toggleAssignTeam = (teamId: string) => {
-    setAssignTeamIds((current) =>
-      current.includes(teamId)
-        ? current.filter((id) => id !== teamId)
-        : [...current, teamId],
-    );
-  };
-
-  const handleCreateEvaluation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!evalTitle.trim() || !evalDate || !evalVenue.trim()) {
-      toast.error("Title, date, and venue are required");
-      return;
-    }
-    createEvalMutation.mutate({
-      title: evalTitle.trim(),
-      type: evalType,
-      date: new Date(evalDate).toISOString(),
-      venue: evalVenue.trim(),
-      remarks: evalRemarks.trim() || undefined,
-    });
+  const openAssignDialog = (
+    submissionId: string,
+    currentEvaluatorIds: string[],
+  ) => {
+    setSelectedSubmissionId(submissionId);
+    setAssignedEvaluatorIds(currentEvaluatorIds);
+    setSelectedEvaluatorIds([]);
+    setAssignDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Evaluations</h2>
+          <h1 className="text-2xl font-semibold">Evaluations</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule viva sessions, panels, and team assignments
+            Assign one or more evaluators per submission. {pendingCount} pending.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New evaluation
-        </Button>
       </div>
 
-      {evaluations.length === 0 ? (
-        <EmptyState
-          title="No evaluations scheduled"
-          description="Create an evaluation to set up panels and assign teams."
-          action={
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Create evaluation
-            </Button>
+      <div className="flex flex-wrap gap-2">
+        <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
+        <Select
+          value={templateFilter}
+          onValueChange={setTemplateFilter}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Deliverable" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_FILTER}>All deliverables</SelectItem>
+            {(templatesQuery.data ?? []).map((template) => (
+              <SelectItem key={template.id} value={template.id}>
+                {template.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={supervisorFilter}
+          onValueChange={setSupervisorFilter}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Supervisor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_FILTER}>All supervisors</SelectItem>
+            {supervisors.map((supervisor) => (
+              <SelectItem key={supervisor.id} value={supervisor.id}>
+                {supervisor.fullName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={teamFilter} onValueChange={setTeamFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Team" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_FILTER}>All teams</SelectItem>
+            {teams.map((team) => (
+              <SelectItem key={team.id} value={team.id}>
+                {team.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={statusFilter}
+          onValueChange={(value) =>
+            setStatusFilter(value as SubmissionEvaluationStatus | "all")
           }
-        />
-      ) : (
-        <div className="space-y-4">
-          <div className="relative max-w-md">
-            <Input
-              className="pl-9"
-              placeholder="Search evaluations..."
-              value={evaluationSearch}
-              onChange={(e) => setEvaluationSearch(e.target.value)}
-            />
-            <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={evaluatorFilter}
+          onValueChange={setEvaluatorFilter}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Evaluator" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_FILTER}>All evaluators</SelectItem>
+            {(evaluatorsQuery.data ?? []).map((evaluator) => (
+              <SelectItem key={evaluator.id} value={evaluator.id}>
+                {evaluator.fullName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-          {evaluations
-            .filter((evaluation) => {
-              const query = evaluationSearch.trim().toLowerCase();
-              if (!query) return true;
-              return (
-                evaluation.title.toLowerCase().includes(query) ||
-                evaluation.venue.toLowerCase().includes(query) ||
-                evaluation.type.toLowerCase().includes(query)
-              );
-            })
-            .map((evaluation) => {
-            const expanded = expandedId === evaluation.id;
-            return (
-              <Card key={evaluation.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <CardTitle className="text-base">{evaluation.title}</CardTitle>
-                      <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span>{evaluation.type.replace(/_/g, " ")}</span>
-                        <span>·</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(evaluation.date)}
-                        </span>
-                        <span>·</span>
-                        <span>{evaluation.venue}</span>
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {evaluation.remarks && (
-                    <p className="text-sm text-muted-foreground">
-                      {evaluation.remarks}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPanelOpen(evaluation)}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create panel
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setAssignOpen({ evaluation, panelId: undefined })
-                      }
-                    >
-                      <Users className="h-4 w-4" />
-                      Assign teams
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setExpandedId(expanded ? null : evaluation.id)
-                      }
-                    >
-                      {expanded ? (
-                        <>
-                          <ChevronUp className="h-4 w-4" />
-                          Hide panels
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-4 w-4" />
-                          View panels
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {expanded && (
-                    <EvaluationPanels
-                      panels={panelsByEvaluationId[evaluation.id] ?? []}
-                      teamNameById={teamNameById}
-                      onAssignTeam={(panelId) =>
-                        setAssignOpen({ evaluation, panelId })
-                      }
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <form onSubmit={handleCreateEvaluation}>
-            <DialogHeader>
-              <DialogTitle>New evaluation</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <Input
-                placeholder="Title"
-                value={evalTitle}
-                onChange={(e) => setEvalTitle(e.target.value)}
-              />
-              <Select
-                value={evalType}
-                onValueChange={(v) =>
-                  setEvalType(v as "MID_VIVA" | "FINAL_VIVA")
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MID_VIVA">Mid Viva</SelectItem>
-                  <SelectItem value="FINAL_VIVA">Final Viva</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                type="datetime-local"
-                value={evalDate}
-                onChange={(e) => setEvalDate(e.target.value)}
-              />
-              <Input
-                placeholder="Venue"
-                value={evalVenue}
-                onChange={(e) => setEvalVenue(e.target.value)}
-              />
-              <Textarea
-                placeholder="Remarks (optional)"
-                value={evalRemarks}
-                onChange={(e) => setEvalRemarks(e.target.value)}
-                rows={2}
-              />
+      <Card>
+        <CardHeader>
+          <CardTitle>Eligible submissions</CardTitle>
+          <CardDescription>
+            Finalized submissions can have multiple independent evaluators.
+            Results are averaged across submitted evaluations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No finalized submissions match the current filters.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[1200px] text-sm">
+                <thead className="border-b bg-muted/40">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Deliverable</th>
+                    <th className="px-3 py-2 text-left font-medium">Phase</th>
+                    <th className="px-3 py-2 text-left font-medium">Team</th>
+                    <th className="px-3 py-2 text-left font-medium">Supervisor</th>
+                    <th className="px-3 py-2 text-left font-medium">Finalized</th>
+                    <th className="px-3 py-2 text-left font-medium">Status</th>
+                    <th className="px-3 py-2 text-left font-medium">Evaluators</th>
+                    <th className="px-3 py-2 text-left font-medium">Progress</th>
+                    <th className="px-3 py-2 text-left font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.submissionId} className="border-b last:border-b-0">
+                      <td className="px-3 py-3">{row.deliverableTitle}</td>
+                      <td className="px-3 py-3">{row.phase?.name ?? "—"}</td>
+                      <td className="px-3 py-3">{row.teamName}</td>
+                      <td className="px-3 py-3">{row.supervisor.fullName}</td>
+                      <td className="px-3 py-3">
+                        {row.finalizedAt
+                          ? formatDateTime(row.finalizedAt)
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge
+                          variant={
+                            row.evaluationStatus === "SUBMITTED"
+                              ? "secondary"
+                              : row.evaluationStatus === "UNASSIGNED"
+                                ? "destructive"
+                                : "outline"
+                          }
+                        >
+                          {row.evaluationStatus}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3">
+                        {row.evaluations.length > 0 ? (
+                          <div className="space-y-1">
+                            {row.evaluations.map((assignment) => (
+                              <div
+                                key={assignment.evaluationId}
+                                className="text-xs"
+                              >
+                                {assignment.evaluator?.fullName ?? "Evaluator"}{" "}
+                                <Badge variant="outline" className="ml-1">
+                                  {assignment.status}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {row.submittedEvaluatorCount}/{row.assignedEvaluatorCount}{" "}
+                        submitted
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <a
+                              href={row.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View file
+                            </a>
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              openAssignDialog(
+                                row.submissionId,
+                                row.evaluations.map(
+                                  (assignment) => assignment.evaluatorId,
+                                ),
+                              )
+                            }
+                          >
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Add evaluator
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCreateOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createEvalMutation.isPending}>
-                {createEvalMutation.isPending && (
-                  <Loader2 className="animate-spin" />
-                )}
-                Create
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          )}
+        </CardContent>
+      </Card>
 
-      <Dialog open={!!panelOpen} onOpenChange={(o) => !o && setPanelOpen(null)}>
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create panel for {panelOpen?.title}</DialogTitle>
+            <DialogTitle>Assign evaluators</DialogTitle>
+            <DialogDescription>
+              Select one or more evaluators. Each scores independently; final
+              results use averaged marks. Already assigned evaluators are
+              excluded.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <Input
-              placeholder="Room"
-              value={panelRoom}
-              onChange={(e) => setPanelRoom(e.target.value)}
-            />
-            <Input
-              type="datetime-local"
-              value={panelScheduledAt}
-              onChange={(e) => setPanelScheduledAt(e.target.value)}
-            />
-            <Textarea
-              placeholder="Remarks (optional)"
-              value={panelRemarks}
-              onChange={(e) => setPanelRemarks(e.target.value)}
-              rows={2}
-            />
-          </div>
+          <EvaluatorMultiSelect
+            evaluators={availableEvaluators}
+            selectedIds={selectedEvaluatorIds}
+            onChange={setSelectedEvaluatorIds}
+            excludedIds={assignedEvaluatorIds}
+            label="Evaluators"
+            placeholder="Select one or more evaluators"
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPanelOpen(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setAssignDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                if (!panelOpen || !panelRoom.trim()) return;
-                createPanelMutation.mutate(
-                  {
-                    evaluationId: panelOpen.id,
-                    room: panelRoom.trim(),
-                    scheduledAt: panelScheduledAt
-                      ? new Date(panelScheduledAt).toISOString()
-                      : undefined,
-                    remarks: panelRemarks.trim() || undefined,
-                  },
-                  {
-                    onSuccess: (panel) => {
-                      setEvaluatorOpen(panel.id);
-                    },
-                  },
-                );
-              }}
-              disabled={!panelRoom.trim() || createPanelMutation.isPending}
-            >
-              {createPanelMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Create panel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!evaluatorOpen}
-        onOpenChange={(o) => !o && setEvaluatorOpen(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add evaluator to panel
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <Select value={evaluatorId} onValueChange={setEvaluatorId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select supervisor" />
-              </SelectTrigger>
-              <SelectContent>
-                {supervisors.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder="Role (default: EVALUATOR)"
-              value={evaluatorRole}
-              onChange={(e) => setEvaluatorRole(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEvaluatorOpen(null)}>
-              Skip
-            </Button>
-            <Button
-              onClick={() =>
-                evaluatorOpen &&
-                evaluatorId &&
-                addEvaluatorMutation.mutate({
-                  panelId: evaluatorOpen,
-                  evaluatorId,
-                  role: evaluatorRole || undefined,
-                })
-              }
-              disabled={!evaluatorId || addEvaluatorMutation.isPending}
-            >
-              {addEvaluatorMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Add evaluator
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!assignOpen}
-        onOpenChange={(o) => {
-          if (!o) {
-            setAssignOpen(null);
-            setAssignTeamIds([]);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Assign teams to evaluation</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {assignOpen?.panelId && (
-              <p className="text-sm text-muted-foreground">
-                Assigning multiple teams to the same panel block.
-              </p>
-            )}
-            {availableTeams.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                All teams are already assigned to this evaluation.
-              </p>
-            ) : (
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border p-3">
-                {availableTeams.map((team) => {
-                  const checked = assignTeamIds.includes(team.id);
-                  return (
-                    <label
-                      key={team.id}
-                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleAssignTeam(team.id)}
-                        className="h-4 w-4 rounded border-border"
-                      />
-                      <span className="text-sm">
-                        {team.name}{" "}
-                        <span className="text-muted-foreground">
-                          ({team.domain})
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            {assignTeamIds.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {pluralize(assignTeamIds.length, "team")} selected
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() =>
-                assignOpen &&
-                assignTeamIds.length > 0 &&
-                assignTeamsMutation.mutate({
-                  evaluationId: assignOpen.evaluation.id,
-                  teamIds: assignTeamIds,
-                  panelId: assignOpen.panelId,
-                })
-              }
               disabled={
-                assignTeamIds.length === 0 || assignTeamsMutation.isPending
+                !selectedSubmissionId ||
+                selectedEvaluatorIds.length === 0 ||
+                assignMutation.isPending
               }
+              onClick={() => {
+                if (!selectedSubmissionId || selectedEvaluatorIds.length === 0) {
+                  return;
+                }
+                assignMutation.mutate({
+                  submissionId: selectedSubmissionId,
+                  evaluatorIds: selectedEvaluatorIds,
+                });
+              }}
             >
-              {assignTeamsMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
-              Assign selected
+              {assignMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Assign{" "}
+              {selectedEvaluatorIds.length > 0
+                ? `(${selectedEvaluatorIds.length})`
+                : "evaluators"}
             </Button>
           </DialogFooter>
         </DialogContent>

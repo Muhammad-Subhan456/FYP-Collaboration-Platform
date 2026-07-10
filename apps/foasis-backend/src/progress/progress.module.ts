@@ -14,6 +14,7 @@ import { EvaluationResultsModule } from './evaluation-results/evaluation-results
 import { StatsModule } from './stats/stats.module';
 import { EvaluationPanelsModule } from './evaluation-panels/evaluation-panels.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { SubmissionEvaluationsModule } from './submission-evaluations/submission-evaluations.module';
 import { ProgressCommonModule } from './common/common.module';
 import { WorkStreamModule } from './work-stream/work-stream.module';
 
@@ -35,6 +36,7 @@ import { WorkStreamModule } from './work-stream/work-stream.module';
     StatsModule,
     EvaluationPanelsModule,
     RemindersModule,
+    SubmissionEvaluationsModule,
   ],
 })
 export class ProgressModule {}

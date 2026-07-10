@@ -445,6 +445,27 @@ export class InvitationsService {
         },
       });
 
+      if (invitation.role === UserRole.SUPERVISOR) {
+        await tx.workspaceMembership.upsert({
+          where: {
+            workspaceId_userId_role: {
+              workspaceId: invitation.workspaceId,
+              userId: savedUser.id,
+              role: UserRole.EVALUATOR,
+            },
+          },
+          create: {
+            workspaceId: invitation.workspaceId,
+            userId: savedUser.id,
+            role: UserRole.EVALUATOR,
+            isActive: true,
+          },
+          update: {
+            isActive: true,
+          },
+        });
+      }
+
       await tx.workspaceInvitation.update({
         where: { id: invitation.id },
         data: {

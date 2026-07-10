@@ -37,3 +37,14 @@ export function pluralize(
   const word = count === 1 ? singular : (plural ?? `${singular}s`);
   return `${count} ${word}`;
 }
+
+export function formatGpa(gpa: number | null | undefined) {
+  if (gpa === null || gpa === undefined) {
+    return "—";
+  }
+  return Number(gpa).toFixed(2);
+}
+
+export function formatPercent(value: number, digits = 2) {
+  return `${value.toFixed(digits)}%`;
+}

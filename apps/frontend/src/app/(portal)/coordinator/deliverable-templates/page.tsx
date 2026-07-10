@@ -76,6 +76,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
   const [phaseId, setPhaseId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [totalMarks, setTotalMarks] = useState(100);
+  const [weightagePercent, setWeightagePercent] = useState(0);
   const [criteria, setCriteria] = useState<RubricCriterionInput[]>([
     defaultCriterion(),
   ]);
@@ -107,6 +108,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
     setPhaseId(phasesQuery.data?.[0]?.id ?? "");
     setDueDate("");
     setTotalMarks(100);
+    setWeightagePercent(0);
     setCriteria([defaultCriterion()]);
     setPendingFiles([]);
     setEditing(null);
@@ -125,6 +127,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
     setPhaseId(template.phaseId);
     setDueDate(template.dueDate?.slice(0, 16) ?? "");
     setTotalMarks(template.totalMarks);
+    setWeightagePercent(Number(template.weightagePercent ?? 0));
     setCriteria(
       template.rubricCriteria.map((criterion) => ({
         id: criterion.id,
@@ -155,6 +158,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
           type,
           dueDate: dueDate || undefined,
           totalMarks,
+          weightagePercent,
           rubricCriteria: criteria,
           attachments: attachments.length
             ? [
@@ -275,7 +279,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
                       {template.description}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {template.totalMarks} marks · {template.rubricCriteria.length}{" "}
+                      {template.totalMarks} marks · {Number(template.weightagePercent ?? 0)}% weightage · {template.rubricCriteria.length}{" "}
                       criteria · {template._count?.deliverables ?? 0} published
                     </p>
                   </div>
@@ -378,6 +382,20 @@ export default function CoordinatorDeliverableTemplatesPage() {
                   disabled={!!editing?.isLocked}
                   onChange={(event) =>
                     setTotalMarks(Number(event.target.value) || 0)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Weightage (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={weightagePercent}
+                  disabled={!!editing?.isLocked}
+                  onChange={(event) =>
+                    setWeightagePercent(Number(event.target.value) || 0)
                   }
                 />
               </div>

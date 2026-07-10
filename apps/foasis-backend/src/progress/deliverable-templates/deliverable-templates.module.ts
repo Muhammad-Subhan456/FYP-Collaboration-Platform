@@ -5,6 +5,8 @@ import { DomainEventsModule } from '../../domain-events/domain-events.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
 
+import { GpaCalculationService } from '../gpa/gpa-calculation.service';
+
 import { DeliverableTemplatesController } from './deliverable-templates.controller';
 import { DeliverableTemplatesService } from './deliverable-templates.service';
 
@@ -16,7 +18,7 @@ import { DeliverableTemplatesService } from './deliverable-templates.service';
     DomainEventsModule,
   ],
   controllers: [DeliverableTemplatesController],
-  providers: [DeliverableTemplatesService],
+  providers: [DeliverableTemplatesService, GpaCalculationService],
   exports: [DeliverableTemplatesService],
 })
 export class DeliverableTemplatesModule {}

@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 import { ReminderTypes } from '../progress/reminders/reminder.types';
 import { ProfilesService } from '../users/profiles.service';
+import { resolveEvaluationAggregateStatus } from '../progress/submission-evaluations/submission-scoring.util';
 
 import { SendSubmissionReminderDto } from './dto/send-submission-reminder.dto';
 
@@ -70,6 +71,11 @@ export class CoordinatorSubmissionsService {
     workspaceId: string,
     options?: {
       phaseId?: string;
+      templateId?: string;
+      supervisorId?: string;
+      teamId?: string;
+      evaluationStatus?: string;
+      evaluatorId?: string;
       page?: number;
       limit?: number;
       sortBy?: 'finalizedAt' | 'deliverable' | 'team' | 'supervisor';
@@ -84,9 +90,16 @@ export class CoordinatorSubmissionsService {
     const where = {
       workspaceId,
       status: SubmissionStatus.FINALIZED,
-      ...(options?.phaseId
-        ? { deliverable: { phaseId: options.phaseId } }
-        : {}),
+      ...(options?.teamId ? { teamId: options.teamId } : {}),
+      deliverable: {
+        ...(options?.phaseId ? { phaseId: options.phaseId } : {}),
+        ...(options?.templateId
+          ? { templateId: options.templateId }
+          : {}),
+        ...(options?.supervisorId
+          ? { supervisorId: options.supervisorId }
+          : {}),
+      },
     };
 
     const orderBy =
@@ -96,27 +109,37 @@ export class CoordinatorSubmissionsService {
           ? { finalizedAt: options?.sortOrder ?? 'desc' }
           : { finalizedAt: 'desc' as const };
 
-    const [rows, total] = await Promise.all([
-      this.prisma.submission.findMany({
+    const allRows = await this.prisma.submission.findMany({
         where,
         include: {
           deliverable: {
             include: { phase: true, template: true },
           },
+          evaluations: {
+            select: {
+              id: true,
+              evaluatorId: true,
+              status: true,
+            },
+          },
         },
         orderBy,
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      this.prisma.submission.count({ where }),
-    ]);
+    });
 
-    const teamIds = [...new Set(rows.map((row) => row.teamId))];
+    const teamIds = [...new Set(allRows.map((row) => row.teamId))];
     const supervisorIds = [
-      ...new Set(rows.map((row) => row.deliverable.supervisorId)),
+      ...new Set(allRows.map((row) => row.deliverable.supervisorId)),
     ];
 
-    const [teams, supervisors] = await Promise.all([
+    const evaluatorIds = [
+      ...new Set(
+        allRows.flatMap((row) =>
+          row.evaluations.map((evaluation) => evaluation.evaluatorId),
+        ),
+      ),
+    ];
+
+    const [teams, supervisors, evaluators] = await Promise.all([
       teamIds.length
         ? this.prisma.team.findMany({
             where: { id: { in: teamIds } },
@@ -124,6 +147,9 @@ export class CoordinatorSubmissionsService {
           })
         : Promise.resolve([]),
       this.loadSupervisorSummaries(supervisorIds),
+      evaluatorIds.length
+        ? this.loadSupervisorSummaries(evaluatorIds)
+        : Promise.resolve(new Map()),
     ]);
 
     const teamById = new Map<
@@ -139,40 +165,68 @@ export class CoordinatorSubmissionsService {
       ] as const),
     );
 
-    const data = rows.map((row) => ({
-      id: row.id,
-      version: row.version,
-      status: row.status,
-      fileUrl: row.fileUrl,
-      finalizedAt: row.finalizedAt,
-      submittedAt: row.submittedAt,
-      deliverable: {
-        id: row.deliverable.id,
-        title: row.deliverable.title,
-        phase: row.deliverable.phase
-          ? {
-              id: row.deliverable.phase.id,
-              name: row.deliverable.phase.name,
-            }
-          : null,
-        template: row.deliverable.template
-          ? {
-              id: row.deliverable.template.id,
-              title: row.deliverable.template.title,
-            }
-          : null,
-      },
-      team: teamById.get(row.teamId) ?? {
-        id: row.teamId,
-        name: 'Unknown team',
-      },
-      supervisor: supervisors.get(row.deliverable.supervisorId) ?? {
-        id: row.deliverable.supervisorId,
-        fullName: 'Supervisor',
-        email: '',
-      },
-      evaluator: null,
-    }));
+    let data = allRows.map((row) => {
+      const evaluationStatus = resolveEvaluationAggregateStatus(
+        row.evaluations,
+      );
+      const assignedEvaluators = row.evaluations.map((evaluation) => ({
+        evaluationId: evaluation.id,
+        evaluatorId: evaluation.evaluatorId,
+        evaluator:
+          evaluators.get(evaluation.evaluatorId) ?? null,
+        status: evaluation.status,
+      }));
+
+      return {
+        id: row.id,
+        version: row.version,
+        status: row.status,
+        fileUrl: row.fileUrl,
+        finalizedAt: row.finalizedAt,
+        submittedAt: row.submittedAt,
+        deliverable: {
+          id: row.deliverable.id,
+          title: row.deliverable.title,
+          phase: row.deliverable.phase
+            ? {
+                id: row.deliverable.phase.id,
+                name: row.deliverable.phase.name,
+              }
+            : null,
+          template: row.deliverable.template
+            ? {
+                id: row.deliverable.template.id,
+                title: row.deliverable.template.title,
+              }
+            : null,
+        },
+        team: teamById.get(row.teamId) ?? {
+          id: row.teamId,
+          name: 'Unknown team',
+        },
+        supervisor: supervisors.get(row.deliverable.supervisorId) ?? {
+          id: row.deliverable.supervisorId,
+          fullName: 'Supervisor',
+          email: '',
+        },
+        evaluationStatus,
+        evaluators: assignedEvaluators,
+      };
+    });
+
+    if (options?.evaluationStatus) {
+      data = data.filter(
+        (row) => row.evaluationStatus === options.evaluationStatus,
+      );
+    }
+
+    if (options?.evaluatorId) {
+      data = data.filter((row) =>
+        row.evaluators.some(
+          (item) => item.evaluatorId === options.evaluatorId,
+        ),
+      );
+    }
 
     if (options?.sortBy === 'supervisor' || options?.sortBy === 'team') {
       const direction = options.sortOrder === 'desc' ? -1 : 1;
@@ -188,8 +242,14 @@ export class CoordinatorSubmissionsService {
       );
     }
 
+    const total = data.length;
+    const paginatedData = data.slice(
+      pagination.skip,
+      pagination.skip + pagination.take,
+    );
+
     return buildPaginatedResponse(
-      data,
+      paginatedData,
       total,
       pagination.page,
       pagination.limit,

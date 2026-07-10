@@ -2,8 +2,10 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -40,6 +42,12 @@ export class UpdateDeliverableTemplateDto {
   @IsInt()
   @Min(1)
   totalMarks?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  weightagePercent?: number;
 
   @IsOptional()
   @IsArray()

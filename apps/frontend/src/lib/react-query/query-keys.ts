@@ -38,6 +38,16 @@ export const queryKeys = {
       ["student", "evaluations", userId, workspaceId ?? null] as const,
     results: (userId?: string, workspaceId?: string | null) =>
       ["student", "results", userId, workspaceId ?? null] as const,
+    submissionResults: (
+      filters?: Record<string, string | undefined>,
+      workspaceId?: string | null,
+    ) =>
+      [
+        "student",
+        "submission-results",
+        filters ?? null,
+        workspaceId ?? null,
+      ] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["student", "notifications", userId, page, limit] as const,
     notificationsList: (
@@ -89,6 +99,16 @@ export const queryKeys = {
     workStreamPrefix: () => ["supervisor", "work-stream"] as const,
     evaluations: (userId?: string, workspaceId?: string | null) =>
       ["supervisor", "evaluations", userId, workspaceId ?? null] as const,
+    submissionResults: (
+      filters?: Record<string, string | undefined>,
+      workspaceId?: string | null,
+    ) =>
+      [
+        "supervisor",
+        "submission-results",
+        filters ?? null,
+        workspaceId ?? null,
+      ] as const,
     notifications: (userId?: string, page = 1, limit = 20) =>
       ["supervisor", "notifications", userId, page, limit] as const,
     notificationsList: (
@@ -147,6 +167,25 @@ export const queryKeys = {
       ["coordinator", "finalized-submissions", phaseId ?? null, page, workspaceId ?? null] as const,
     submissionOverview: (phaseId?: string, workspaceId?: string | null) =>
       ["coordinator", "submission-overview", phaseId ?? null, workspaceId ?? null] as const,
+    submissionEvaluations: (
+      phaseId?: string,
+      status?: string,
+      workspaceId?: string | null,
+    ) =>
+      [
+        "coordinator",
+        "submission-evaluations",
+        phaseId ?? null,
+        status ?? null,
+        workspaceId ?? null,
+      ] as const,
+    evaluators: (workspaceId?: string | null) =>
+      ["coordinator", "evaluators", workspaceId ?? null] as const,
+    submissionResults: (
+      filters?: Record<string, string | undefined> | string,
+      workspaceId?: string | null,
+    ) =>
+      ["coordinator", "submission-results", filters ?? null, workspaceId ?? null] as const,
   },
 
   phases: {
@@ -165,6 +204,12 @@ export const queryKeys = {
     all: ["evaluator"] as const,
     dashboard: (workspaceId?: string | null) =>
       ["evaluator", "dashboard", workspaceId ?? null] as const,
+    evaluations: (workspaceId?: string | null) =>
+      ["evaluator", "evaluations", workspaceId ?? null] as const,
+    evaluationDetail: (evaluationId: string, workspaceId?: string | null) =>
+      ["evaluator", "evaluation", evaluationId, workspaceId ?? null] as const,
+    results: (workspaceId?: string | null) =>
+      ["evaluator", "results", workspaceId ?? null] as const,
   },
 
   teams: {

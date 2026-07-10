@@ -29,15 +29,55 @@ import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/auth-provider";
+import { coordinatorPageService } from "@/services/coordinator-page.service";
 import { coordinatorSubmissionsService } from "@/services/coordinator-submissions.service";
+import { deliverableTemplateService } from "@/services/deliverable-template.service";
+import { submissionEvaluationService } from "@/services/submission-evaluation.service";
 import type {
   CoordinatorFinalizedSubmission,
   FinalizedSubmissionSortBy,
 } from "@/types/coordinator-submissions";
+import type { SubmissionEvaluationStatus } from "@/types/submission-evaluation";
 import { cn } from "@/lib/utils";
 
 type PageSection = "forwarded" | "tracking";
 type ViewMode = "list" | "table";
+
+const ALL_FILTER = "all";
+
+const EVALUATION_STATUS_OPTIONS: Array<{
+  value: SubmissionEvaluationStatus | "all";
+  label: string;
+}> = [
+  { value: "all", label: "All evaluation statuses" },
+  { value: "UNASSIGNED", label: "Unassigned" },
+  { value: "ASSIGNED", label: "Assigned" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "SUBMITTED", label: "Submitted" },
+];
+
+function EvaluatorsSummary({
+  submission,
+}: {
+  submission: CoordinatorFinalizedSubmission;
+}) {
+  if (submission.evaluators.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="space-y-1">
+      {submission.evaluators.map((assignment) => (
+        <div key={assignment.evaluationId} className="text-xs">
+          {assignment.evaluator?.fullName ?? "Evaluator"}{" "}
+          <Badge variant="outline" className="ml-1">
+            {assignment.status}
+          </Badge>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function FinalizedSubmissionListItem({
   submission,
@@ -52,18 +92,32 @@ function FinalizedSubmissionListItem({
           <Badge variant="outline">
             {submission.deliverable.phase?.name ?? "Phase"}
           </Badge>
-          <Badge>FINALIZED</Badge>
+          <Badge>{submission.status}</Badge>
+          <Badge
+            variant={
+              submission.evaluationStatus === "SUBMITTED"
+                ? "secondary"
+                : submission.evaluationStatus === "UNASSIGNED"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
+            {submission.evaluationStatus}
+          </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
           Team: {submission.team.name} · Supervisor:{" "}
           {submission.supervisor.fullName}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           v{submission.version}
           {submission.finalizedAt
             ? ` · finalized ${formatDateTime(submission.finalizedAt)}`
             : ""}
-        </p>
+        </div>
+        <div className="pt-1">
+          <EvaluatorsSummary submission={submission} />
+        </div>
       </div>
       <Button asChild size="sm" variant="outline">
         <a
@@ -97,7 +151,7 @@ function FinalizedSubmissionsTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-[960px] text-sm">
+      <table className="w-full min-w-[1200px] text-sm">
         <thead className="border-b bg-muted/40">
           <tr>
             <th
@@ -119,20 +173,25 @@ function FinalizedSubmissionsTable({
             >
               Supervisor {sortBy === "supervisor" ? `(${sortOrder})` : ""}
             </th>
-            <th className="px-3 py-2 text-left font-medium">Status</th>
+            <th className="px-3 py-2 text-left font-medium">
+              Submission status
+            </th>
+            <th className="px-3 py-2 text-left font-medium">
+              Evaluation status
+            </th>
             <th
               className={headerClass("finalizedAt")}
               onClick={() => onSortChange("finalizedAt")}
             >
               Finalized {sortBy === "finalizedAt" ? `(${sortOrder})` : ""}
             </th>
-            <th className="px-3 py-2 text-left font-medium">Evaluator</th>
+            <th className="px-3 py-2 text-left font-medium">Evaluators</th>
             <th className="px-3 py-2 text-left font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>
           {submissions.map((submission) => (
-            <tr key={submission.id} className="border-b last:border-b-0">
+            <tr key={submission.id} className="border-b last:border-b-0 align-top">
               <td className="px-3 py-3">{submission.deliverable.title}</td>
               <td className="px-3 py-3">
                 {submission.deliverable.phase?.name ?? "—"}
@@ -143,11 +202,26 @@ function FinalizedSubmissionsTable({
                 <Badge variant="secondary">{submission.status}</Badge>
               </td>
               <td className="px-3 py-3">
+                <Badge
+                  variant={
+                    submission.evaluationStatus === "SUBMITTED"
+                      ? "secondary"
+                      : submission.evaluationStatus === "UNASSIGNED"
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
+                  {submission.evaluationStatus}
+                </Badge>
+              </td>
+              <td className="px-3 py-3">
                 {submission.finalizedAt
                   ? formatDateTime(submission.finalizedAt)
                   : "—"}
               </td>
-              <td className="px-3 py-3 text-muted-foreground">—</td>
+              <td className="px-3 py-3">
+                <EvaluatorsSummary submission={submission} />
+              </td>
               <td className="px-3 py-3">
                 <Button asChild size="sm" variant="outline">
                   <a
@@ -173,21 +247,50 @@ export default function CoordinatorSubmissionsPage() {
   const [section, setSection] = useState<PageSection>("forwarded");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [phaseFilter, setPhaseFilter] = useState("all");
+  const [templateFilter, setTemplateFilter] = useState(ALL_FILTER);
+  const [supervisorFilter, setSupervisorFilter] = useState(ALL_FILTER);
+  const [teamFilter, setTeamFilter] = useState(ALL_FILTER);
+  const [evaluationStatusFilter, setEvaluationStatusFilter] =
+    useState<SubmissionEvaluationStatus | "all">("all");
+  const [evaluatorFilter, setEvaluatorFilter] = useState(ALL_FILTER);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<FinalizedSubmissionSortBy>("finalizedAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const phaseId = phaseFilter === "all" ? undefined : phaseFilter;
+  const templateId =
+    templateFilter === ALL_FILTER ? undefined : templateFilter;
+  const supervisorId =
+    supervisorFilter === ALL_FILTER ? undefined : supervisorFilter;
+  const teamId = teamFilter === ALL_FILTER ? undefined : teamFilter;
+  const evaluationStatus =
+    evaluationStatusFilter === "all" ? undefined : evaluationStatusFilter;
+  const evaluatorId =
+    evaluatorFilter === ALL_FILTER ? undefined : evaluatorFilter;
 
   const submissionsQuery = useQuery({
     queryKey: [
-      ...queryKeys.coordinator.finalizedSubmissions(phaseId, page, user?.workspaceId),
+      ...queryKeys.coordinator.finalizedSubmissions(
+        phaseId,
+        page,
+        user?.workspaceId,
+      ),
+      templateId,
+      supervisorId,
+      teamId,
+      evaluationStatus,
+      evaluatorId,
       sortBy,
       sortOrder,
     ],
     queryFn: () =>
       coordinatorSubmissionsService.getFinalizedSubmissions({
         phaseId,
+        templateId,
+        supervisorId,
+        teamId,
+        evaluationStatus,
+        evaluatorId,
         page,
         sortBy,
         sortOrder,
@@ -202,6 +305,33 @@ export default function CoordinatorSubmissionsPage() {
     ),
     queryFn: () => coordinatorSubmissionsService.getOverview(phaseId),
     enabled: !!user?.workspaceId && section === "tracking",
+  });
+
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.coordinator.deliverableTemplates(
+      phaseId,
+      user?.workspaceId,
+    ),
+    queryFn: () => deliverableTemplateService.list(phaseId),
+    enabled: !!user?.workspaceId && section === "forwarded",
+  });
+
+  const teamsQuery = useQuery({
+    queryKey: queryKeys.coordinator.teams(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getTeams,
+    enabled: !!user?.workspaceId && section === "forwarded",
+  });
+
+  const usersQuery = useQuery({
+    queryKey: queryKeys.coordinator.users(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getUsers,
+    enabled: !!user?.workspaceId && section === "forwarded",
+  });
+
+  const evaluatorsQuery = useQuery({
+    queryKey: queryKeys.coordinator.evaluators(user?.workspaceId),
+    queryFn: submissionEvaluationService.listEvaluators,
+    enabled: !!user?.workspaceId && section === "forwarded",
   });
 
   const [remindingKey, setRemindingKey] = useState<string | null>(null);
@@ -228,10 +358,20 @@ export default function CoordinatorSubmissionsPage() {
     setPage(1);
   };
 
+  const resetPage = () => setPage(1);
+
   const pendingOverview = useMemo(
     () => (overviewQuery.data ?? []).filter((row) => row.pendingTeamCount > 0),
     [overviewQuery.data],
   );
+
+  const supervisors = useMemo(
+    () =>
+      (usersQuery.data ?? []).filter((userRecord) => userRecord.role === "SUPERVISOR"),
+    [usersQuery.data],
+  );
+
+  const teams = teamsQuery.data?.teams ?? [];
 
   const isLoading =
     section === "forwarded"
@@ -277,13 +417,6 @@ export default function CoordinatorSubmissionsPage() {
             Review finalized work and track supervisor submission progress.
           </p>
         </div>
-        <PhaseFilter
-          value={phaseFilter}
-          onChange={(value) => {
-            setPhaseFilter(value);
-            setPage(1);
-          }}
-        />
       </div>
 
       <SegmentedControl
@@ -301,8 +434,8 @@ export default function CoordinatorSubmissionsPage() {
             <div>
               <CardTitle>Finalized submissions</CardTitle>
               <CardDescription>
-                Work forwarded by supervisors, including team and supervisor
-                details.
+                Filter by phase, deliverable, supervisor, team, evaluation
+                status, and evaluator.
               </CardDescription>
             </div>
             <div className="flex gap-1 rounded-lg border p-1">
@@ -325,6 +458,112 @@ export default function CoordinatorSubmissionsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <PhaseFilter
+                value={phaseFilter}
+                onChange={(value) => {
+                  setPhaseFilter(value);
+                  resetPage();
+                }}
+              />
+              <Select
+                value={templateFilter}
+                onValueChange={(value) => {
+                  setTemplateFilter(value);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Deliverable" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_FILTER}>All deliverables</SelectItem>
+                  {(templatesQuery.data ?? []).map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={supervisorFilter}
+                onValueChange={(value) => {
+                  setSupervisorFilter(value);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Supervisor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_FILTER}>All supervisors</SelectItem>
+                  {supervisors.map((supervisor) => (
+                    <SelectItem key={supervisor.id} value={supervisor.id}>
+                      {supervisor.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={teamFilter}
+                onValueChange={(value) => {
+                  setTeamFilter(value);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_FILTER}>All teams</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={evaluationStatusFilter}
+                onValueChange={(value) => {
+                  setEvaluationStatusFilter(
+                    value as SubmissionEvaluationStatus | "all",
+                  );
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Evaluation status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVALUATION_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={evaluatorFilter}
+                onValueChange={(value) => {
+                  setEvaluatorFilter(value);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Evaluator" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_FILTER}>All evaluators</SelectItem>
+                  {(evaluatorsQuery.data ?? []).map((evaluator) => (
+                    <SelectItem key={evaluator.id} value={evaluator.id}>
+                      {evaluator.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-wrap items-center gap-3">
               <Select
                 value={sortBy}
@@ -360,7 +599,7 @@ export default function CoordinatorSubmissionsPage() {
 
             {submissions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No finalized submissions yet.
+                No finalized submissions match the current filters.
               </p>
             ) : viewMode === "list" ? (
               submissions.map((submission) => (
@@ -405,13 +644,19 @@ export default function CoordinatorSubmissionsPage() {
         </Card>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>Supervisor submission tracking</CardTitle>
-            <CardDescription>
-              {pendingOverview.length} supervisor deliverable group
-              {pendingOverview.length === 1 ? "" : "s"} still have pending
-              finalizations.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle>Supervisor submission tracking</CardTitle>
+              <CardDescription>
+                {pendingOverview.length} supervisor deliverable group
+                {pendingOverview.length === 1 ? "" : "s"} still have pending
+                finalizations.
+              </CardDescription>
+            </div>
+            <PhaseFilter
+              value={phaseFilter}
+              onChange={setPhaseFilter}
+            />
           </CardHeader>
           <CardContent>
             {overview.length === 0 ? (
@@ -456,60 +701,60 @@ export default function CoordinatorSubmissionsPage() {
                       const isReminding = remindingKey === rowKey;
 
                       return (
-                      <tr
-                        key={rowKey}
-                        className="border-b last:border-b-0"
-                      >
-                        <td className="px-3 py-3">{row.deliverableTitle}</td>
-                        <td className="px-3 py-3">{row.phaseName}</td>
-                        <td className="px-3 py-3">
-                          {row.supervisor.fullName}
-                        </td>
-                        <td className="px-3 py-3">{row.assignedTeamCount}</td>
-                        <td className="px-3 py-3">{row.submittedTeamCount}</td>
-                        <td className="px-3 py-3">
-                          <Badge
-                            variant={
-                              row.pendingTeamCount > 0
-                                ? "destructive"
-                                : "secondary"
-                            }
-                          >
-                            {row.pendingTeamCount}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3 font-medium">
-                          {row.progressLabel}
-                        </td>
-                        <td className="px-3 py-3 text-muted-foreground">
-                          {row.lastReminderSentAt
-                            ? formatDateTime(row.lastReminderSentAt)
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={
-                              row.pendingTeamCount === 0 || isReminding
-                            }
-                            onClick={() => {
-                              setRemindingKey(rowKey);
-                              reminderMutation.mutate({
-                                templateId: row.templateId,
-                                supervisorId: row.supervisorId,
-                              });
-                            }}
-                          >
-                            {isReminding ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Mail className="mr-2 h-4 w-4" />
-                            )}
-                            Send reminder
-                          </Button>
-                        </td>
-                      </tr>
+                        <tr
+                          key={rowKey}
+                          className="border-b last:border-b-0"
+                        >
+                          <td className="px-3 py-3">{row.deliverableTitle}</td>
+                          <td className="px-3 py-3">{row.phaseName}</td>
+                          <td className="px-3 py-3">
+                            {row.supervisor.fullName}
+                          </td>
+                          <td className="px-3 py-3">{row.assignedTeamCount}</td>
+                          <td className="px-3 py-3">{row.submittedTeamCount}</td>
+                          <td className="px-3 py-3">
+                            <Badge
+                              variant={
+                                row.pendingTeamCount > 0
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {row.pendingTeamCount}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-3 font-medium">
+                            {row.progressLabel}
+                          </td>
+                          <td className="px-3 py-3 text-muted-foreground">
+                            {row.lastReminderSentAt
+                              ? formatDateTime(row.lastReminderSentAt)
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                row.pendingTeamCount === 0 || isReminding
+                              }
+                              onClick={() => {
+                                setRemindingKey(rowKey);
+                                reminderMutation.mutate({
+                                  templateId: row.templateId,
+                                  supervisorId: row.supervisorId,
+                                });
+                              }}
+                            >
+                              {isReminding ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Mail className="mr-2 h-4 w-4" />
+                              )}
+                              Send reminder
+                            </Button>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>

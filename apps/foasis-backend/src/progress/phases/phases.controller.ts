@@ -38,6 +38,12 @@ export class PhasesController {
     return this.phasesService.listPhases(req.workspaceId, status);
   }
 
+  @Roles('COORDINATOR')
+  @Get(':id/weightage-validation')
+  validateWeightages(@Param('id') id: string) {
+    return this.phasesService.validatePhaseWeightages(id);
+  }
+
   @Roles('COORDINATOR', 'SUPERVISOR', 'STUDENT')
   @Get(':id')
   getPhase(@Param('id') id: string) {
@@ -60,6 +66,21 @@ export class PhasesController {
     @Body() dto: UpdatePhaseDto,
   ) {
     return this.phasesService.updatePhase(id, dto);
+  }
+
+  @Roles('COORDINATOR')
+  @Post(':id/publish-configuration')
+  publishPhaseConfiguration(@Param('id') id: string) {
+    return this.phasesService.publishPhaseConfiguration(id);
+  }
+
+  @Roles('COORDINATOR')
+  @Post(':id/recalculate-gpa')
+  recalculateGpa(
+    @Req() req: WorkspaceRequest,
+    @Param('id') id: string,
+  ) {
+    return this.phasesService.recalculatePhaseGpa(req.workspaceId, id);
   }
 
   @Roles('COORDINATOR')

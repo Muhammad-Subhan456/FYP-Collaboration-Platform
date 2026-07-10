@@ -5,10 +5,16 @@ import type {
   CoordinatorSubmissionOverviewRow,
   FinalizedSubmissionSortBy,
 } from "@/types/coordinator-submissions";
+import type { SubmissionEvaluationStatus } from "@/types/submission-evaluation";
 
 export const coordinatorSubmissionsService = {
   getFinalizedSubmissions: async (params?: {
     phaseId?: string;
+    templateId?: string;
+    supervisorId?: string;
+    teamId?: string;
+    evaluationStatus?: SubmissionEvaluationStatus;
+    evaluatorId?: string;
     page?: number;
     limit?: number;
     sortBy?: FinalizedSubmissionSortBy;

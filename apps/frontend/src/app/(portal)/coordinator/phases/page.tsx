@@ -19,6 +19,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -51,6 +52,8 @@ export default function CoordinatorPhasesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishingPhase, setPublishingPhase] = useState<Phase | null>(null);
   const [editing, setEditing] = useState<Phase | null>(null);
   const [form, setForm] = useState(emptyForm);
 
@@ -103,6 +106,33 @@ export default function CoordinatorPhasesPage() {
       });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (id: string) => phaseService.publishConfiguration(id),
+    onSuccess: () => {
+      toast.success("Phase configuration published");
+      setPublishDialogOpen(false);
+      setPublishingPhase(null);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.coordinator.phases(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.phases.list(),
+      });
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const weightageQuery = useQuery({
+    queryKey: [
+      "coordinator",
+      "phase-weightage",
+      publishingPhase?.id,
+      user?.workspaceId,
+    ],
+    queryFn: () => phaseService.validateWeightages(publishingPhase!.id),
+    enabled: publishDialogOpen && !!publishingPhase?.id,
   });
 
   if (phasesQuery.isLoading) return <DashboardSkeleton />;
@@ -174,6 +204,9 @@ export default function CoordinatorPhasesPage() {
                     <Badge variant={phase.status === "ACTIVE" ? "default" : "secondary"}>
                       {phase.status}
                     </Badge>
+                    {phase.isConfigurationPublished ? (
+                      <Badge variant="outline">Published config</Badge>
+                    ) : null}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {phase.creditHours} credit hours
@@ -185,6 +218,18 @@ export default function CoordinatorPhasesPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  {!phase.isConfigurationPublished ? (
+                    <Button
+                      size="sm"
+                      disabled={publishMutation.isPending}
+                      onClick={() => {
+                        setPublishingPhase(phase);
+                        setPublishDialogOpen(true);
+                      }}
+                    >
+                      Publish configuration
+                    </Button>
+                  ) : null}
                   <Button size="sm" variant="outline" onClick={() => openEdit(phase)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
@@ -293,6 +338,97 @@ export default function CoordinatorPhasesPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={publishDialogOpen}
+        onOpenChange={(open) => {
+          setPublishDialogOpen(open);
+          if (!open) {
+            setPublishingPhase(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish phase configuration</DialogTitle>
+            <DialogDescription>
+              Publishing locks deliverable weightages for{" "}
+              <strong>{publishingPhase?.name}</strong> and enables GPA
+              calculation once evaluations are complete. Weightages must total
+              exactly 100%.
+            </DialogDescription>
+          </DialogHeader>
+
+          {weightageQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking deliverable weightages...
+            </div>
+          ) : weightageQuery.isError ? (
+            <p className="text-sm text-destructive">
+              {getErrorMessage(weightageQuery.error)}
+            </p>
+          ) : weightageQuery.data ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/40">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Deliverable template</th>
+                      <th className="px-3 py-2 text-left">Weightage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weightageQuery.data.templates?.map((template: {
+                      id: string;
+                      title: string;
+                      weightagePercent: number;
+                    }) => (
+                      <tr key={template.id} className="border-b">
+                        <td className="px-3 py-2">{template.title}</td>
+                        <td className="px-3 py-2">
+                          {template.weightagePercent}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm">
+                Total weightage:{" "}
+                <strong>{weightageQuery.data.totalWeightage}%</strong>
+              </p>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPublishDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !publishingPhase ||
+                publishMutation.isPending ||
+                weightageQuery.isLoading ||
+                weightageQuery.isError ||
+                !weightageQuery.data?.isValid
+              }
+              onClick={() => {
+                if (!publishingPhase) return;
+                publishMutation.mutate(publishingPhase.id);
+              }}
+            >
+              {publishMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Publish configuration
             </Button>
           </DialogFooter>
         </DialogContent>
