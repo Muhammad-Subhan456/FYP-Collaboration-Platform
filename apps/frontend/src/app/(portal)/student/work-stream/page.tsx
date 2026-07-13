@@ -114,6 +114,9 @@ export default function StudentWorkStreamPage() {
     if (tab === "deliverables") {
       setMainTab("deliverables");
     }
+    if (tab === "announcements") {
+      setMainTab("announcements");
+    }
     if (announcementId) {
       setMainTab("announcements");
       setSelectedAnnouncementId(announcementId);

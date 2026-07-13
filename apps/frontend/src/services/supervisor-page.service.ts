@@ -1,10 +1,8 @@
 import api from "@/lib/axios";
-import type { EvaluationPanel } from "@/types/coordinator";
 import type { UserProfile } from "@/types/profile";
 import type {
   Announcement,
   Deliverable,
-  EvaluationResult,
   Proposal,
   Submission,
   TeamMember,
@@ -55,12 +53,6 @@ export interface SupervisorReviewsPageData {
   supervisedProposals: Proposal[];
   selectedDeliverableId: string | null;
   submissions: Submission[];
-}
-
-export interface SupervisorEvaluationsPageData {
-  panels: EvaluationPanel[];
-  teamNameById: Record<string, string>;
-  results: EvaluationResult[];
 }
 
 export const supervisorPageService = {
@@ -141,13 +133,6 @@ export const supervisorPageService = {
     const res = await api.get<SupervisorMilestonesPageData>(
       "/supervisor/milestones",
       { params: teamId ? { teamId } : undefined },
-    );
-    return res.data;
-  },
-
-  getEvaluations: async () => {
-    const res = await api.get<SupervisorEvaluationsPageData>(
-      "/supervisor/evaluations",
     );
     return res.data;
   },

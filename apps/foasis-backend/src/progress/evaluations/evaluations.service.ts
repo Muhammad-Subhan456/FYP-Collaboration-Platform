@@ -4,6 +4,9 @@ import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { TeamsService } from '../../teams/teams.service';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { AuthContextService } from '../../common/auth-context.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { LegacyEvaluationAssignedPayload } from '../../domain-events/domain-event.types';
 
 @Injectable()
 export class EvaluationsService {
@@ -12,6 +15,7 @@ export class EvaluationsService {
     private readonly teamsService: TeamsService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly authContext: AuthContextService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   async createEvaluation(
@@ -85,6 +89,20 @@ export class EvaluationsService {
     >[] = [];
 
     for (const teamId of uniqueTeamIds) {
+      const team = await this.prisma.team.findFirst({
+        where: {
+          id: teamId,
+          workspaceId: evaluation.workspaceId,
+        },
+        select: { id: true },
+      });
+
+      if (!team) {
+        throw new BadRequestException(
+          'One or more teams do not belong to this workspace',
+        );
+      }
+
       const existingAssignment =
         await this.prisma.evaluationAssignment.findFirst({
           where: {
@@ -127,12 +145,44 @@ export class EvaluationsService {
             }),
           ),
         );
+
+        const proposal = await this.prisma.proposal.findFirst({
+          where: { teamId },
+          select: { assignedSupervisorId: true },
+        });
+
+        if (proposal?.assignedSupervisorId) {
+          await this.notificationDispatch.send({
+            authUserId: proposal.assignedSupervisorId,
+            title: 'FOASIS Evaluation Scheduled',
+            message: `A supervised team has been scheduled for ${evaluation.title} on ${evaluation.date.toDateString()} at ${evaluation.venue}.`,
+            type: 'EVALUATION_ASSIGNED',
+            entityType: 'EVALUATION',
+            entityId: evaluationId,
+            route: '/supervisor/dashboard',
+          });
+        }
       } catch (error: any) {
         console.error(
           'Failed to create evaluation assignment notifications',
           error.message,
         );
       }
+
+      this.domainEventService.emitSafe<LegacyEvaluationAssignedPayload>({
+        name: DomainEvents.EVALUATION_ASSIGNED,
+        timestamp: new Date().toISOString(),
+        scope: { type: 'workspace', id: evaluation.workspaceId },
+        entity: { type: 'EVALUATION', id: evaluationId },
+        payload: {
+          workspaceId: evaluation.workspaceId,
+          evaluationId,
+          teamId,
+          title: evaluation.title,
+          date: evaluation.date.toISOString(),
+          venue: evaluation.venue,
+        },
+      });
     }
 
     return assignments;

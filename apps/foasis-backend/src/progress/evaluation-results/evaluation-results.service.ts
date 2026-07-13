@@ -11,6 +11,9 @@ import { UpdateResultDto } from './dto/update-result.dto';
 import { TeamsService } from '../../teams/teams.service';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { AuthContextService } from '../../common/auth-context.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { LegacyResultPayload } from '../../domain-events/domain-event.types';
 
 @Injectable()
 export class EvaluationResultsService {
@@ -19,6 +22,7 @@ export class EvaluationResultsService {
     private readonly teamsService: TeamsService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly authContext: AuthContextService,
+    private readonly domainEventService: DomainEventService,
   ) {}
 
   private async notifyTeam(
@@ -120,6 +124,20 @@ export class EvaluationResultsService {
       evaluatorId,
     );
 
+    const team = await this.prisma.team.findFirst({
+      where: {
+        id: dto.teamId,
+        workspaceId: evaluation.workspaceId,
+      },
+      select: { id: true },
+    });
+
+    if (!team) {
+      throw new BadRequestException(
+        'Team does not belong to this workspace',
+      );
+    }
+
     const existingResult =
       await this.prisma.evaluationResult.findFirst({
         where: {
@@ -151,6 +169,21 @@ export class EvaluationResultsService {
       entityType: 'EVALUATION_RESULT',
       entityId: result.id,
       route: '/student/results',
+    });
+
+    this.domainEventService.emitSafe<LegacyResultPayload>({
+      name: DomainEvents.RESULT_PUBLISHED,
+      timestamp: new Date().toISOString(),
+      actorId: evaluatorId,
+      scope: { type: 'workspace', id: evaluation.workspaceId },
+      entity: { type: 'EVALUATION_RESULT', id: result.id },
+      payload: {
+        workspaceId: evaluation.workspaceId,
+        evaluationId,
+        teamId: dto.teamId,
+        resultId: result.id,
+        marks: dto.marks,
+      },
     });
 
     return result;
@@ -195,6 +228,24 @@ export class EvaluationResultsService {
         route: '/student/results',
       });
 
+      this.domainEventService.emitSafe<LegacyResultPayload>({
+        name: DomainEvents.RESULT_UPDATED,
+        timestamp: new Date().toISOString(),
+        actorId: evaluatorId,
+        scope: {
+          type: 'workspace',
+          id: updated.evaluation.workspaceId,
+        },
+        entity: { type: 'EVALUATION_RESULT', id: updated.id },
+        payload: {
+          workspaceId: updated.evaluation.workspaceId,
+          evaluationId: updated.evaluationId,
+          teamId: updated.teamId,
+          resultId: updated.id,
+          marks: dto.marks ?? updated.marks,
+        },
+      });
+
       return updated;
     });
   }
@@ -205,24 +256,34 @@ export class EvaluationResultsService {
     requesterRole?: string,
   ) {
     if (requesterRole === 'SUPERVISOR' && requesterId) {
-      const assignment =
-        await this.prisma.evaluationAssignment.findFirst({
-          where: {
-            teamId,
-            panel: {
-              evaluators: {
-                some: {
-                  evaluatorId: requesterId,
+      const supervised = await this.prisma.proposal.findFirst({
+        where: {
+          teamId,
+          assignedSupervisorId: requesterId,
+        },
+        select: { id: true },
+      });
+
+      if (!supervised) {
+        const assignment =
+          await this.prisma.evaluationAssignment.findFirst({
+            where: {
+              teamId,
+              panel: {
+                evaluators: {
+                  some: {
+                    evaluatorId: requesterId,
+                  },
                 },
               },
             },
-          },
-        });
+          });
 
-      if (!assignment) {
-        throw new ForbiddenException(
-          'You can only view results for teams on your evaluation panels',
-        );
+        if (!assignment) {
+          throw new ForbiddenException(
+            'You can only view results for teams you supervise or evaluate',
+          );
+        }
       }
     }
 

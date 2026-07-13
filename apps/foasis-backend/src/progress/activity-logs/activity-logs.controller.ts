@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { InternalApiKeyGuard } from '../../common/guards/internal-api-key.guard';
 
 import { ActivityLogsService } from './activity-logs.service';
@@ -21,7 +23,8 @@ export class ActivityLogsController {
       ActivityLogsService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR', 'EVALUATOR')
   @Get('my')
   getMyLogs(
     @Req() req: any,

@@ -1,13 +1,14 @@
 "use client";
 
-import { CheckSquare, Flag, Inbox, Package, Users } from "lucide-react";
+import Link from "next/link";
+import { CheckSquare, Inbox, Package, Users } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { GlobalAnnouncementsCard } from "@/components/dashboard/global-announcements-card";
 import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
 import { ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,7 +18,8 @@ import {
 } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/axios";
 import { useSupervisorDashboardQuery } from "@/queries/supervisor";
-import { pluralize } from "@/lib/format";
+
+const DASHBOARD_WIDGET_LIMIT = 3;
 
 function StatCard({
   title,
@@ -75,60 +77,28 @@ export default function SupervisorDashboardPage() {
   }
 
   const stats = overview.stats;
-  const deliverables = overview.deliverables;
-  const pendingRequests = overview.pendingRequests;
-  const supervisedTeams = overview.supervisedTeams;
+  const deliverables = overview.deliverables.slice(0, DASHBOARD_WIDGET_LIMIT);
+  const pendingRequests = overview.pendingRequests.slice(
+    0,
+    DASHBOARD_WIDGET_LIMIT,
+  );
+  const supervisedTeams = overview.supervisedTeams.slice(
+    0,
+    DASHBOARD_WIDGET_LIMIT,
+  );
   const teamCount =
-    supervisedTeams.length ||
+    overview.supervisedTeams.length ||
     stats.supervisedTeams ||
     stats.activeTeams ||
     0;
 
-  const insightLines: string[] = [
-    `You supervise ${pluralize(teamCount, "team")}.`,
-  ];
-  if ((stats.pendingReviews ?? 0) > 0) {
-    insightLines.push(
-      `${pluralize(stats.pendingReviews, "submission")} require review.`,
-    );
-  }
-  if (pendingRequests.length > 0) {
-    insightLines.push(
-      `${pluralize(pendingRequests.length, "proposal request")} awaiting your response.`,
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <DashboardInsights lines={insightLines} />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Open Issues"
-          value={stats.openIssues ?? 0}
-          icon={Flag}
-        />
-        <StatCard
-          title="In Progress"
-          value={stats.inProgressIssues ?? 0}
-          icon={Flag}
-        />
-        <StatCard
-          title="Recently Completed"
-          value={stats.recentlyCompletedIssues ?? 0}
-          icon={Flag}
-        />
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Active Teams"
-          value={teamCount}
-          icon={Users}
-        />
+        <StatCard title="Active Teams" value={teamCount} icon={Users} />
         <StatCard
           title="Deliverables"
-          value={deliverables.length}
+          value={overview.deliverables.length}
           icon={Package}
         />
         <StatCard
@@ -138,24 +108,35 @@ export default function SupervisorDashboardPage() {
         />
         <StatCard
           title="Pending Requests"
-          value={pendingRequests.length}
+          value={overview.pendingRequests.length}
           icon={Inbox}
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Supervised Teams</CardTitle>
-            <CardDescription>Teams currently under your supervision</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle>Supervised Teams</CardTitle>
+              <CardDescription>
+                Teams currently under your supervision
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/supervisor/teams">View all</Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {supervisedTeams.length > 0 ? (
-              supervisedTeams.slice(0, 5).map((p) => (
-                <div key={p.id} className="rounded-lg border p-3 text-sm">
-                  <p className="font-medium">{p.title}</p>
-                  <p className="text-muted-foreground">{p.domain}</p>
-                </div>
+              supervisedTeams.map((team) => (
+                <Link
+                  key={team.id}
+                  href={`/supervisor/teams?teamId=${encodeURIComponent(team.teamId)}`}
+                  className="block rounded-lg border p-3 text-sm transition-colors hover:bg-muted/50"
+                >
+                  <p className="font-medium">{team.title}</p>
+                  <p className="text-muted-foreground">{team.domain}</p>
+                </Link>
               ))
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -166,34 +147,54 @@ export default function SupervisorDashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Pending Proposal Requests</CardTitle>
-            <CardDescription>Students awaiting your approval</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle>Pending Proposal Requests</CardTitle>
+              <CardDescription>Students awaiting your approval</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/supervisor/requests">View all</Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {pendingRequests.length > 0 ? (
-              pendingRequests.slice(0, 5).map((r) => (
-                <div key={r.id} className="rounded-lg border p-3 text-sm">
-                  <p className="font-medium">{r.proposal?.title ?? "Proposal request"}</p>
+              pendingRequests.map((r) => (
+                <Link
+                  key={r.id}
+                  href="/supervisor/requests"
+                  className="block rounded-lg border p-3 text-sm transition-colors hover:bg-muted/50"
+                >
+                  <p className="font-medium">
+                    {r.proposal?.title ?? "Proposal request"}
+                  </p>
                   <Badge variant="warning" className="mt-1">
                     Pending
                   </Badge>
-                </div>
+                </Link>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No pending requests.</p>
+              <p className="text-sm text-muted-foreground">
+                No pending requests.
+              </p>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Deliverables</CardTitle>
-            <CardDescription>Recently created deliverables</CardDescription>
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle>Your Deliverables</CardTitle>
+              <CardDescription>Recently created deliverables</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/supervisor/work-stream?tab=deliverables">
+                View all
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {deliverables.length > 0 ? (
-              deliverables.slice(0, 5).map((d) => (
+              deliverables.map((d) => (
                 <div
                   key={d.id}
                   className="flex items-center justify-between rounded-lg border p-3 text-sm"
@@ -213,8 +214,16 @@ export default function SupervisorDashboardPage() {
         </Card>
       </div>
 
-      <GlobalAnnouncementsCard announcements={overview.globalAnnouncements} />
-      <RecentActivityFeed recentActivity={overview.recentActivity} />
+      <GlobalAnnouncementsCard
+        announcements={overview.globalAnnouncements}
+        limit={DASHBOARD_WIDGET_LIMIT}
+        viewAllDialog
+      />
+      <RecentActivityFeed
+        recentActivity={overview.recentActivity}
+        displayLimit={DASHBOARD_WIDGET_LIMIT}
+        viewAllHref="/supervisor/notifications"
+      />
     </div>
   );
 }

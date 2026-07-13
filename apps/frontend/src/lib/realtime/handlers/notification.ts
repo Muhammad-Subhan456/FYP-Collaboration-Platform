@@ -93,7 +93,8 @@ export function handleNotificationCreated(
         query.queryKey.length >= 3 &&
         (query.queryKey[0] === "student" ||
           query.queryKey[0] === "supervisor" ||
-          query.queryKey[0] === "coordinator") &&
+          query.queryKey[0] === "coordinator" ||
+          query.queryKey[0] === "evaluator") &&
         query.queryKey[1] === "me" &&
         (workspaceId == null || query.queryKey.includes(workspaceId)),
     }).forEach((query) => {

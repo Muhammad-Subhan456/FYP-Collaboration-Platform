@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../../auth/auth.module';
+import { AppUrlsService } from '../../common/app-urls.service';
 import { NotificationsModule } from '../../notifications/notifications.module';
-import { TeamsModule } from '../../teams/teams.module';
 import { ProgressCommonModule } from '../common/common.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
 
@@ -17,7 +17,7 @@ import { SubmissionsService } from './submissions.service';
     AuthModule,
   ],
   controllers: [SubmissionsController],
-  providers: [SubmissionsService],
+  providers: [SubmissionsService, AppUrlsService],
   exports: [SubmissionsService],
 })
 export class SubmissionsModule {}

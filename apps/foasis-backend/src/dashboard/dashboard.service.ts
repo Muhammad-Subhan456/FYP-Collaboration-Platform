@@ -9,6 +9,7 @@ import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
+import { SubmissionEvaluationsService } from '../progress/submission-evaluations/submission-evaluations.service';
 import { StatsService } from '../progress/stats/stats.service';
 import { AnnouncementsService } from '../progress/announcements/announcements.service';
 import { GlobalAnnouncementsService } from '../progress/global-announcements/global-announcements.service';
@@ -25,7 +26,34 @@ const EMPTY_STUDENT_STATS = {
   upcomingEvaluations: 0,
 };
 
+/** Dashboard overview widgets only need a short preview list. */
+const OVERVIEW_LIST_LIMIT = 3;
+
 type DashboardRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR';
+
+function takeTop<T>(items: T[], limit = OVERVIEW_LIST_LIMIT): T[] {
+  return items.slice(0, limit);
+}
+
+function dueTime(value: Date | string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function pickRecentByCreatedAt<
+  T extends { createdAt?: Date | string | null },
+>(items: T[], limit = OVERVIEW_LIST_LIMIT): T[] {
+  return [...items]
+    .sort((a, b) => {
+      const aTime = dueTime(a.createdAt) ?? 0;
+      const bTime = dueTime(b.createdAt) ?? 0;
+      return bTime - aTime;
+    })
+    .slice(0, limit);
+}
 
 @Injectable()
 export class DashboardService {
@@ -37,6 +65,7 @@ export class DashboardService {
     private readonly statsService: StatsService,
     private readonly deliverablesService: DeliverablesService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly submissionEvaluationsService: SubmissionEvaluationsService,
     private readonly announcementsService: AnnouncementsService,
     private readonly globalAnnouncementsService: GlobalAnnouncementsService,
     private readonly notificationsService: NotificationsService,
@@ -227,23 +256,37 @@ export class DashboardService {
       stats,
       deliverables,
       evaluations,
+      deliverableEvaluations,
       teamMembers,
       announcements,
       supervisor,
     ] = await Promise.all([
       this.globalAnnouncementsService
-        .getAnnouncements(workspaceId, 'STUDENT')
+        .getAnnouncements(workspaceId, 'STUDENT', {
+          page: 1,
+          limit: OVERVIEW_LIST_LIMIT,
+        })
+        .then((result) =>
+          Array.isArray(result) ? result : result.data,
+        )
         .catch(() => []),
       this.notificationsService
-        .getMyNotifications(authUserId, 1, 20)
+        .getMyNotifications(
+          authUserId,
+          1,
+          OVERVIEW_LIST_LIMIT,
+        )
         .catch(() => ({
           data: [],
-          total: 0,
-          page: 1,
-          limit: 20,
+          meta: {
+            total: 0,
+            page: 1,
+            limit: OVERVIEW_LIST_LIMIT,
+            totalPages: 0,
+          },
         })),
       this.activityLogsService
-        .getMyLogs(authUserId)
+        .getMyLogs(authUserId, OVERVIEW_LIST_LIMIT)
         .catch(() => []),
       teamId
         ? this.statsService
@@ -255,15 +298,24 @@ export class DashboardService {
             .catch(() => EMPTY_STUDENT_STATS)
         : Promise.resolve(EMPTY_STUDENT_STATS),
       this.deliverablesService
-        .getForMyTeamByUserId(
-          authUserId,
+        .getUpcomingForTeamDashboard(
           supervisorId,
+          teamId,
+          OVERVIEW_LIST_LIMIT,
         )
         .catch(() => []),
       teamId
         ? this.evaluationsService
             .getMyEvaluationsByUserId(
               authUserId,
+              teamId,
+            )
+            .catch(() => [])
+        : Promise.resolve([]),
+      teamId
+        ? this.submissionEvaluationsService
+            .getTeamDeliverableEvaluationStatuses(
+              workspaceId,
               teamId,
             )
             .catch(() => [])
@@ -286,14 +338,45 @@ export class DashboardService {
         : Promise.resolve(null),
     ]);
 
+    const upcomingLegacyEvaluations = takeTop(
+      [...evaluations]
+        .filter(
+          (item: {
+            evaluation?: { date?: Date | string | null };
+          }) => Boolean(item.evaluation?.date),
+        )
+        .sort(
+          (
+            a: { evaluation: { date: Date | string } },
+            b: { evaluation: { date: Date | string } },
+          ) =>
+            new Date(a.evaluation.date).getTime() -
+            new Date(b.evaluation.date).getTime(),
+        ),
+    );
+
+    const openDeliverableEvaluations = takeTop(
+      [...deliverableEvaluations].sort(
+        (
+          a: { status: string },
+          b: { status: string },
+        ) => {
+          const rank = (status: string) =>
+            status === 'SUBMITTED' ? 1 : 0;
+          return rank(a.status) - rank(b.status);
+        },
+      ),
+    );
+
     return {
       team,
       proposal,
       stats,
       deliverables,
-      evaluations,
+      evaluations: upcomingLegacyEvaluations,
+      deliverableEvaluations: openDeliverableEvaluations,
       teamMembers,
-      announcements,
+      announcements: pickRecentByCreatedAt(announcements),
       globalAnnouncements,
       supervisor,
       recentActivity: {
@@ -316,21 +399,37 @@ export class DashboardService {
       supervised,
     ] = await Promise.all([
       this.globalAnnouncementsService
-        .getAnnouncements(workspaceId, 'SUPERVISOR')
+        .getAnnouncements(workspaceId, 'SUPERVISOR', {
+          page: 1,
+          limit: OVERVIEW_LIST_LIMIT,
+        })
+        .then((result) =>
+          Array.isArray(result) ? result : result.data,
+        )
         .catch(() => []),
       this.notificationsService
-        .getMyNotifications(supervisorId, 1, 20)
+        .getMyNotifications(
+          supervisorId,
+          1,
+          OVERVIEW_LIST_LIMIT,
+        )
         .catch(() => ({
           data: [],
-          total: 0,
-          page: 1,
-          limit: 20,
+          meta: {
+            total: 0,
+            page: 1,
+            limit: OVERVIEW_LIST_LIMIT,
+            totalPages: 0,
+          },
         })),
       this.activityLogsService
-        .getMyLogs(supervisorId)
+        .getMyLogs(supervisorId, OVERVIEW_LIST_LIMIT)
         .catch(() => []),
       this.deliverablesService
-        .getMyDeliverables(supervisorId)
+        .getRecentForSupervisorDashboard(
+          supervisorId,
+          OVERVIEW_LIST_LIMIT,
+        )
         .catch(() => []),
       this.proposalsService
         .getSupervisorRequests(supervisorId)
@@ -355,8 +454,13 @@ export class DashboardService {
         supervisedTeams,
       },
       deliverables,
-      pendingRequests: requests,
-      supervisedTeams: supervised,
+      pendingRequests: takeTop(requests),
+      supervisedTeams: takeTop(supervised).map((proposal) => ({
+        id: proposal.id,
+        teamId: proposal.teamId,
+        title: proposal.title,
+        domain: proposal.domain,
+      })),
       globalAnnouncements,
       recentActivity: {
         notifications,
@@ -381,18 +485,30 @@ export class DashboardService {
       this.globalAnnouncementsService
         .getAnnouncements(workspaceId, 'COORDINATOR', {
           coordinatorView: true,
+          page: 1,
+          limit: OVERVIEW_LIST_LIMIT,
         })
+        .then((result) =>
+          Array.isArray(result) ? result : result.data,
+        )
         .catch(() => []),
       this.notificationsService
-        .getMyNotifications(authUserId, 1, 20)
+        .getMyNotifications(
+          authUserId,
+          1,
+          OVERVIEW_LIST_LIMIT,
+        )
         .catch(() => ({
           data: [],
-          total: 0,
-          page: 1,
-          limit: 20,
+          meta: {
+            total: 0,
+            page: 1,
+            limit: OVERVIEW_LIST_LIMIT,
+            totalPages: 0,
+          },
         })),
       this.activityLogsService
-        .getMyLogs(authUserId)
+        .getMyLogs(authUserId, OVERVIEW_LIST_LIMIT)
         .catch(() => []),
       this.authService.getUserStats(workspaceId),
       this.teamsService.getTeamCountForCoordinator(workspaceId),

@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 
+import { AppUrlsService } from '../common/app-urls.service';
 import { ActivityLogsModule } from '../progress/activity-logs/activity-logs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { TeamsModule } from '../teams/teams.module';
@@ -14,7 +15,7 @@ import { ProposalsService } from './proposals.service';
     forwardRef(() => ActivityLogsModule),
   ],
   controllers: [ProposalsController],
-  providers: [ProposalsService],
+  providers: [ProposalsService, AppUrlsService],
   exports: [ProposalsService],
 })
 export class ProposalsModule {}

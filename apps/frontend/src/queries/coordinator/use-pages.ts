@@ -48,22 +48,6 @@ export function useCoordinatorAnnouncementsQuery() {
   );
 }
 
-export function useCoordinatorSystemHealthQuery() {
-  const { user } = useAuth();
-
-  return useQuery({
-    ...coordinatorPageQueryOptions,
-    staleTime: 0,
-    queryKey: queryKeys.coordinator.systemHealth(
-      user?.userId,
-      user?.workspaceId,
-    ),
-    queryFn: coordinatorPageService.getSystemHealth,
-    enabled: !!user?.userId,
-    refetchInterval: 30_000,
-  });
-}
-
 export function useCoordinatorProfileQuery() {
   const { user } = useAuth();
 

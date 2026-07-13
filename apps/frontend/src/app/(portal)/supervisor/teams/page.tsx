@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ChevronDown, ChevronUp, Eye, Users } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
+import {
+  ProfileAvatar,
+  ProfileViewModal,
+} from "@/components/profile/profile-view-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,14 +30,26 @@ import {
 import type { TeamMember } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
 
+function memberLabel(
+  profiles: Record<string, UserProfile>,
+  authUserId: string,
+) {
+  const profile = profiles[authUserId];
+  const name = getDisplayName(profiles, authUserId);
+  const registration = profile?.registrationNumber?.trim();
+  return registration ? `${name} — ${registration}` : name;
+}
+
 function TeamMembers({
   teamId,
   membersByTeamId,
   profiles,
+  onViewProfile,
 }: {
   teamId: string;
   membersByTeamId: Record<string, TeamMember[]>;
   profiles: Record<string, UserProfile>;
+  onViewProfile: (profile: UserProfile) => void;
 }) {
   const members = membersByTeamId[teamId] ?? [];
 
@@ -44,25 +61,65 @@ function TeamMembers({
 
   return (
     <ul className="space-y-2">
-      {members.map((member) => (
-        <li
-          key={member.id}
-          className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
-        >
-          <span>{getDisplayName(profiles, member.authUserId)}</span>
-          <span className="text-muted-foreground">
-            Joined {formatDate(member.joinedAt)}
-          </span>
-        </li>
-      ))}
+      {members.map((member) => {
+        const profile = profiles[member.authUserId];
+        return (
+          <li
+            key={member.id}
+            className="flex flex-col gap-3 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <ProfileAvatar profile={profile} className="h-9 w-9 shrink-0" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  {memberLabel(profiles, member.authUserId)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Joined {formatDate(member.joinedAt)}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              disabled={!profile}
+              onClick={() => profile && onViewProfile(profile)}
+            >
+              <Eye className="h-4 w-4" />
+              View Profile
+            </Button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 export default function SupervisorTeamsPage() {
-  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const focusTeamId = searchParams.get("teamId");
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(
+    focusTeamId,
+  );
+  const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
 
   const pageQuery = useSupervisorTeamsQuery();
+
+  useEffect(() => {
+    if (focusTeamId) {
+      setExpandedTeamId(focusTeamId);
+    }
+  }, [focusTeamId]);
+
+  useEffect(() => {
+    if (!focusTeamId || !pageQuery.data) {
+      return;
+    }
+    const el = document.getElementById(`team-${focusTeamId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusTeamId, pageQuery.data]);
 
   if (isSupervisorQueryInitialLoading(pageQuery)) return <DashboardSkeleton />;
 
@@ -81,6 +138,14 @@ export default function SupervisorTeamsPage() {
 
   return (
     <div className="space-y-6">
+      <ProfileViewModal
+        profile={viewProfile}
+        open={!!viewProfile}
+        onOpenChange={(open) => {
+          if (!open) setViewProfile(null);
+        }}
+      />
+
       <div>
         <h2 className="text-lg font-semibold">Supervised Teams</h2>
         <p className="text-sm text-muted-foreground">
@@ -103,8 +168,13 @@ export default function SupervisorTeamsPage() {
           {proposals.map((proposal) => {
             const expanded = expandedTeamId === proposal.teamId;
             const leaderId = proposal.teamLeaderAuthUserId;
+            const focused = focusTeamId === proposal.teamId;
             return (
-              <Card key={proposal.id}>
+              <Card
+                key={proposal.id}
+                id={`team-${proposal.teamId}`}
+                className={focused ? "ring-2 ring-primary/30" : undefined}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -123,7 +193,7 @@ export default function SupervisorTeamsPage() {
                   </p>
                   {leaderId && (
                     <p className="text-sm text-muted-foreground">
-                      Team leader: {getDisplayName(profiles, leaderId)}
+                      Team leader: {memberLabel(profiles, leaderId)}
                     </p>
                   )}
                   <Button
@@ -147,6 +217,7 @@ export default function SupervisorTeamsPage() {
                       teamId={proposal.teamId}
                       membersByTeamId={membersByTeamId}
                       profiles={profiles}
+                      onViewProfile={setViewProfile}
                     />
                   )}
                 </CardContent>

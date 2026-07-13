@@ -127,7 +127,8 @@ export class SubmissionsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get(':deliverableId/team/:teamId/latest')
   getLatestSubmission(
     @Req() req: any,
@@ -144,7 +145,8 @@ export class SubmissionsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get(':deliverableId/team/:teamId/history')
   getSubmissionHistory(
     @Req() req: any,
@@ -161,7 +163,8 @@ export class SubmissionsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get('team/:teamId')
   getTeamSubmissions(
     @Req() req: any,

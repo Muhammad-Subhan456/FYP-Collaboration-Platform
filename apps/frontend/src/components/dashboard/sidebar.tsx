@@ -22,6 +22,9 @@ import {
   Building2,
   UserCog,
   Server,
+  Layers,
+  FileStack,
+  FileCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +53,9 @@ const iconMap: Record<string, LucideIcon> = {
   Building2,
   UserCog,
   Server,
+  Layers,
+  FileStack,
+  FileCheck,
 };
 
 interface SidebarProps {

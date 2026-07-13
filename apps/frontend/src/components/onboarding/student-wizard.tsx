@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -23,31 +22,20 @@ import {
 } from "@/components/ui/select";
 import { getDashboardPath } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/axios";
+import {
+  studentOnboardingSchema,
+  type StudentProfileFormValues,
+} from "@/lib/validation/student-profile";
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
 import { useAuth } from "@/providers/auth-provider";
 
-const schema = z.object({
-  fullName: z.string().min(2, "Full name is required"),
-  email: z.union([z.string().email("Enter a valid email"), z.literal("")]).optional(),
-  registrationNumber: z.string().min(1, "Registration number is required"),
-  department: z.enum(["CS", "SE", "IT", "AI", "DS"]),
-  batch: z.string().min(1, "Batch is required"),
-  degreeProgram: z.string().min(1, "Degree program is required"),
-  semester: z.number().min(1, "Semester is required").max(12),
-  skills: z.string().optional(),
-  interests: z.string().optional(),
-  linkedIn: z.string().optional(),
-  github: z.string().optional(),
-  bio: z.string().optional(),
-});
-
-type FormData = z.infer<typeof schema>;
+type FormData = StudentProfileFormValues;
 
 const STEPS = ["Basic Info", "Academic", "Skills", "Social Links", "Finish"];
 
 const STEP_FIELDS: Array<Array<keyof FormData>> = [
-  ["fullName", "email"],
+  ["fullName"],
   ["registrationNumber", "department", "batch", "degreeProgram", "semester"],
   ["skills", "interests", "bio"],
   ["linkedIn", "github"],
@@ -62,11 +50,19 @@ export function StudentOnboardingWizard() {
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(studentOnboardingSchema),
     defaultValues: {
       department: "CS",
       semester: 7,
-      fullName: user?.email?.split("@")[0] ?? "",
+      fullName: "",
+      registrationNumber: "",
+      batch: "",
+      degreeProgram: "",
+      skills: "",
+      interests: "",
+      linkedIn: "",
+      github: "",
+      bio: "",
     },
   });
 
@@ -79,6 +75,15 @@ export function StudentOnboardingWizard() {
     formState: { errors },
   } = form;
   const department = watch("department");
+
+  useEffect(() => {
+    if (user?.email) {
+      const suggestedName = user.email.split("@")[0] ?? "";
+      if (suggestedName && !form.getValues("fullName")) {
+        setValue("fullName", suggestedName.replace(/[._]/g, " "));
+      }
+    }
+  }, [user?.email, form, setValue]);
 
   const goToStepWithError = (field: keyof FormData) => {
     const stepIndex = STEP_FIELDS.findIndex((fields) =>
@@ -117,7 +122,7 @@ export function StudentOnboardingWizard() {
 
       const created = await profileService.createStudentProfile({
         fullName: data.fullName.trim(),
-        email: data.email?.trim() || user.email,
+        email: user.email,
         profilePicture,
         registrationNumber: data.registrationNumber.trim(),
         department: data.department,
@@ -197,11 +202,16 @@ export function StudentOnboardingWizard() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Email (optional)</Label>
-                <Input {...register("email")} placeholder={user?.email} />
-                {errors.email && (
-                  <p className="text-sm text-destructive">{errors.email.message}</p>
-                )}
+                <Label>Email</Label>
+                <Input
+                  value={user?.email ?? ""}
+                  readOnly
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Taken from your FOASIS account and cannot be changed here.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Profile Picture (optional)</Label>
@@ -247,6 +257,8 @@ export function StudentOnboardingWizard() {
                   <Label>Semester *</Label>
                   <Input
                     type="number"
+                    min={1}
+                    max={12}
                     {...register("semester", { valueAsNumber: true })}
                   />
                   {errors.semester && (
@@ -277,14 +289,23 @@ export function StudentOnboardingWizard() {
               <div className="space-y-2">
                 <Label>Skills (optional, comma-separated)</Label>
                 <Textarea {...register("skills")} placeholder="React, Python, ML" />
+                {errors.skills && (
+                  <p className="text-sm text-destructive">{errors.skills.message}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Interests (optional, comma-separated)</Label>
                 <Textarea {...register("interests")} placeholder="Web Dev, AI" />
+                {errors.interests && (
+                  <p className="text-sm text-destructive">{errors.interests.message}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Bio (optional)</Label>
-                <Textarea {...register("bio")} />
+                <Textarea {...register("bio")} maxLength={1000} />
+                {errors.bio && (
+                  <p className="text-sm text-destructive">{errors.bio.message}</p>
+                )}
               </div>
             </>
           )}
@@ -293,10 +314,16 @@ export function StudentOnboardingWizard() {
               <div className="space-y-2">
                 <Label>LinkedIn URL (optional)</Label>
                 <Input {...register("linkedIn")} placeholder="https://linkedin.com/in/..." />
+                {errors.linkedIn && (
+                  <p className="text-sm text-destructive">{errors.linkedIn.message}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>GitHub URL (optional)</Label>
                 <Input {...register("github")} placeholder="https://github.com/..." />
+                {errors.github && (
+                  <p className="text-sm text-destructive">{errors.github.message}</p>
+                )}
               </div>
             </>
           )}

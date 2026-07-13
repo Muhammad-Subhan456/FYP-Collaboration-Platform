@@ -61,6 +61,7 @@ export default function EvaluatorDashboardPage() {
       <GlobalAnnouncementsCard
         announcements={data?.globalAnnouncements ?? []}
         emptyMessage="No program announcements for evaluators yet."
+        limit={3}
       />
     </div>
   );

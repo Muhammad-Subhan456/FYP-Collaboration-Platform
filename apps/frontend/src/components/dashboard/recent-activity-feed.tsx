@@ -1,9 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { Activity } from "lucide-react";
 
-import { ScrollableFeed } from "@/components/common/scrollable-feed";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -18,6 +18,9 @@ import type { PaginatedResponse } from "@/types";
 interface RecentActivityFeedProps {
   fetchLimit?: number;
   className?: string;
+  /** When set, only the first N merged items are shown. */
+  displayLimit?: number;
+  viewAllHref?: string;
   recentActivity?: {
     notifications: PaginatedResponse<Notification>;
     activityLogs: ActivityLog[];
@@ -27,6 +30,8 @@ interface RecentActivityFeedProps {
 export function RecentActivityFeed({
   fetchLimit = 20,
   className,
+  displayLimit,
+  viewAllHref,
   recentActivity,
 }: RecentActivityFeedProps) {
   const { notificationsQuery, activityQuery } = useRecentActivityFeedQuery(
@@ -51,10 +56,15 @@ export function RecentActivityFeed({
       createdAt: item.createdAt,
     })) ?? [];
 
-  const items = [...notificationItems, ...activityItems].sort(
+  const allItems = [...notificationItems, ...activityItems].sort(
     (a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+
+  const items =
+    typeof displayLimit === "number"
+      ? allItems.slice(0, displayLimit)
+      : allItems;
 
   const isLoading =
     !recentActivity &&
@@ -62,36 +72,39 @@ export function RecentActivityFeed({
 
   return (
     <Card className={className}>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-start justify-between gap-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Activity className="h-4 w-4" />
           Recent Activity
         </CardTitle>
+        {viewAllHref ? (
+          <Button variant="ghost" size="sm" className="shrink-0" asChild>
+            <Link href={viewAllHref}>View all</Link>
+          </Button>
+        ) : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading activity...</p>
         ) : items.length > 0 ? (
-          <ScrollableFeed>
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{item.title}</p>
-                  {item.description && (
-                    <p className="line-clamp-2 text-muted-foreground">
-                      {item.description}
-                    </p>
-                  )}
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatDateTime(item.createdAt)}
-                </span>
+          items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">{item.title}</p>
+                {item.description && (
+                  <p className="line-clamp-2 text-muted-foreground">
+                    {item.description}
+                  </p>
+                )}
               </div>
-            ))}
-          </ScrollableFeed>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {formatDateTime(item.createdAt)}
+              </span>
+            </div>
+          ))
         ) : (
           <p className="text-sm text-muted-foreground">
             No recent activity yet. Updates will appear here as you use FOASIS.

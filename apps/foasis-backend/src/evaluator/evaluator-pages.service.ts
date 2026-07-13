@@ -39,7 +39,13 @@ export class EvaluatorPagesService {
           })),
         workspaceId
           ? this.globalAnnouncementsService
-              .getAnnouncements(workspaceId, 'EVALUATOR')
+              .getAnnouncements(workspaceId, 'EVALUATOR', {
+                page: 1,
+                limit: 3,
+              })
+              .then((result) =>
+                Array.isArray(result) ? result : result.data,
+              )
               .catch(() => [])
           : Promise.resolve([]),
       ]);

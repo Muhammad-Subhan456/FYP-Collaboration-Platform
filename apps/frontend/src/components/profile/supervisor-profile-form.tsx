@@ -112,7 +112,7 @@ export function SupervisorProfileForm() {
   if (isError || !data) {
     return (
       <ErrorState
-        message={error instanceof Error ? error.message : "Profile not found"}
+        message={error ? getErrorMessage(error) : "Profile not found"}
         onRetry={() => refetch()}
       />
     );

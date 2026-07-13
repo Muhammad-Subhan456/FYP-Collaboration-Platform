@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   forwardRef,
 } from '@nestjs/common';
 
@@ -17,9 +18,15 @@ import {
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 import { AuthContextService } from '../common/auth-context.service';
+import { AppUrlsService } from '../common/app-urls.service';
 import { NotificationPayload } from '../common/helpers/notification-payload';
 import { DomainEvents } from '../domain-events/domain-event.constants';
 import { DomainEventService } from '../domain-events/domain-event.service';
+import { EmailService } from '../email/email.service';
+import {
+  buildProposalAcceptedEmail,
+  buildProposalRequestEmail,
+} from '../email/email.templates';
 import type {
   DomainEventScope,
   ProposalInterestDismissedPayload,
@@ -41,6 +48,7 @@ import {
 @Injectable()
 export class ProposalsService {
   private static readonly REQUEST_TTL_MS = 5 * 60 * 1000;
+  private readonly logger = new Logger(ProposalsService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,6 +58,8 @@ export class ProposalsService {
     private readonly activityLogsService: ActivityLogsService,
     private readonly authContext: AuthContextService,
     private readonly domainEventService: DomainEventService,
+    private readonly emailService: EmailService,
+    private readonly appUrls: AppUrlsService,
   ) {}
 
   async getAcceptedTeamCount(supervisorId: string) {
@@ -812,6 +822,20 @@ async submitProposalToSupervisor(
     route: '/supervisor/requests',
   });
 
+  void this.emailSupervisorProposalRequest({
+    supervisorId,
+    teamId,
+    proposalTitle: proposal.title,
+    workspaceId: proposal.workspaceId,
+    leaderAuthUserId: authUserId,
+  }).catch((error) => {
+    this.logger.warn(
+      `Failed to send proposal-request email for ${proposal.id}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  });
+
   await this.activityLogsService.logActivity(
     supervisorId,
     'Proposal Received',
@@ -1481,6 +1505,104 @@ private async notifyCoordinatorsProposalAccepted(
   );
 }
 
+private async emailTeamLeaderProposalAccepted(proposal: {
+  id: string;
+  title: string;
+  teamId: string;
+  teamLeaderAuthUserId?: string | null;
+}) {
+  const team = await this.prisma.team.findUnique({
+    where: { id: proposal.teamId },
+    select: { name: true, leaderId: true },
+  });
+
+  const leaderId =
+    proposal.teamLeaderAuthUserId ?? team?.leaderId ?? null;
+
+  if (!leaderId) {
+    this.logger.warn(
+      `No team leader for proposal ${proposal.id}; skipping email`,
+    );
+    return;
+  }
+
+  const leader = await this.prisma.user.findUnique({
+    where: { id: leaderId },
+    select: { email: true },
+  });
+
+  if (!leader?.email) {
+    this.logger.warn(
+      `Team leader ${leaderId} has no email; skipping proposal-accepted email`,
+    );
+    return;
+  }
+
+  await this.emailService.send(
+    buildProposalAcceptedEmail({
+      to: leader.email,
+      proposalTitle: proposal.title,
+      teamName: team?.name,
+      actionUrl: this.appUrls.portalUrl('/student/proposal'),
+    }),
+  );
+}
+
+private async emailSupervisorProposalRequest(input: {
+  supervisorId: string;
+  teamId: string;
+  proposalTitle: string;
+  workspaceId: string;
+  leaderAuthUserId: string;
+}) {
+  const [supervisor, team, workspace, leaderProfile, leaderUser] =
+    await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: input.supervisorId },
+        select: { email: true },
+      }),
+      this.prisma.team.findUnique({
+        where: { id: input.teamId },
+        select: { name: true, projectTitle: true },
+      }),
+      this.prisma.workspace.findUnique({
+        where: { id: input.workspaceId },
+        select: { name: true },
+      }),
+      this.prisma.userProfile.findUnique({
+        where: { authUserId: input.leaderAuthUserId },
+        select: { fullName: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: input.leaderAuthUserId },
+        select: { fullName: true },
+      }),
+    ]);
+
+  if (!supervisor?.email) {
+    this.logger.warn(
+      `Supervisor ${input.supervisorId} has no email; skipping proposal-request email`,
+    );
+    return;
+  }
+
+  await this.emailService.send(
+    buildProposalRequestEmail({
+      to: supervisor.email,
+      teamName: team?.name ?? 'Team',
+      projectTitle:
+        team?.projectTitle?.trim() ||
+        input.proposalTitle,
+      studentLeaderName:
+        leaderProfile?.fullName?.trim() ||
+        leaderUser?.fullName?.trim() ||
+        'Team leader',
+      workspaceName: workspace?.name ?? 'FOASIS workspace',
+      actionUrl: this.appUrls.portalUrl('/supervisor/requests'),
+    }),
+  );
+}
+
 async resubmitProposal(
   authUserId: string,
   authorization: string,
@@ -1702,6 +1824,14 @@ async approveProposal(
     proposal.id,
     proposal.workspaceId,
   );
+
+  void this.emailTeamLeaderProposalAccepted(updated).catch((error) => {
+    this.logger.warn(
+      `Failed to send proposal-accepted email for ${proposal.id}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  });
 
   return updated;
 }

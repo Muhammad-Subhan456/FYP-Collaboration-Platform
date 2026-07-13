@@ -17,7 +17,8 @@ export class DashboardController {
     private readonly dashboardService: DashboardService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR', 'EVALUATOR')
   @Get()
   getDashboard(@Req() req: { user: { userId: string } }) {
     return this.dashboardService.getDashboard(

@@ -29,6 +29,7 @@ export function useSupervisorTeamIssueCommentMutation() {
           comment,
         );
       }
+      toast.success("Comment posted");
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

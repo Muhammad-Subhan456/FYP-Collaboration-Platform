@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -203,9 +203,10 @@ export default function EvaluatorEvaluationsPage() {
         </CardHeader>
         <CardContent>
           {evaluations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No evaluations match the current filters.
-            </p>
+            <EmptyState
+              title="No evaluations found"
+              description="No evaluations match the current filters."
+            />
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[1080px] text-sm">

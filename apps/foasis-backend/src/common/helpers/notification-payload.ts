@@ -20,6 +20,10 @@ function dashboardRouteForRole(role: string): string {
       return '/supervisor/dashboard';
     case 'COORDINATOR':
       return '/coordinator/dashboard';
+    case 'EVALUATOR':
+      return '/evaluator/dashboard';
+    case 'SUPER_ADMIN':
+      return '/super-admin/workspaces';
     default:
       return '/student/dashboard';
   }

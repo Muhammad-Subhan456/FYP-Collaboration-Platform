@@ -69,8 +69,8 @@ export function ProfileViewModal({
                 <div>
                   <p className="mb-1 font-medium text-muted-foreground">Skills</p>
                   <div className="flex flex-wrap gap-1">
-                    {profile.skills.map((s) => (
-                      <Badge key={s} variant="secondary">
+                    {profile.skills.map((s, index) => (
+                      <Badge key={`skill-${index}-${s}`} variant="secondary">
                         {s}
                       </Badge>
                     ))}
@@ -81,8 +81,8 @@ export function ProfileViewModal({
                 <div>
                   <p className="mb-1 font-medium text-muted-foreground">Interests</p>
                   <div className="flex flex-wrap gap-1">
-                    {profile.interests.map((s) => (
-                      <Badge key={s} variant="outline">
+                    {profile.interests.map((s, index) => (
+                      <Badge key={`interest-${index}-${s}`} variant="outline">
                         {s}
                       </Badge>
                     ))}

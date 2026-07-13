@@ -10,9 +10,14 @@ export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+/** Cookie lifetime follows the JWT `exp` claim (set by backend JWT_EXPIRES_IN). */
 export function setStoredToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
-  document.cookie = `${TOKEN_COOKIE}=${token}; path=/; max-age=900; SameSite=Lax`;
+  const payload = decodeToken(token);
+  const maxAgeSeconds = payload?.exp
+    ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000))
+    : 0;
+  document.cookie = `${TOKEN_COOKIE}=${token}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
 }
 
 export function clearStoredToken(): void {

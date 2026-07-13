@@ -233,6 +233,7 @@ export function useSupervisorWorkStreamMutations(options?: {
           comment,
         });
       }
+      toast.success("Comment posted");
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

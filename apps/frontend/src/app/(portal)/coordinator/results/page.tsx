@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -169,9 +169,10 @@ export default function CoordinatorResultsPage() {
         </CardHeader>
         <CardContent>
           {phaseResults.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No phase results match the current filters.
-            </p>
+            <EmptyState
+              title="No phase results"
+              description="No phase results match the current filters."
+            />
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[720px] text-sm">
@@ -216,9 +217,10 @@ export default function CoordinatorResultsPage() {
         </CardHeader>
         <CardContent>
           {deliverableResults.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No deliverable results match the current filters.
-            </p>
+            <EmptyState
+              title="No deliverable results"
+              description="No deliverable results match the current filters."
+            />
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[1280px] text-sm">

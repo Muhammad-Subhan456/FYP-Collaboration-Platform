@@ -8,7 +8,6 @@ export {
 } from "./base";
 export { useSupervisorDashboardQuery } from "./use-dashboard";
 export {
-  useSupervisorEvaluationsQuery,
   useSupervisorInvitationsQuery,
   useSupervisorMilestonesQuery,
   useSupervisorNotificationsQuery,

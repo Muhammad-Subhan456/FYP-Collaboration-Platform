@@ -3,7 +3,6 @@
 import { FileText, Package, Users } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { GlobalAnnouncementsCard } from "@/components/dashboard/global-announcements-card";
 import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
 import { ErrorState } from "@/components/common/state-blocks";
@@ -15,7 +14,8 @@ import {
 } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/axios";
 import { useCoordinatorDashboardQuery } from "@/queries/coordinator";
-import { pluralize } from "@/lib/format";
+
+const DASHBOARD_WIDGET_LIMIT = 3;
 
 function KpiCard({
   title,
@@ -78,32 +78,14 @@ export default function CoordinatorDashboardPage() {
   const totalTeams = overview.totalTeams;
 
   const proposalTotal = proposals.total ?? proposals.totalProposals ?? 0;
-  const proposalPending = proposals.pending ?? proposals.assignedProposals ?? 0;
 
   const totalUsers =
     (users.totalStudents ?? 0) +
     (users.totalSupervisors ?? 0) +
     (users.totalCoordinators ?? 0);
 
-  const insightLines: string[] = [
-    `Managing ${pluralize(totalUsers, "registered user")} across the program.`,
-    `${pluralize(totalTeams, "team")} currently active.`,
-  ];
-  if ((proposalPending ?? 0) > 0) {
-    insightLines.push(
-      `${pluralize(proposalPending, "proposal")} pending your review.`,
-    );
-  }
-  if ((progress.pendingSubmissions ?? 0) > 0) {
-    insightLines.push(
-      `${pluralize(progress.pendingSubmissions, "submission")} awaiting review.`,
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <DashboardInsights lines={insightLines} />
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Total Users" value={totalUsers} icon={Users} />
         <KpiCard title="Total Teams" value={totalTeams} icon={Users} />
@@ -119,8 +101,16 @@ export default function CoordinatorDashboardPage() {
         />
       </div>
 
-      <GlobalAnnouncementsCard announcements={overview.globalAnnouncements} />
-      <RecentActivityFeed recentActivity={overview.recentActivity} />
+      <GlobalAnnouncementsCard
+        announcements={overview.globalAnnouncements}
+        limit={DASHBOARD_WIDGET_LIMIT}
+        viewAllDialog
+      />
+      <RecentActivityFeed
+        recentActivity={overview.recentActivity}
+        displayLimit={DASHBOARD_WIDGET_LIMIT}
+        viewAllHref="/coordinator/notifications"
+      />
     </div>
   );
 }

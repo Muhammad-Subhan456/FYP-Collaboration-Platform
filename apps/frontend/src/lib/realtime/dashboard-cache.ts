@@ -215,10 +215,11 @@ export function syncSupervisorProposalResolved(
           ...dashboard.supervisedTeams.filter((item) => item.id !== proposal.id),
           {
             id: proposal.id,
+            teamId: proposal.teamId,
             title: proposal.title,
             domain: proposal.domain,
           },
-        ]
+        ].slice(0, 3)
       : dashboard.supervisedTeams;
 
     const supervisedCount = supervisedTeams.length;
@@ -282,6 +283,39 @@ function upsertDeliverable(
   return next;
 }
 
+const DASHBOARD_WIDGET_LIMIT = 3;
+
+/** Prefer soonest upcoming; fill with most recently overdue. */
+function pickUpcomingDeliverables(
+  items: Deliverable[],
+  limit = DASHBOARD_WIDGET_LIMIT,
+): Deliverable[] {
+  const now = Date.now();
+  const dated = items
+    .filter((item) => item.isActive !== false && item.dueDate)
+    .map((item) => ({
+      item,
+      time: new Date(item.dueDate).getTime(),
+    }))
+    .filter((entry) => Number.isFinite(entry.time));
+
+  const upcoming = dated
+    .filter((entry) => entry.time >= now)
+    .sort((a, b) => a.time - b.time)
+    .map((entry) => entry.item);
+
+  if (upcoming.length >= limit) {
+    return upcoming.slice(0, limit);
+  }
+
+  const overdue = dated
+    .filter((entry) => entry.time < now)
+    .sort((a, b) => b.time - a.time)
+    .map((entry) => entry.item);
+
+  return [...upcoming, ...overdue].slice(0, limit);
+}
+
 function countUpcomingDeliverables(deliverables: Deliverable[]) {
   const now = Date.now();
   return deliverables.filter(
@@ -293,18 +327,26 @@ export function syncStudentDashboardDeliverable(
   queryClient: QueryClient,
   userId: string,
   deliverable: Deliverable,
+  workspaceId?: string | null,
 ) {
-  touchStudentDashboard(queryClient, userId, (dashboard) => {
-    const deliverables = upsertDeliverable(dashboard.deliverables, deliverable);
-    return {
-      ...dashboard,
-      deliverables,
-      stats: {
-        ...dashboard.stats,
-        upcomingDeliverables: countUpcomingDeliverables(deliverables),
-      },
-    };
-  });
+  touchStudentDashboard(
+    queryClient,
+    userId,
+    (dashboard) => {
+      const deliverables = pickUpcomingDeliverables(
+        upsertDeliverable(dashboard.deliverables, deliverable),
+      );
+      return {
+        ...dashboard,
+        deliverables,
+        stats: {
+          ...dashboard.stats,
+          upcomingDeliverables: countUpcomingDeliverables(deliverables),
+        },
+      };
+    },
+    workspaceId,
+  );
 }
 
 function upsertAnnouncement(
@@ -313,22 +355,28 @@ function upsertAnnouncement(
 ): Announcement[] {
   const index = items.findIndex((item) => item.id === incoming.id);
   if (index === -1) {
-    return [incoming, ...items];
+    return [incoming, ...items].slice(0, DASHBOARD_WIDGET_LIMIT);
   }
   const next = [...items];
   next[index] = { ...next[index], ...incoming };
-  return next;
+  return next.slice(0, DASHBOARD_WIDGET_LIMIT);
 }
 
 export function syncStudentDashboardAnnouncement(
   queryClient: QueryClient,
   userId: string,
   announcement: Announcement,
+  workspaceId?: string | null,
 ) {
-  touchStudentDashboard(queryClient, userId, (dashboard) => ({
-    ...dashboard,
-    announcements: upsertAnnouncement(dashboard.announcements, announcement),
-  }));
+  touchStudentDashboard(
+    queryClient,
+    userId,
+    (dashboard) => ({
+      ...dashboard,
+      announcements: upsertAnnouncement(dashboard.announcements, announcement),
+    }),
+    workspaceId,
+  );
 }
 
 export function syncSupervisorDashboardPendingReviews(

@@ -55,6 +55,14 @@ export const progressService = {
     return res.data;
   },
 
+  getGlobalAnnouncementsPage: async (page = 1, limit = 6) => {
+    const res = await api.get<PaginatedResponse<GlobalAnnouncement>>(
+      "/global-announcements",
+      { params: { page, limit } },
+    );
+    return res.data;
+  },
+
   getAnnouncementsForMyTeam: async () => {
     const res = await api.get<Announcement[]>("/announcements/for-my-team");
     return res.data;

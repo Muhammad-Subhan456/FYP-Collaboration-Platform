@@ -1,15 +1,18 @@
 "use client";
 
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
+import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { CoordinatorProfileForm } from "@/components/profile/coordinator-profile-form";
 import { StudentProfileForm } from "@/components/profile/student-profile-form";
 import { SupervisorProfileForm } from "@/components/profile/supervisor-profile-form";
 import { useAuth } from "@/providers/auth-provider";
 
 export function ProfilePage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (!user) return null;
+  if (isLoading || !user) {
+    return <DashboardSkeleton />;
+  }
 
   const profileForm = (() => {
     switch (user.role) {
@@ -20,7 +23,7 @@ export function ProfilePage() {
       case "COORDINATOR":
         return <CoordinatorProfileForm />;
       case "EVALUATOR":
-        return <StudentProfileForm />;
+        return <StudentProfileForm title="Evaluator Profile" />;
       default:
         return null;
     }

@@ -41,8 +41,17 @@ export class RealtimeEventDispatcher {
   @OnEvent(DomainEvents.DELIVERABLE_CREATED)
   @OnEvent(DomainEvents.DELIVERABLE_UPDATED)
   @OnEvent(DomainEvents.DELIVERABLE_DEADLINE_EXTENDED)
+  @OnEvent(DomainEvents.DELIVERABLE_DELETED)
+  @OnEvent(DomainEvents.DELIVERABLE_TEMPLATE_CREATED)
+  @OnEvent(DomainEvents.DELIVERABLE_TEMPLATE_UPDATED)
+  @OnEvent(DomainEvents.DELIVERABLE_TEMPLATE_DELETED)
   @OnEvent(DomainEvents.SUBMISSION_CREATED)
   @OnEvent(DomainEvents.SUBMISSION_REVIEWED)
+  @OnEvent(DomainEvents.SUBMISSION_FINALIZED)
+  @OnEvent(DomainEvents.PHASE_CREATED)
+  @OnEvent(DomainEvents.PHASE_UPDATED)
+  @OnEvent(DomainEvents.PHASE_CONFIGURATION_PUBLISHED)
+  @OnEvent(DomainEvents.PHASE_DELETED)
   onWorkStreamEvent(event: DomainEvent) {
     this.dispatch(event);
   }
@@ -62,7 +71,26 @@ export class RealtimeEventDispatcher {
   @OnEvent(DomainEvents.TEAM_MEMBER_JOINED)
   @OnEvent(DomainEvents.TEAM_MEMBER_LEFT)
   @OnEvent(DomainEvents.TEAM_ROLE_UPDATED)
+  @OnEvent(DomainEvents.TEAM_UPDATED)
+  @OnEvent(DomainEvents.TEAM_DELETED)
   onTeamEvent(event: DomainEvent) {
+    this.dispatch(event);
+  }
+
+  @OnEvent(DomainEvents.EVALUATION_ASSIGNED)
+  @OnEvent(DomainEvents.RESULT_PUBLISHED)
+  @OnEvent(DomainEvents.RESULT_UPDATED)
+  @OnEvent(DomainEvents.SUBMISSION_EVALUATION_ASSIGNED)
+  @OnEvent(DomainEvents.SUBMISSION_EVALUATION_UPDATED)
+  @OnEvent(DomainEvents.SUBMISSION_EVALUATION_SUBMITTED)
+  @OnEvent(DomainEvents.GPA_RECALCULATED)
+  onEvaluationEvent(event: DomainEvent) {
+    this.dispatch(event);
+  }
+
+  @OnEvent(DomainEvents.USER_ROLE_UPDATED)
+  @OnEvent(DomainEvents.USER_STATUS_UPDATED)
+  onUserMembershipEvent(event: DomainEvent) {
     this.dispatch(event);
   }
 

@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Shield, ShieldOff, UserCheck, UserMinus, Eye } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ChevronDown,
+  Eye,
+  Loader2,
+  Shield,
+  ShieldOff,
+  UserCheck,
+  UserCog,
+  UserMinus,
+} from "lucide-react";
 
 import { CoordinatorUserProfileDialog } from "@/components/coordinator/coordinator-user-profile-dialog";
 import { CoordinatorInvitePanel } from "@/components/coordinator/coordinator-invite-panel";
-
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +35,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { useCoordinatorUserMutations } from "@/mutations/coordinator";
@@ -34,20 +49,96 @@ import {
   isCoordinatorQueryInitialLoading,
   useCoordinatorUsersQuery,
 } from "@/queries/coordinator";
+import { useAuth } from "@/providers/auth-provider";
 import type { AuthUserRecord } from "@/types/profile";
-import type { UserRole } from "@/types";
+
+type MembershipAction =
+  | "promote-supervisor"
+  | "demote-student"
+  | "promote-coordinator"
+  | "make-evaluator"
+  | "disable"
+  | "enable";
+
+const ACTION_COPY: Record<
+  MembershipAction,
+  { label: string; confirm: string }
+> = {
+  "promote-supervisor": {
+    label: "Promote to Supervisor",
+    confirm: "promote this user to Supervisor",
+  },
+  "demote-student": {
+    label: "Demote to Student",
+    confirm: "demote this user to Student",
+  },
+  "promote-coordinator": {
+    label: "Make Coordinator",
+    confirm: "make this user a Coordinator",
+  },
+  "make-evaluator": {
+    label: "Make Evaluator",
+    confirm: "make this user an Evaluator",
+  },
+  disable: {
+    label: "Disable",
+    confirm: "disable this membership",
+  },
+  enable: {
+    label: "Enable",
+    confirm: "enable this membership",
+  },
+};
+
+function getMembershipActions(
+  user: AuthUserRecord,
+  currentUserId: string | undefined,
+): MembershipAction[] {
+  if (currentUserId && user.id === currentUserId) {
+    return [];
+  }
+
+  const actions: MembershipAction[] = [];
+
+  if (user.role === "STUDENT") {
+    actions.push("promote-supervisor");
+  }
+  if (user.role === "SUPERVISOR") {
+    actions.push("demote-student");
+  }
+  if (user.role !== "COORDINATOR") {
+    actions.push("promote-coordinator");
+  }
+  if (user.role !== "EVALUATOR" && user.role !== "COORDINATOR") {
+    actions.push("make-evaluator");
+  }
+  actions.push(user.isActive ? "disable" : "enable");
+
+  return actions;
+}
 
 export default function CoordinatorUsersPage() {
+  const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [confirmAction, setConfirmAction] = useState<{
     user: AuthUserRecord;
-    type: "promote-supervisor" | "demote-student" | "promote-coordinator" | "disable" | "enable";
+    type: MembershipAction;
   } | null>(null);
   const [viewUser, setViewUser] = useState<AuthUserRecord | null>(null);
 
   const usersQuery = useCoordinatorUsersQuery();
   const { roleMutation, statusMutation } = useCoordinatorUserMutations();
+
+  const users = useMemo(() => {
+    return (usersQuery.data ?? []).filter((u) => {
+      const matchesSearch =
+        u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase());
+      const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [usersQuery.data, search, roleFilter]);
 
   if (isCoordinatorQueryInitialLoading(usersQuery)) return <DashboardSkeleton />;
   if (usersQuery.isError) {
@@ -59,44 +150,27 @@ export default function CoordinatorUsersPage() {
     );
   }
 
-  const users = (usersQuery.data ?? []).filter((u) => {
-    const matchesSearch =
-      u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
-
   const handleConfirm = () => {
     if (!confirmAction) return;
     const { user, type } = confirmAction;
+    const onSuccess = () => setConfirmAction(null);
+
     if (type === "promote-supervisor") {
-      roleMutation.mutate(
-        { userId: user.id, role: "SUPERVISOR" },
-        { onSuccess: () => setConfirmAction(null) },
-      );
+      roleMutation.mutate({ userId: user.id, role: "SUPERVISOR" }, { onSuccess });
     } else if (type === "demote-student") {
-      roleMutation.mutate(
-        { userId: user.id, role: "STUDENT" },
-        { onSuccess: () => setConfirmAction(null) },
-      );
+      roleMutation.mutate({ userId: user.id, role: "STUDENT" }, { onSuccess });
     } else if (type === "promote-coordinator") {
-      roleMutation.mutate(
-        { userId: user.id, role: "COORDINATOR" },
-        { onSuccess: () => setConfirmAction(null) },
-      );
+      roleMutation.mutate({ userId: user.id, role: "COORDINATOR" }, { onSuccess });
+    } else if (type === "make-evaluator") {
+      roleMutation.mutate({ userId: user.id, role: "EVALUATOR" }, { onSuccess });
     } else if (type === "disable") {
-      statusMutation.mutate(
-        { userId: user.id, isActive: false },
-        { onSuccess: () => setConfirmAction(null) },
-      );
+      statusMutation.mutate({ userId: user.id, isActive: false }, { onSuccess });
     } else if (type === "enable") {
-      statusMutation.mutate(
-        { userId: user.id, isActive: true },
-        { onSuccess: () => setConfirmAction(null) },
-      );
+      statusMutation.mutate({ userId: user.id, isActive: true }, { onSuccess });
     }
   };
+
+  const isMutating = roleMutation.isPending || statusMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -136,101 +210,104 @@ export default function CoordinatorUsersPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No memberships match your search or filter.
-            </p>
+            <EmptyState
+              title="No memberships found"
+              description="No memberships match your search or filter."
+            />
           ) : (
-            users.map((user) => (
-            <div
-              key={user.membershipId}
-              className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="font-medium">{user.fullName}</p>
-                <p className="text-sm text-muted-foreground">{user.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  Membership created {formatDate(user.createdAt)}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setViewUser(user)}
+            users.map((user) => {
+              const actions = getMembershipActions(user, currentUser?.userId);
+
+              return (
+                <div
+                  key={user.membershipId}
+                  className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <Eye className="h-3 w-3" />
-                  View Profile
-                </Button>
-                <StatusBadge status={user.role} />
-                <StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} />
-                {user.role === "STUDENT" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setConfirmAction({ user, type: "promote-supervisor" })
-                    }
-                  >
-                    <UserCheck className="h-3 w-3" />
-                    Promote to Supervisor
-                  </Button>
-                )}
-                {user.role === "SUPERVISOR" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setConfirmAction({ user, type: "demote-student" })
-                    }
-                  >
-                    <UserMinus className="h-3 w-3" />
-                    Demote to Student
-                  </Button>
-                )}
-                {user.role !== "COORDINATOR" && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() =>
-                      setConfirmAction({ user, type: "promote-coordinator" })
-                    }
-                  >
-                    Make Coordinator
-                  </Button>
-                )}
-                {user.isActive ? (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => setConfirmAction({ user, type: "disable" })}
-                  >
-                    <ShieldOff className="h-3 w-3" />
-                    Disable
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setConfirmAction({ user, type: "enable" })}
-                  >
-                    <Shield className="h-3 w-3" />
-                    Enable
-                  </Button>
-                )}
-              </div>
-            </div>
-            ))
+                  <div className="min-w-0">
+                    <p className="font-medium">{user.fullName}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Membership created {formatDate(user.createdAt)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <StatusBadge status={user.role} />
+                      <StatusBadge
+                        status={user.isActive ? "ACTIVE" : "INACTIVE"}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setViewUser(user)}
+                    >
+                      <Eye className="h-3 w-3" />
+                      View Profile
+                    </Button>
+
+                    {actions.length > 0 ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline">
+                            Actions
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          {actions.map((action, index) => {
+                            const isStatusAction =
+                              action === "disable" || action === "enable";
+                            const showSeparator =
+                              isStatusAction &&
+                              index > 0 &&
+                              actions[index - 1] !== "disable" &&
+                              actions[index - 1] !== "enable";
+
+                            return (
+                              <div key={action}>
+                                {showSeparator ? <DropdownMenuSeparator /> : null}
+                                <DropdownMenuItem
+                                  className={
+                                    action === "disable"
+                                      ? "text-destructive focus:text-destructive"
+                                      : undefined
+                                  }
+                                  onSelect={() =>
+                                    setConfirmAction({ user, type: action })
+                                  }
+                                >
+                                  <ActionIcon action={action} />
+                                  {ACTION_COPY[action].label}
+                                </DropdownMenuItem>
+                              </div>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+      <Dialog
+        open={!!confirmAction}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm action</DialogTitle>
             <DialogDescription>
-              Are you sure you want to perform this action on{" "}
-              <strong>{confirmAction?.user.fullName}</strong>?
+              Are you sure you want to{" "}
+              {confirmAction
+                ? ACTION_COPY[confirmAction.type].confirm
+                : "perform this action"}{" "}
+              for <strong>{confirmAction?.user.fullName}</strong>?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -238,12 +315,13 @@ export default function CoordinatorUsersPage() {
               Cancel
             </Button>
             <Button
+              variant={
+                confirmAction?.type === "disable" ? "destructive" : "default"
+              }
               onClick={handleConfirm}
-              disabled={roleMutation.isPending || statusMutation.isPending}
+              disabled={isMutating}
             >
-              {(roleMutation.isPending || statusMutation.isPending) && (
-                <Loader2 className="animate-spin" />
-              )}
+              {isMutating && <Loader2 className="animate-spin" />}
               Confirm
             </Button>
           </DialogFooter>
@@ -257,4 +335,21 @@ export default function CoordinatorUsersPage() {
       />
     </div>
   );
+}
+
+function ActionIcon({ action }: { action: MembershipAction }) {
+  switch (action) {
+    case "promote-supervisor":
+      return <UserCheck className="h-4 w-4" />;
+    case "demote-student":
+      return <UserMinus className="h-4 w-4" />;
+    case "promote-coordinator":
+      return <UserCog className="h-4 w-4" />;
+    case "make-evaluator":
+      return <UserCheck className="h-4 w-4" />;
+    case "disable":
+      return <ShieldOff className="h-4 w-4" />;
+    case "enable":
+      return <Shield className="h-4 w-4" />;
+  }
 }

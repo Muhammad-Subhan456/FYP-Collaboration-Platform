@@ -254,6 +254,15 @@ export class GpaCalculationService {
     phaseId: string,
     teamId: string,
   ) {
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId, workspaceId },
+      select: { id: true },
+    });
+
+    if (!team) {
+      return;
+    }
+
     const members = await this.prisma.teamMember.findMany({
       where: { teamId },
       select: { authUserId: true },

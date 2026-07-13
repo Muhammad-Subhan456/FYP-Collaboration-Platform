@@ -16,6 +16,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 
 import { AssignEvaluatorDto, AssignEvaluatorsDto, SaveEvaluationDraftDto } from './dto/assign-evaluator.dto';
 import { ListEligibleSubmissionsQueryDto } from './dto/list-submissions-query.dto';
+import { RemindEvaluatorsDto } from './dto/remind-evaluators.dto';
 import { SubmissionEvaluationsService } from './submission-evaluations.service';
 
 type AuthedRequest = {
@@ -80,6 +81,19 @@ export class SubmissionEvaluationsController {
       req.workspaceId,
       req.user.userId,
       dto,
+    );
+  }
+
+  @Post('remind')
+  @Roles('COORDINATOR')
+  remindPendingEvaluators(
+    @Req() req: AuthedRequest,
+    @Body() dto: RemindEvaluatorsDto,
+  ) {
+    return this.submissionEvaluationsService.remindPendingEvaluators(
+      req.workspaceId,
+      req.user.userId,
+      dto.submissionId,
     );
   }
 

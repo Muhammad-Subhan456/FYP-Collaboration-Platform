@@ -13,6 +13,10 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScheduledReminderService } from '../reminders/scheduled-reminder.service';
 import { ReminderTypes } from '../reminders/reminder.types';
+import {
+  buildPaginatedResponse,
+  getPaginationParams,
+} from '../../common/helpers/pagination';
 
 import { normalizeAudienceRoles } from './announcement-audience';
 import { AnnouncementAudienceService } from './announcement-audience.service';
@@ -128,7 +132,11 @@ export class GlobalAnnouncementsService {
   async getAnnouncements(
     workspaceId: string,
     viewerRole?: string,
-    options?: { coordinatorView?: boolean },
+    options?: {
+      coordinatorView?: boolean;
+      page?: number;
+      limit?: number;
+    },
   ) {
     const isCoordinatorView =
       options?.coordinatorView ||
@@ -143,23 +151,49 @@ export class GlobalAnnouncementsService {
       where.status = GlobalAnnouncementStatus.PUBLISHED;
     }
 
-    const announcements =
-      await this.prisma.globalAnnouncement.findMany({
-        where: {
-          ...where,
-          ...(isCoordinatorView
-            ? {}
-            : this.audienceService.audienceWhereForRole(
-                viewerRole ?? 'STUDENT',
-              )),
-        },
-        include: { attachments: true },
-        orderBy: [
-          { publishedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
-      });
+    const audienceWhere = isCoordinatorView
+      ? {}
+      : this.audienceService.audienceWhereForRole(
+          viewerRole ?? 'STUDENT',
+        );
 
-    return announcements;
+    const findArgs = {
+      where: {
+        ...where,
+        ...audienceWhere,
+      },
+      include: { attachments: true },
+      orderBy: [
+        { publishedAt: 'desc' as const },
+        { createdAt: 'desc' as const },
+      ],
+    };
+
+    if (options?.page != null || options?.limit != null) {
+      const { skip, take, page, limit } = getPaginationParams(
+        options.page,
+        options.limit,
+      );
+
+      const [announcements, total] = await Promise.all([
+        this.prisma.globalAnnouncement.findMany({
+          ...findArgs,
+          skip,
+          take,
+        }),
+        this.prisma.globalAnnouncement.count({
+          where: findArgs.where,
+        }),
+      ]);
+
+      return buildPaginatedResponse(
+        announcements,
+        total,
+        page,
+        limit,
+      );
+    }
+
+    return this.prisma.globalAnnouncement.findMany(findArgs);
   }
 }

@@ -6,6 +6,7 @@ import { TeamsModule } from '../teams/teams.module';
 import { UsersModule } from '../users/users.module';
 import { DeliverablesModule } from '../progress/deliverables/deliverables.module';
 import { EvaluationsModule } from '../progress/evaluations/evaluations.module';
+import { SubmissionEvaluationsModule } from '../progress/submission-evaluations/submission-evaluations.module';
 import { StatsModule } from '../progress/stats/stats.module';
 import { AnnouncementsModule } from '../progress/announcements/announcements.module';
 import { GlobalAnnouncementsModule } from '../progress/global-announcements/global-announcements.module';
@@ -25,6 +26,7 @@ import { DashboardService } from './dashboard.service';
     StatsModule,
     DeliverablesModule,
     EvaluationsModule,
+    SubmissionEvaluationsModule,
     AnnouncementsModule,
     GlobalAnnouncementsModule,
     NotificationsModule,

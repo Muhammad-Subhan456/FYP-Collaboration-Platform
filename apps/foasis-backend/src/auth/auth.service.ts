@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, UnauthorizedExcept
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from '@prisma/client';
+import type { StringValue } from 'ms';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -9,6 +10,12 @@ import { JwtService } from '@nestjs/jwt';
 import {
   buildRoleNotification,
 } from '../common/helpers/notification-payload';
+import { DomainEventService } from '../domain-events/domain-event.service';
+import { DomainEvents } from '../domain-events/domain-event.constants';
+import type {
+  UserRoleUpdatedPayload,
+  UserStatusUpdatedPayload,
+} from '../domain-events/domain-event.types';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { SUPERVISOR_MAX_ACCEPTED_TEAMS } from '../proposals/supervisor-capacity.constants';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
@@ -28,6 +35,7 @@ export class AuthService {
   private readonly prisma: PrismaService,
   private readonly jwtService: JwtService,
   private readonly notificationDispatch: NotificationDispatchService,
+  private readonly domainEventService: DomainEventService,
   private readonly workspaceContext: WorkspaceContextService,
   private readonly config: ConfigService,
   private readonly emailService: EmailService,
@@ -166,7 +174,10 @@ export class AuthService {
         sub: user.id,
         type: AUTH_TOKEN_TYPES.CONTEXT_SELECTION,
       },
-      { expiresIn: '10m' },
+      {
+        expiresIn: (this.config.get<string>('JWT_SELECTION_EXPIRES_IN') ??
+          '10m') as StringValue,
+      },
     ),
     contexts,
   };
@@ -638,6 +649,24 @@ async updateUserRole(
       'ROLE_UPDATED',
       role,
     );
+
+    const payload: UserRoleUpdatedPayload = {
+      workspaceId,
+      userId: updated.id,
+      role: updated.role,
+      fullName: updated.fullName,
+      email: updated.email,
+    };
+
+    this.domainEventService.emitSafe({
+      name: DomainEvents.USER_ROLE_UPDATED,
+      timestamp: new Date().toISOString(),
+      actorId: coordinatorId,
+      scope: { type: 'workspace', id: workspaceId },
+      entity: { type: 'USER', id: updated.id },
+      payload,
+    });
+
     return updated;
   });
 }
@@ -702,6 +731,25 @@ async updateUserStatus(
       'ACCOUNT_STATUS_UPDATED',
       updated.role,
     );
+
+    const payload: UserStatusUpdatedPayload = {
+      workspaceId,
+      userId: updated.id,
+      isActive: updated.isActive,
+      role: updated.role,
+      fullName: updated.fullName,
+      email: updated.email,
+    };
+
+    this.domainEventService.emitSafe({
+      name: DomainEvents.USER_STATUS_UPDATED,
+      timestamp: new Date().toISOString(),
+      actorId: coordinatorId,
+      scope: { type: 'workspace', id: workspaceId },
+      entity: { type: 'USER', id: updated.id },
+      payload,
+    });
+
     return updated;
   });
 }

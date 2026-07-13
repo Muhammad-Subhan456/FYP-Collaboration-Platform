@@ -56,7 +56,8 @@ export class EvaluationPanelsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR', 'EVALUATOR')
   @Get('my')
   getMyPanels(@Req() req: any) {
     return this.evaluationPanelsService.getMyPanels(

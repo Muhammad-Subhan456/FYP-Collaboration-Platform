@@ -2,11 +2,15 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from '../../auth/auth.service';
+import { AppUrlsService } from '../../common/app-urls.service';
+import { EmailService } from '../../email/email.service';
+import { buildSubmissionReceivedEmail } from '../../email/email.templates';
 
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { ReviewSubmissionDto } from './dto/review-submission.dto';
@@ -24,6 +28,8 @@ import { serializeSubmission } from '../work-stream/work-stream-realtime';
 
 @Injectable()
 export class SubmissionsService {
+  private readonly logger = new Logger(SubmissionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogsService: ActivityLogsService,
@@ -31,6 +37,8 @@ export class SubmissionsService {
     private readonly teamAccessService: TeamAccessService,
     private readonly domainEventService: DomainEventService,
     private readonly authService: AuthService,
+    private readonly emailService: EmailService,
+    private readonly appUrls: AppUrlsService,
   ) {}
 
   private async notifySupervisor(
@@ -56,6 +64,53 @@ export class SubmissionsService {
     await this.teamAccessService.notifyTeamMembers(
       teamId,
       context,
+    );
+  }
+
+  private async emailSupervisorSubmissionReceived(input: {
+    supervisorId: string;
+    teamId: string;
+    deliverableTitle: string;
+    phaseId: string | null;
+    submittedAt: Date;
+  }) {
+    const [supervisor, team, phase] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: input.supervisorId },
+        select: { email: true },
+      }),
+      this.prisma.team.findUnique({
+        where: { id: input.teamId },
+        select: { name: true },
+      }),
+      input.phaseId
+        ? this.prisma.phase.findUnique({
+            where: { id: input.phaseId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!supervisor?.email) {
+      this.logger.warn(
+        `Supervisor ${input.supervisorId} has no email; skipping submission email`,
+      );
+      return;
+    }
+
+    await this.emailService.send(
+      buildSubmissionReceivedEmail({
+        to: supervisor.email,
+        deliverableTitle: input.deliverableTitle,
+        teamName: team?.name ?? 'Team',
+        phaseName: phase?.name ?? null,
+        submittedAt: input.submittedAt,
+        actionUrl: this.appUrls.portalUrl(
+          `/supervisor/work-stream?tab=deliverables&teamId=${encodeURIComponent(
+            input.teamId,
+          )}`,
+        ),
+      }),
     );
   }
 
@@ -183,6 +238,20 @@ export class SubmissionsService {
       entityId: submission.id,
       route: '/supervisor/work-stream',
     }).catch(() => undefined);
+
+    void this.emailSupervisorSubmissionReceived({
+      supervisorId: deliverable.supervisorId,
+      teamId: team.id,
+      deliverableTitle: deliverable.title,
+      phaseId: deliverable.phaseId ?? null,
+      submittedAt: submission.submittedAt,
+    }).catch((error) => {
+      this.logger.warn(
+        `Failed to send submission-received email for ${submission.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
 
     this.domainEventService.emitSafe<SubmissionSnapshotPayload>({
       name: DomainEvents.SUBMISSION_CREATED,
@@ -501,7 +570,7 @@ export class SubmissionsService {
       name: DomainEvents.SUBMISSION_FINALIZED,
       timestamp: finalizedAt.toISOString(),
       actorId: supervisorId,
-      scope: { type: 'team', id: submission.teamId },
+      scope: { type: 'workspace', id: submission.workspaceId },
       entity: { type: 'SUBMISSION', id: updatedSubmission.id },
       payload: {
         teamId: submission.teamId,

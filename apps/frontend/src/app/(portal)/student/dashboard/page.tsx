@@ -1,14 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Calendar,
-  FileText,
-  Flag,
-  Megaphone,
-  Package,
-  Users,
-} from "lucide-react";
+import { Megaphone } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
@@ -21,56 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { GlobalAnnouncementsCard } from "@/components/dashboard/global-announcements-card";
 import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
-import { ScrollableFeed } from "@/components/common/scrollable-feed";
-import { formatDate, formatDateTime, pluralize } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { useStudentDashboardQuery } from "@/queries/student";
 
-function formatProposalStatus(status?: string | null) {
-  if (!status) return "None";
-  const labels: Record<string, string> = {
-    DRAFT: "Draft",
-    PENDING_SUPERVISOR: "Pending",
-    SUPERVISOR_ASSIGNED: "Supervisor set",
-    APPROVED: "Approved",
-    REJECTED: "Rejected",
-  };
-  return labels[status] ?? status.replace(/_/g, " ");
-}
-
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-}: {
-  title: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="overflow-hidden transition-all hover:shadow-md">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-          <Icon className="h-4 w-4 text-primary" />
-        </div>
-      </CardHeader>
-      <CardContent className="min-w-0">
-        <div
-          className="truncate text-lg font-bold leading-tight sm:text-2xl"
-          title={String(value)}
-        >
-          {value}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+const DASHBOARD_WIDGET_LIMIT = 3;
 
 export default function StudentDashboardPage() {
   const {
@@ -100,97 +50,23 @@ export default function StudentDashboardPage() {
       />
     );
   }
-  const stats = data.stats;
+
   const team = data.team;
   const proposal = data.proposal;
-  const deliverables = data.deliverables;
-  const evaluations = data.evaluations;
+  // Backend already returns top 3; keep a defensive client cap.
+  const deliverables = data.deliverables.slice(0, DASHBOARD_WIDGET_LIMIT);
+  const deliverableEvaluations = (
+    data.deliverableEvaluations ?? []
+  ).slice(0, DASHBOARD_WIDGET_LIMIT);
+  const legacyEvaluations = data.evaluations.slice(0, DASHBOARD_WIDGET_LIMIT);
+  const teamAnnouncements = data.announcements.slice(0, DASHBOARD_WIDGET_LIMIT);
   const memberCount = data.teamMembers.length;
   const supervisorName = data.supervisor?.fullName ?? null;
 
-  const insightLines: string[] = [];
-  if (proposal?.status === "APPROVED") {
-    insightLines.push("Your proposal is approved.");
-  } else if (proposal) {
-    insightLines.push(
-      `Your proposal status: ${proposal.status.replace(/_/g, " ").toLowerCase()}.`,
-    );
-  }
-  const nextDeliverable = [...deliverables]
-    .filter((d) => d.dueDate)
-    .sort(
-      (a, b) =>
-        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-    )[0];
-  if (nextDeliverable?.dueDate) {
-    const days = Math.ceil(
-      (new Date(nextDeliverable.dueDate).getTime() - Date.now()) /
-        (1000 * 60 * 60 * 24),
-    );
-    insightLines.push(
-      `Next deliverable "${nextDeliverable.title}" due in ${pluralize(Math.max(days, 0), "day")}.`,
-    );
-  }
-  const nextEvaluation = [...evaluations]
-    .filter((e) => e.evaluation?.date)
-    .sort(
-      (a, b) =>
-        new Date(a.evaluation.date).getTime() -
-        new Date(b.evaluation.date).getTime(),
-    )[0];
-  if (nextEvaluation?.evaluation) {
-    insightLines.push(
-      `${nextEvaluation.evaluation.title} scheduled for ${formatDate(nextEvaluation.evaluation.date)}.`,
-    );
-  }
-  const latestGlobalAnnouncement = data.globalAnnouncements[0];
-  if (latestGlobalAnnouncement) {
-    insightLines.push(
-      `Program announcement: ${latestGlobalAnnouncement.title}`,
-    );
-  }
+  const showDeliverableEvaluations = deliverableEvaluations.length > 0;
 
   return (
     <div className="space-y-6">
-      <DashboardInsights lines={insightLines} />
-
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Open Issues"
-          value={stats.openIssues ?? 0}
-          icon={Flag}
-        />
-        <StatCard
-          title="Assigned to Me"
-          value={stats.assignedIssues ?? 0}
-          icon={Flag}
-        />
-        <StatCard
-          title="Recently Completed"
-          value={stats.recentlyCompletedIssues ?? 0}
-          icon={Flag}
-        />
-      </div>
-
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Team Members" value={memberCount} icon={Users} />
-        <StatCard
-          title="Proposal Status"
-          value={formatProposalStatus(proposal?.status)}
-          icon={FileText}
-        />
-        <StatCard
-          title="Deliverables"
-          value={stats.upcomingDeliverables ?? deliverables.length}
-          icon={Package}
-        />
-        <StatCard
-          title="Evaluations"
-          value={stats.upcomingEvaluations ?? evaluations.length}
-          icon={Calendar}
-        />
-      </div>
-
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -254,7 +130,7 @@ export default function StudentDashboardPage() {
                 <StatusBadge status={proposal?.status ?? "DRAFT"} />
                 {supervisorName && (
                   <p
-                    className="text-sm text-muted-foreground break-words"
+                    className="break-words text-sm text-muted-foreground"
                     title={supervisorName}
                   >
                     Supervisor:{" "}
@@ -281,13 +157,18 @@ export default function StudentDashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Deliverables</CardTitle>
-            <CardDescription>From your supervisor</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle>Upcoming Deliverables</CardTitle>
+              <CardDescription>From your supervisor</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/student/work-stream?tab=deliverables">View all</Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {deliverables.length > 0 ? (
-              deliverables.slice(0, 5).map((d) => (
+              deliverables.map((d) => (
                 <div
                   key={d.id}
                   className="flex items-center justify-between rounded-lg border p-3 text-sm"
@@ -307,13 +188,36 @@ export default function StudentDashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Evaluations</CardTitle>
-            <CardDescription>Scheduled evaluation events</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle>Upcoming Evaluations</CardTitle>
+              <CardDescription>
+                Deliverable evaluations and scheduled events
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/student/evaluations">View all</Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            {evaluations.length > 0 ? (
-              evaluations.slice(0, 5).map((item) => (
+            {showDeliverableEvaluations ? (
+              deliverableEvaluations.map((item) => (
+                <div
+                  key={item.submissionId}
+                  className="flex items-start justify-between gap-2 rounded-lg border p-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{item.deliverableTitle}</p>
+                    <p className="text-muted-foreground">
+                      {item.phaseName ? `${item.phaseName} · ` : ""}
+                      {item.templateTitle}
+                    </p>
+                  </div>
+                  <StatusBadge status={item.status} />
+                </div>
+              ))
+            ) : legacyEvaluations.length > 0 ? (
+              legacyEvaluations.map((item) => (
                 <div key={item.id} className="rounded-lg border p-3 text-sm">
                   <p className="font-medium">{item.evaluation.title}</p>
                   <p className="text-muted-foreground">
@@ -332,25 +236,28 @@ export default function StudentDashboardPage() {
 
         <GlobalAnnouncementsCard
           announcements={data.globalAnnouncements}
+          limit={DASHBOARD_WIDGET_LIMIT}
+          viewAllDialog
         />
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <Megaphone className="h-4 w-4" />
               Team Announcements
             </CardTitle>
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+              <Link href="/student/work-stream?tab=announcements">View all</Link>
+            </Button>
           </CardHeader>
-          <CardContent>
-            {data.announcements.length > 0 ? (
-              <ScrollableFeed>
-                {data.announcements.map((a) => (
-                  <div key={a.id} className="rounded-lg border p-3 text-sm">
-                    <p className="font-medium">{a.title}</p>
-                    <p className="line-clamp-2 text-muted-foreground">{a.message}</p>
-                  </div>
-                ))}
-              </ScrollableFeed>
+          <CardContent className="space-y-3">
+            {teamAnnouncements.length > 0 ? (
+              teamAnnouncements.map((a) => (
+                <div key={a.id} className="rounded-lg border p-3 text-sm">
+                  <p className="font-medium">{a.title}</p>
+                  <p className="line-clamp-2 text-muted-foreground">{a.message}</p>
+                </div>
+              ))
             ) : (
               <p className="text-sm text-muted-foreground">No announcements.</p>
             )}
@@ -360,6 +267,8 @@ export default function StudentDashboardPage() {
         <RecentActivityFeed
           className="lg:col-span-2"
           recentActivity={data.recentActivity}
+          displayLimit={DASHBOARD_WIDGET_LIMIT}
+          viewAllHref="/student/notifications"
         />
       </div>
     </div>

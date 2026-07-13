@@ -75,8 +75,17 @@ export const RealtimeEvents = {
   DELIVERABLE_CREATED: "deliverable.created",
   DELIVERABLE_UPDATED: "deliverable.updated",
   DELIVERABLE_DEADLINE_EXTENDED: "deliverable.deadline_extended",
+  DELIVERABLE_DELETED: "deliverable.deleted",
+  DELIVERABLE_TEMPLATE_CREATED: "deliverable_template.created",
+  DELIVERABLE_TEMPLATE_UPDATED: "deliverable_template.updated",
+  DELIVERABLE_TEMPLATE_DELETED: "deliverable_template.deleted",
   SUBMISSION_CREATED: "submission.created",
   SUBMISSION_REVIEWED: "submission.reviewed",
+  SUBMISSION_FINALIZED: "submission.finalized",
+  PHASE_CREATED: "phase.created",
+  PHASE_UPDATED: "phase.updated",
+  PHASE_CONFIGURATION_PUBLISHED: "phase.configuration_published",
+  PHASE_DELETED: "phase.deleted",
   PROPOSAL_SUBMITTED: "proposal.submitted",
   PROPOSAL_ACCEPTED: "proposal.accepted",
   PROPOSAL_REJECTED: "proposal.rejected",
@@ -88,6 +97,17 @@ export const RealtimeEvents = {
   TEAM_MEMBER_JOINED: "team.member_joined",
   TEAM_MEMBER_LEFT: "team.member_left",
   TEAM_ROLE_UPDATED: "team.role_updated",
+  TEAM_UPDATED: "team.updated",
+  TEAM_DELETED: "team.deleted",
+  EVALUATION_ASSIGNED: "evaluation.assigned",
+  RESULT_PUBLISHED: "result.published",
+  RESULT_UPDATED: "result.updated",
+  SUBMISSION_EVALUATION_ASSIGNED: "submission_evaluation.assigned",
+  SUBMISSION_EVALUATION_UPDATED: "submission_evaluation.updated",
+  SUBMISSION_EVALUATION_SUBMITTED: "submission_evaluation.submitted",
+  GPA_RECALCULATED: "gpa.recalculated",
+  USER_ROLE_UPDATED: "user.role_updated",
+  USER_STATUS_UPDATED: "user.status_updated",
   CONNECTED: "realtime.connected",
   ERROR: "realtime.error",
 } as const;
@@ -165,6 +185,11 @@ export interface RealtimeDeliverablePayload {
   deliverable: RealtimeDeliverableWire;
 }
 
+export interface RealtimeDeliverableDeletedPayload {
+  teamId: string;
+  deliverableId: string;
+}
+
 export interface RealtimeSubmissionWire {
   id: string;
   deliverableId: string;
@@ -192,8 +217,20 @@ export const WORKSTREAM_EVENTS = [
   RealtimeEvents.DELIVERABLE_CREATED,
   RealtimeEvents.DELIVERABLE_UPDATED,
   RealtimeEvents.DELIVERABLE_DEADLINE_EXTENDED,
+  RealtimeEvents.DELIVERABLE_DELETED,
   RealtimeEvents.SUBMISSION_CREATED,
   RealtimeEvents.SUBMISSION_REVIEWED,
+  RealtimeEvents.SUBMISSION_FINALIZED,
+] as const;
+
+export const CONFIG_EVENTS = [
+  RealtimeEvents.DELIVERABLE_TEMPLATE_CREATED,
+  RealtimeEvents.DELIVERABLE_TEMPLATE_UPDATED,
+  RealtimeEvents.DELIVERABLE_TEMPLATE_DELETED,
+  RealtimeEvents.PHASE_CREATED,
+  RealtimeEvents.PHASE_UPDATED,
+  RealtimeEvents.PHASE_CONFIGURATION_PUBLISHED,
+  RealtimeEvents.PHASE_DELETED,
 ] as const;
 
 export interface RealtimeProposalWire {
@@ -298,6 +335,27 @@ export interface RealtimeTeamRoleUpdatedPayload {
   member: RealtimeTeamMemberWire;
 }
 
+export interface RealtimeTeamUpdatedPayload {
+  workspaceId: string;
+  teamId: string;
+  team: {
+    id: string;
+    name: string;
+    domain: string;
+    projectTitle: string | null;
+    projectAbstract: string | null;
+    proposalPdfUrl: string | null;
+    maxMembers: number;
+    isOpen: boolean;
+  };
+}
+
+export interface RealtimeTeamDeletedPayload {
+  workspaceId: string;
+  teamId: string;
+  name: string;
+}
+
 export const PROPOSAL_EVENTS = [
   RealtimeEvents.PROPOSAL_SUBMITTED,
   RealtimeEvents.PROPOSAL_ACCEPTED,
@@ -313,4 +371,67 @@ export const TEAM_EVENTS = [
   RealtimeEvents.TEAM_MEMBER_JOINED,
   RealtimeEvents.TEAM_MEMBER_LEFT,
   RealtimeEvents.TEAM_ROLE_UPDATED,
+  RealtimeEvents.TEAM_UPDATED,
+  RealtimeEvents.TEAM_DELETED,
+] as const;
+
+export interface RealtimeSubmissionEvaluationPayload {
+  workspaceId: string;
+  evaluationId: string;
+  submissionId: string;
+  deliverableId: string;
+  teamId: string;
+  evaluatorId: string;
+  status: string;
+  deliverableTitle?: string;
+  phaseId?: string | null;
+}
+
+export interface RealtimeLegacyEvaluationPayload {
+  workspaceId: string;
+  evaluationId: string;
+  teamId: string;
+  title?: string;
+  date?: string;
+  venue?: string;
+  resultId?: string;
+  marks?: number;
+}
+
+export interface RealtimeGpaRecalculatedPayload {
+  workspaceId: string;
+  phaseId: string;
+  teamId: string;
+}
+
+export interface RealtimeUserRoleUpdatedPayload {
+  workspaceId: string;
+  userId: string;
+  role: string;
+  fullName?: string;
+  email?: string;
+}
+
+export interface RealtimeUserStatusUpdatedPayload {
+  workspaceId: string;
+  userId: string;
+  isActive: boolean;
+  role?: string;
+  fullName?: string;
+  email?: string;
+}
+
+export const EVALUATION_EVENTS = [
+  RealtimeEvents.EVALUATION_ASSIGNED,
+  RealtimeEvents.RESULT_PUBLISHED,
+  RealtimeEvents.RESULT_UPDATED,
+  RealtimeEvents.SUBMISSION_EVALUATION_ASSIGNED,
+  RealtimeEvents.SUBMISSION_EVALUATION_UPDATED,
+  RealtimeEvents.SUBMISSION_EVALUATION_SUBMITTED,
+  RealtimeEvents.GPA_RECALCULATED,
+] as const;
+
+export const AUTH_MEMBERSHIP_EVENTS = [
+  RealtimeEvents.USER_ROLE_UPDATED,
+  RealtimeEvents.USER_STATUS_UPDATED,
 ] as const;

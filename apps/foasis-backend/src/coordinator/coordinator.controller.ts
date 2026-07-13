@@ -99,11 +99,6 @@ export class CoordinatorController {
     );
   }
 
-  @Get('system-health')
-  getSystemHealth() {
-    return this.coordinatorPagesService.getSystemHealth();
-  }
-
   @Get('submissions/finalized')
   getFinalizedSubmissions(
     @Req() req: CoordinatorRequest,

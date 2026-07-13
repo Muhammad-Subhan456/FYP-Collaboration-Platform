@@ -82,9 +82,12 @@ export class StudentController {
   }
 
   @Get('evaluations')
-  getEvaluations(@Req() req: { user: { userId: string } }) {
+  getEvaluations(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
     return this.studentPagesService.getEvaluations(
       req.user.userId,
+      req.workspaceId,
     );
   }
 

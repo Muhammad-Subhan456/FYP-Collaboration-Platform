@@ -97,8 +97,6 @@ export const queryKeys = {
         : (["supervisor", "milestones", userId, workspaceId ?? null] as const),
     milestonesPrefix: () => ["supervisor", "milestones"] as const,
     workStreamPrefix: () => ["supervisor", "work-stream"] as const,
-    evaluations: (userId?: string, workspaceId?: string | null) =>
-      ["supervisor", "evaluations", userId, workspaceId ?? null] as const,
     submissionResults: (
       filters?: Record<string, string | undefined>,
       workspaceId?: string | null,
@@ -149,8 +147,6 @@ export const queryKeys = {
       readFilter = "all",
       workspaceId?: string | null,
     ) => ["coordinator", "me", page, readFilter, workspaceId ?? null] as const,
-    systemHealth: (userId?: string, workspaceId?: string | null) =>
-      ["coordinator", "system-health", userId, workspaceId ?? null] as const,
     userDetail: (userId: string, workspaceId?: string | null) =>
       ["coordinator", "user-detail", userId, workspaceId ?? null] as const,
     evaluatorOverview: (workspaceId?: string | null) =>
@@ -262,5 +258,6 @@ export const queryKeys = {
     all: ["super-admin"] as const,
     workspaces: (includeArchived = false) =>
       ["super-admin", "workspaces", includeArchived] as const,
+    systemHealth: () => ["super-admin", "system-health"] as const,
   },
 } as const;

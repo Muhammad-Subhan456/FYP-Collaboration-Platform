@@ -47,6 +47,15 @@ export const submissionEvaluationService = {
     return res.data;
   },
 
+  remindEvaluators: async (submissionId: string) => {
+    const res = await api.post<{
+      success: boolean;
+      remindedCount: number;
+      remindedAt: string;
+    }>("/submission-evaluations/remind", { submissionId });
+    return res.data;
+  },
+
   getMyEvaluations: async (status?: SubmissionEvaluationStatus) => {
     const res = await api.get<SubmissionEvaluationDetail[]>(
       "/submission-evaluations/my",

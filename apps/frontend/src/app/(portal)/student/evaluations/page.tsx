@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, ClipboardCheck, MapPin } from "lucide-react";
 
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -54,62 +54,113 @@ export default function StudentEvaluationsPage() {
   }
 
   const evaluations = data.evaluations;
+  const deliverableEvaluations = data.deliverableEvaluations ?? [];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Upcoming Evaluations</h2>
-        <p className="text-sm text-muted-foreground">
-          Scheduled viva and evaluation events for your team
-        </p>
-      </div>
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Deliverable evaluations</h2>
+          <p className="text-sm text-muted-foreground">
+            Rubric marking progress for your team&apos;s finalized submissions
+          </p>
+        </div>
 
-      {evaluations.length === 0 ? (
-        <EmptyState
-          title="No evaluations scheduled"
-          description="Your coordinator will schedule evaluations when the time comes."
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {evaluations.map((item) => {
-            const ev = item.evaluation;
-            const isPast = new Date(ev.date) < new Date();
-            return (
-              <Card
-                key={item.id}
-                id={`focus-${ev.id}`}
-                className={cn(
-                  "transition-all hover:shadow-md",
-                  isDeepLinkFocused(evaluationFocusId, ev.id) &&
-                    "border-primary ring-2 ring-primary/20",
-                )}
-              >
+        {deliverableEvaluations.length === 0 ? (
+          <EmptyState
+            title="No deliverable evaluations yet"
+            description="Status appears here once a coordinator assigns evaluators to your finalized submissions."
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {deliverableEvaluations.map((item) => (
+              <Card key={item.submissionId}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-base">{ev.title}</CardTitle>
-                    <StatusBadge status={isPast ? "INACTIVE" : "ACTIVE"} />
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base">
+                      {item.deliverableTitle}
+                    </CardTitle>
+                    <StatusBadge status={item.status} />
                   </div>
                   <CardDescription>
-                    {ev.type.replace(/_/g, " ")}
+                    {item.phaseName ? `${item.phaseName} · ` : ""}
+                    {item.templateTitle}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm">
+                <CardContent className="space-y-3 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    {formatDateTime(ev.date)}
+                    <ClipboardCheck className="h-4 w-4" />
+                    {item.submittedEvaluatorCount}/{item.evaluatorCount}{" "}
+                    evaluator
+                    {item.evaluatorCount === 1 ? "" : "s"} submitted
                   </div>
-                  {ev.venue && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {ev.venue}
-                    </div>
-                  )}
+                  {item.status === "SUBMITTED" ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/student/results">View results</Link>
+                    </Button>
+                  ) : null}
                 </CardContent>
               </Card>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Scheduled events</h2>
+          <p className="text-sm text-muted-foreground">
+            Viva and evaluation events scheduled by your coordinator
+          </p>
         </div>
-      )}
+
+        {evaluations.length === 0 ? (
+          <EmptyState
+            title="No evaluations scheduled"
+            description="Your coordinator will schedule evaluations when the time comes."
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {evaluations.map((item) => {
+              const ev = item.evaluation;
+              const isPast = new Date(ev.date) < new Date();
+              return (
+                <Card
+                  key={item.id}
+                  id={`focus-${ev.id}`}
+                  className={cn(
+                    "transition-all hover:shadow-md",
+                    isDeepLinkFocused(evaluationFocusId, ev.id) &&
+                      "border-primary ring-2 ring-primary/20",
+                  )}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-base">{ev.title}</CardTitle>
+                      <StatusBadge status={isPast ? "INACTIVE" : "ACTIVE"} />
+                    </div>
+                    <CardDescription>
+                      {ev.type.replace(/_/g, " ")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      {formatDateTime(ev.date)}
+                    </div>
+                    {ev.venue ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="h-4 w-4" />
+                        {ev.venue}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

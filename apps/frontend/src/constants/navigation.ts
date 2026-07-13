@@ -24,7 +24,6 @@ export const SUPERVISOR_NAV: NavItemConfig[] = [
   { title: "Browse Teams", href: "/supervisor/invitations", icon: "Mail" },
   { title: "Work Stream", href: "/supervisor/work-stream", icon: "Megaphone" },
   { title: "Milestones", href: "/supervisor/milestones", icon: "Flag" },
-  { title: "Evaluations", href: "/supervisor/evaluations", icon: "Calendar" },
   { title: "Results", href: "/supervisor/results", icon: "Award" },
   { title: "Teams", href: "/supervisor/teams", icon: "Users" },
   { title: "Notifications", href: "/supervisor/notifications", icon: "Bell" },
@@ -43,13 +42,13 @@ export const COORDINATOR_NAV: NavItemConfig[] = [
   { title: "Evaluations", href: "/coordinator/evaluations", icon: "Calendar" },
   { title: "Results", href: "/coordinator/results", icon: "Award" },
   { title: "Analytics", href: "/coordinator/analytics", icon: "BarChart3" },
-  { title: "System Health", href: "/coordinator/system-health", icon: "Server" },
   { title: "Notifications", href: "/coordinator/notifications", icon: "Bell" },
   { title: "Profile", href: "/coordinator/profile", icon: "User" },
 ];
 
 export const SUPER_ADMIN_NAV: NavItemConfig[] = [
   { title: "Workspaces", href: "/super-admin/workspaces", icon: "Building2" },
+  { title: "System Health", href: "/super-admin/system-health", icon: "Server" },
 ];
 
 export const EVALUATOR_NAV: NavItemConfig[] = [

@@ -6,6 +6,8 @@ import {
   applyMemberJoined,
   applyMemberLeft,
   applyRoleUpdated,
+  applyTeamDeleted,
+  applyTeamUpdated,
 } from "../team-cache";
 import type { RealtimeEventEnvelope } from "../types";
 import { RealtimeEvents } from "../types";
@@ -52,6 +54,14 @@ export function handleTeamEvent(
         workspaceId,
         envelope.payload as Parameters<typeof applyMemberJoined>[4],
       );
+      if (role === "COORDINATOR") {
+        void queryClient.invalidateQueries({
+          queryKey: ["coordinator", "teams"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["coordinator", "all-teams"],
+        });
+      }
       break;
     }
     case RealtimeEvents.TEAM_MEMBER_LEFT: {
@@ -65,6 +75,14 @@ export function handleTeamEvent(
         workspaceId,
         envelope.payload as Parameters<typeof applyMemberLeft>[4],
       );
+      if (role === "COORDINATOR") {
+        void queryClient.invalidateQueries({
+          queryKey: ["coordinator", "teams"],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["coordinator", "all-teams"],
+        });
+      }
       break;
     }
     case RealtimeEvents.TEAM_ROLE_UPDATED: {
@@ -74,6 +92,26 @@ export function handleTeamEvent(
         role,
         workspaceId,
         envelope.payload as Parameters<typeof applyRoleUpdated>[4],
+      );
+      break;
+    }
+    case RealtimeEvents.TEAM_UPDATED: {
+      applyTeamUpdated(
+        queryClient,
+        userId,
+        role,
+        workspaceId,
+        envelope.payload as Parameters<typeof applyTeamUpdated>[4],
+      );
+      break;
+    }
+    case RealtimeEvents.TEAM_DELETED: {
+      applyTeamDeleted(
+        queryClient,
+        userId,
+        role,
+        workspaceId,
+        envelope.payload as Parameters<typeof applyTeamDeleted>[4],
       );
       break;
     }

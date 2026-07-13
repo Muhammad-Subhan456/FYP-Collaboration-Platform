@@ -3,15 +3,18 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentProfileDto } from './dto/create-student-profile.dto';
 import { CreateSupervisorProfileDto } from './dto/create-supervisor-profile.dto';
 import { CreateCoordinatorProfileDto } from './dto/create-coordinator-profile.dto';
+import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 
-type UserRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR';
+type UserRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR' | 'EVALUATOR';
 
 @Injectable()
 export class ProfilesService {
@@ -21,10 +24,61 @@ export class ProfilesService {
     private readonly activityLogsService: ActivityLogsService,
   ) {}
 
+  private async assertValidStudentUpdate(
+    data: Record<string, unknown>,
+  ): Promise<UpdateStudentProfileDto> {
+    const { email: _ignored, ...rest } = data;
+    const dto = plainToInstance(UpdateStudentProfileDto, rest, {
+      enableImplicitConversion: true,
+    });
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    if (errors.length > 0) {
+      const messages = errors.flatMap((error) =>
+        Object.values(error.constraints ?? {}),
+      );
+      throw new BadRequestException(
+        messages.length > 0 ? messages : 'Invalid profile data',
+      );
+    }
+
+    return dto;
+  }
+
   async findOne(authUserId: string) {
     return this.prisma.userProfile.findUnique({
       where: { authUserId },
     });
+  }
+
+  private async canSupervisorViewStudent(
+    supervisorId: string,
+    studentAuthUserId: string,
+  ) {
+    const membership = await this.prisma.teamMember.findFirst({
+      where: { authUserId: studentAuthUserId },
+      select: { teamId: true },
+    });
+
+    if (!membership) {
+      return false;
+    }
+
+    const supervised = await this.prisma.proposal.findFirst({
+      where: {
+        teamId: membership.teamId,
+        assignedSupervisorId: supervisorId,
+        status: {
+          in: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
+        },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(supervised);
   }
 
   async findOneForRequester(
@@ -38,6 +92,14 @@ export class ProfilesService {
       if (
         target?.profileType === 'SUPERVISOR' &&
         (requesterRole === 'STUDENT' || requesterRole === 'SUPERVISOR')
+      ) {
+        return target;
+      }
+
+      if (
+        requesterRole === 'SUPERVISOR' &&
+        target?.profileType === 'STUDENT' &&
+        (await this.canSupervisorViewStudent(requesterId, authUserId))
       ) {
         return target;
       }
@@ -98,12 +160,21 @@ export class ProfilesService {
 
     await this.assertNoProfile(authUserId);
 
+    const account = await this.prisma.user.findUnique({
+      where: { id: authUserId },
+      select: { email: true },
+    });
+
+    if (!account?.email) {
+      throw new BadRequestException('Authenticated account email is required');
+    }
+
     const profile = await this.prisma.userProfile.create({
       data: {
         authUserId,
         profileType: 'STUDENT',
         fullName: dto.fullName,
-        email: dto.email,
+        email: account.email,
         profilePicture: dto.profilePicture,
         registrationNumber: dto.registrationNumber,
         department: dto.department,
@@ -112,8 +183,8 @@ export class ProfilesService {
         semester: dto.semester,
         skills: dto.skills ?? [],
         interests: dto.interests ?? [],
-        linkedIn: dto.linkedIn,
-        github: dto.github,
+        linkedIn: dto.linkedIn || null,
+        github: dto.github || null,
         bio: dto.bio,
       },
     });
@@ -218,7 +289,7 @@ export class ProfilesService {
 
   async updateMyProfile(
     authUserId: string,
-    role: UserRole,
+    role: string,
     data: Record<string, unknown>,
   ) {
     const existing = await this.findOne(authUserId);
@@ -232,9 +303,14 @@ export class ProfilesService {
       );
     }
 
+    const updateData =
+      role === 'STUDENT'
+        ? await this.assertValidStudentUpdate(data)
+        : data;
+
     const profile = await this.prisma.userProfile.update({
       where: { authUserId },
-      data: data as any,
+      data: updateData as object,
     });
 
     await this.activityLogsService.logActivity(

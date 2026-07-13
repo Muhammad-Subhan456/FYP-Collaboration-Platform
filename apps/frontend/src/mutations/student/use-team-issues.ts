@@ -123,6 +123,7 @@ export function useStudentTeamIssueCommentMutation() {
           comment,
         );
       }
+      toast.success("Comment posted");
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

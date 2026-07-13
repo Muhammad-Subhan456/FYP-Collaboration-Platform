@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 
 import { getRealtimeServerUrl } from "./config";
+import type { AuthMembershipCallbacks } from "./handlers/auth-membership";
 import {
   registerRealtimeHandlers,
   unregisterRealtimeHandlers,
@@ -29,6 +30,7 @@ export function connectRealtime(
   role: string,
   workspaceId: string | null | undefined,
   queryClient: QueryClient,
+  authCallbacks?: AuthMembershipCallbacks | null,
 ) {
   const normalizedWorkspaceId = workspaceId ?? null;
   const needsNewSocket =
@@ -82,7 +84,7 @@ export function connectRealtime(
     });
   }
 
-  // Always refresh handlers so queryClient closures stay current.
+  // Always refresh handlers so queryClient / auth closures stay current.
   if (socket) {
     unregisterRealtimeHandlers(socket);
     registerRealtimeHandlers(
@@ -91,6 +93,7 @@ export function connectRealtime(
       userId,
       role,
       normalizedWorkspaceId,
+      authCallbacks,
     );
   }
 

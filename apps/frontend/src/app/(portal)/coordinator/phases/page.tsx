@@ -6,7 +6,7 @@ import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -189,9 +189,10 @@ export default function CoordinatorPhasesPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {phases.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No phases yet. Create FYP I, FYP II, FYP III to get started.
-            </p>
+            <EmptyState
+              title="No phases yet"
+              description="Create FYP I, FYP II, or FYP III to get started."
+            />
           ) : (
             phases.map((phase) => (
               <div

@@ -243,7 +243,8 @@ export class WorkStreamService {
             entityId: ref.entityId,
           })),
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(refs.length * 30, 500),
         select: {
           id: true,
           entityType: true,
@@ -264,12 +265,16 @@ export class WorkStreamService {
       }[]
     >();
 
-    for (const comment of comments) {
+    // Keep chronological order per entity after the global newest-first take.
+    for (const comment of comments.reverse()) {
       const key = this.entityKey(
         comment.entityType,
         comment.entityId,
       );
       const list = map.get(key) ?? [];
+      if (list.length >= 30) {
+        continue;
+      }
       list.push({
         id: comment.id,
         authUserId: comment.authUserId,
@@ -277,6 +282,15 @@ export class WorkStreamService {
         createdAt: comment.createdAt,
       });
       map.set(key, list);
+    }
+
+    for (const [key, list] of map) {
+      map.set(
+        key,
+        list.sort(
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+        ),
+      );
     }
 
     return map;

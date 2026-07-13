@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AppUrlsService } from '../../common/app-urls.service';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { TeamsModule } from '../../teams/teams.module';
 import { UsersModule } from '../../users/users.module';
@@ -21,6 +22,7 @@ import { SubmissionResultsService } from './submission-results.service';
     SubmissionEvaluationsService,
     SubmissionResultsService,
     GpaCalculationService,
+    AppUrlsService,
   ],
   exports: [
     SubmissionEvaluationsService,

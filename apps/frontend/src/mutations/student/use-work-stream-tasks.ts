@@ -26,6 +26,7 @@ export function useStudentWorkStreamMutations() {
           comment,
         });
       }
+      toast.success("Comment posted");
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

@@ -169,6 +169,11 @@ export interface DeliverableSnapshotPayload {
   deliverable: DeliverableWire;
 }
 
+export interface DeliverableDeletedPayload {
+  teamId: string;
+  deliverableId: string;
+}
+
 export interface SubmissionWire {
   id: string;
   deliverableId: string;
@@ -288,4 +293,95 @@ export interface TeamMemberLeftPayload {
 export interface TeamRoleUpdatedPayload {
   teamId: string;
   member: TeamMemberWire;
+}
+
+export interface TeamUpdatedPayload {
+  workspaceId: string;
+  teamId: string;
+  team: {
+    id: string;
+    name: string;
+    domain: string;
+    projectTitle: string | null;
+    projectAbstract: string | null;
+    proposalPdfUrl: string | null;
+    maxMembers: number;
+    isOpen: boolean;
+  };
+}
+
+export interface TeamDeletedPayload {
+  workspaceId: string;
+  teamId: string;
+  name: string;
+}
+
+export interface LegacyEvaluationAssignedPayload {
+  workspaceId: string;
+  evaluationId: string;
+  teamId: string;
+  title: string;
+  date: string;
+  venue: string;
+}
+
+export interface LegacyResultPayload {
+  workspaceId: string;
+  evaluationId: string;
+  teamId: string;
+  resultId: string;
+  marks: number;
+}
+
+export interface SubmissionEvaluationRealtimePayload {
+  workspaceId: string;
+  evaluationId: string;
+  submissionId: string;
+  deliverableId: string;
+  teamId: string;
+  evaluatorId: string;
+  status: string;
+  deliverableTitle?: string;
+  phaseId?: string | null;
+}
+
+export interface GpaRecalculatedPayload {
+  workspaceId: string;
+  phaseId: string;
+  teamId: string;
+}
+
+export interface PhaseRealtimePayload {
+  workspaceId: string;
+  phaseId: string;
+  name: string;
+  status?: string;
+  isConfigurationPublished?: boolean;
+}
+
+export interface DeliverableTemplateRealtimePayload {
+  workspaceId: string;
+  template: {
+    id: string;
+    title: string;
+    phaseId: string;
+    phaseName: string;
+  };
+}
+
+export interface UserRoleUpdatedPayload {
+  workspaceId: string;
+  userId: string;
+  role: string;
+  fullName?: string;
+  email?: string;
+}
+
+export interface UserStatusUpdatedPayload {
+  workspaceId: string;
+  userId: string;
+  isActive: boolean;
+  role?: string;
+  fullName?: string;
+  email?: string;
 }

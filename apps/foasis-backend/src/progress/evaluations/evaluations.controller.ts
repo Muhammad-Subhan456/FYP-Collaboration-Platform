@@ -6,7 +6,6 @@ import {
   Post,
   Req,
   UseGuards,
-  Headers,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -41,7 +40,8 @@ export class EvaluationsController {
       );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('COORDINATOR')
   @Get()
   getAllEvaluations(@Req() req: { workspaceId: string }) {
     return this.evaluationsService
@@ -69,16 +69,15 @@ export class EvaluationsController {
       );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('my')
   getMyEvaluations(
-    @Headers('authorization')
-    authorization: string,
+    @Req() req: { user: { userId: string } },
   ) {
-    return this.evaluationsService
-      .getMyEvaluations(
-        authorization,
-      );
+    return this.evaluationsService.getMyEvaluationsByUserId(
+      req.user.userId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

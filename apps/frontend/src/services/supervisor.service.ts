@@ -1,8 +1,6 @@
 import api from "@/lib/axios";
-import type { EvaluationPanel } from "@/types/coordinator";
 import type {
   Announcement,
-  EvaluationResult,
   Deliverable,
   DeliverableType,
   Submission,
@@ -158,34 +156,6 @@ export const supervisorService = {
 
   getSupervisorStats: async () => {
     const res = await api.get("/stats/supervisor");
-    return res.data;
-  },
-
-  getMyEvaluationPanels: async () => {
-    const res = await api.get<EvaluationPanel[]>("/evaluation-panels/my");
-    return res.data;
-  },
-
-  submitEvaluationResult: async (
-    evaluationId: string,
-    data: { teamId: string; marks: number; comments?: string },
-  ) => {
-    const res = await api.post(`/evaluation-results/${evaluationId}`, data);
-    return res.data;
-  },
-
-  updateEvaluationResult: async (
-    resultId: string,
-    data: { marks: number; comments?: string },
-  ) => {
-    const res = await api.patch(`/evaluation-results/${resultId}`, data);
-    return res.data;
-  },
-
-  getResultsForTeam: async (teamId: string) => {
-    const res = await api.get<EvaluationResult[]>(
-      `/evaluation-results/team/${teamId}`,
-    );
     return res.data;
   },
 };

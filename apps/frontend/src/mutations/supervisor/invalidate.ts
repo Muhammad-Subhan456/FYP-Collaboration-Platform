@@ -35,12 +35,6 @@ export function invalidateSupervisorMilestones(queryClient: QueryClient) {
   invalidateDashboard(queryClient, "SUPERVISOR");
 }
 
-export function invalidateSupervisorEvaluations(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.evaluations(),
-  });
-}
-
 export function invalidateSupervisorWorkStream(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.supervisor.workStreamPrefix(),

@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, Bell, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { EvaluatorMultiSelect } from "@/components/coordinator/evaluator-multi-select";
 import { PhaseFilter } from "@/components/common/phase-filter";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -155,6 +155,26 @@ export default function CoordinatorEvaluationsPage() {
       });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const [remindingSubmissionId, setRemindingSubmissionId] = useState<
+    string | null
+  >(null);
+
+  const remindMutation = useMutation({
+    mutationFn: submissionEvaluationService.remindEvaluators,
+    onSuccess: (result) => {
+      toast.success(
+        result.remindedCount === 1
+          ? "Reminder sent to 1 evaluator"
+          : `Reminder sent to ${result.remindedCount} evaluators`,
+      );
+      setRemindingSubmissionId(null);
+    },
+    onError: (error) => {
+      setRemindingSubmissionId(null);
+      toast.error(getErrorMessage(error));
+    },
   });
 
   const pendingCount = useMemo(
@@ -306,9 +326,10 @@ export default function CoordinatorEvaluationsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No finalized submissions match the current filters.
-            </p>
+            <EmptyState
+              title="No eligible submissions"
+              description="No finalized submissions match the current filters."
+            />
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[1200px] text-sm">
@@ -374,7 +395,7 @@ export default function CoordinatorEvaluationsPage() {
                         submitted
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button asChild size="sm" variant="outline">
                             <a
                               href={row.fileUrl}
@@ -398,6 +419,32 @@ export default function CoordinatorEvaluationsPage() {
                             <UserPlus className="mr-2 h-4 w-4" />
                             Add evaluator
                           </Button>
+                          {row.evaluations.some(
+                            (assignment) =>
+                              assignment.status === "ASSIGNED" ||
+                              assignment.status === "IN_PROGRESS",
+                          ) ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={
+                                remindingSubmissionId === row.submissionId &&
+                                remindMutation.isPending
+                              }
+                              onClick={() => {
+                                setRemindingSubmissionId(row.submissionId);
+                                remindMutation.mutate(row.submissionId);
+                              }}
+                            >
+                              {remindingSubmissionId === row.submissionId &&
+                              remindMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Bell className="mr-2 h-4 w-4" />
+                              )}
+                              Remind evaluators
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

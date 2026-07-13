@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { PhaseFilter } from "@/components/common/phase-filter";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -598,9 +598,10 @@ export default function CoordinatorSubmissionsPage() {
             </div>
 
             {submissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No finalized submissions match the current filters.
-              </p>
+              <EmptyState
+                title="No finalized submissions"
+                description="No finalized submissions match the current filters."
+              />
             ) : viewMode === "list" ? (
               submissions.map((submission) => (
                 <FinalizedSubmissionListItem
@@ -660,9 +661,10 @@ export default function CoordinatorSubmissionsPage() {
           </CardHeader>
           <CardContent>
             {overview.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No published deliverables to track yet.
-              </p>
+              <EmptyState
+                title="No deliverables to track"
+                description="No published deliverables to track yet."
+              />
             ) : (
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full min-w-[1080px] text-sm">

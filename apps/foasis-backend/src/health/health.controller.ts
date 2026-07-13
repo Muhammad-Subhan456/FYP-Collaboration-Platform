@@ -1,4 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 import { SkipWorkspace } from '../common/decorators/skip-workspace.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,6 +12,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Readiness probe — returns 503 when the database is unreachable
+   * so orchestrators (Docker/K8s) do not route traffic to a broken instance.
+   */
   @Get()
   async check() {
     const timestamp = new Date().toISOString();
@@ -31,22 +39,20 @@ export class HealthController {
         timestamp,
       };
     } catch {
-      const services = [
-        {
-          name: 'foasis-backend',
-          status: 'error',
-          database: 'disconnected',
-          timestamp,
-        },
-      ];
-
-      return {
+      throw new ServiceUnavailableException({
         status: 'degraded',
         service: 'foasis-backend',
         database: 'disconnected',
-        services,
+        services: [
+          {
+            name: 'foasis-backend',
+            status: 'error',
+            database: 'disconnected',
+            timestamp,
+          },
+        ],
         timestamp,
-      };
+      });
     }
   }
 }

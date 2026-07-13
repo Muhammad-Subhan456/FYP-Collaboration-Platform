@@ -4,8 +4,6 @@ import { DashboardService } from '../dashboard/dashboard.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AnnouncementsService } from '../progress/announcements/announcements.service';
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
-import { EvaluationPanelsService } from '../progress/evaluation-panels/evaluation-panels.service';
-import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
 import { TeamIssuesService } from '../progress/team-issues/team-issues.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
 import { WorkStreamService } from '../progress/work-stream/work-stream.service';
@@ -23,8 +21,6 @@ export class SupervisorPagesService {
     private readonly proposalsService: ProposalsService,
     private readonly submissionsService: SubmissionsService,
     private readonly teamIssuesService: TeamIssuesService,
-    private readonly evaluationPanelsService: EvaluationPanelsService,
-    private readonly evaluationResultsService: EvaluationResultsService,
     private readonly teamsService: TeamsService,
     private readonly profilesService: ProfilesService,
     private readonly notificationsService: NotificationsService,
@@ -294,31 +290,6 @@ export class SupervisorPagesService {
     };
   }
 
-  async getEvaluations(supervisorId: string) {
-    const panels =
-      await this.evaluationPanelsService.getMyPanels(
-        supervisorId,
-      );
-
-    const teamIds = [
-      ...new Set(
-        panels.flatMap(
-          (panel) =>
-            panel.assignments?.map((a) => a.teamId) ?? [],
-        ),
-      ),
-    ];
-
-    const [teamNameById, results] = await Promise.all([
-      this.loadTeamNameMap(teamIds),
-      this.evaluationResultsService.getResultsByTeamIds(
-        teamIds,
-      ),
-    ]);
-
-    return { panels, teamNameById, results };
-  }
-
   private async loadMembersByTeamIds(teamIds: string[]) {
     const membersByTeamId: Record<string, unknown[]> =
       {};
@@ -340,20 +311,5 @@ export class SupervisorPagesService {
     }
 
     return membersByTeamId;
-  }
-
-  private async loadTeamNameMap(teamIds: string[]) {
-    if (!teamIds.length) {
-      return {};
-    }
-
-    const teams = await this.prisma.team.findMany({
-      where: { id: { in: teamIds } },
-      select: { id: true, name: true },
-    });
-
-    return Object.fromEntries(
-      teams.map((team) => [team.id, team.name]),
-    );
   }
 }

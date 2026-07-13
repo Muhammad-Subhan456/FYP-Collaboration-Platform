@@ -7,6 +7,7 @@ import { AnnouncementsModule } from '../progress/announcements/announcements.mod
 import { DeliverablesModule } from '../progress/deliverables/deliverables.module';
 import { EvaluationResultsModule } from '../progress/evaluation-results/evaluation-results.module';
 import { EvaluationsModule } from '../progress/evaluations/evaluations.module';
+import { SubmissionEvaluationsModule } from '../progress/submission-evaluations/submission-evaluations.module';
 import { TeamIssuesModule } from '../progress/team-issues/team-issues.module';
 import { SubmissionsModule } from '../progress/submissions/submissions.module';
 import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
@@ -32,6 +33,7 @@ import { StudentContextModule } from './student-context.module';
     TeamIssuesModule,
     EvaluationsModule,
     EvaluationResultsModule,
+    SubmissionEvaluationsModule,
     NotificationsModule,
     WorkStreamModule,
   ],

@@ -47,7 +47,7 @@ export function NotificationBell({ role }: NotificationBellProps) {
   const notifications = previewQuery.data?.data ?? [];
 
   const handleNotificationClick = async (notification: Notification) => {
-    const href = resolveNotificationHref(notification);
+    const href = resolveNotificationHref(notification, role);
 
     try {
       if (!notification.isRead) {
@@ -124,7 +124,7 @@ export function NotificationBell({ role }: NotificationBellProps) {
             <ul className="divide-y">
               {notifications.map((notification) => {
                 const Icon = getNotificationIcon(notification);
-                const actionable = isNotificationActionable(notification);
+                const actionable = isNotificationActionable(notification, role);
 
                 return (
                   <li key={notification.id}>

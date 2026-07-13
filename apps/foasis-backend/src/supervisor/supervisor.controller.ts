@@ -117,11 +117,4 @@ export class SupervisorController {
       teamId,
     );
   }
-
-  @Get('evaluations')
-  getEvaluations(@Req() req: { user: { userId: string } }) {
-    return this.supervisorPagesService.getEvaluations(
-      req.user.userId,
-    );
-  }
 }

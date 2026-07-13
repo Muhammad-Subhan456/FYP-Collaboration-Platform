@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { ErrorState } from "@/components/common/state-blocks";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/providers/auth-provider";
+import { getErrorMessage } from "@/lib/axios";
 import { uploadService } from "@/services/progress.service";
 
 const schema = z.object({
@@ -102,7 +103,7 @@ export function CoordinatorProfileForm() {
   if (isError || !data) {
     return (
       <ErrorState
-        message={error instanceof Error ? error.message : "Profile not found"}
+        message={error ? getErrorMessage(error) : "Profile not found"}
         onRetry={() => refetch()}
       />
     );
@@ -133,6 +134,9 @@ export function CoordinatorProfileForm() {
     <Card className="max-w-2xl">
       <CardHeader>
         <CardTitle>Coordinator Profile</CardTitle>
+        <CardDescription>
+          Update your coordinator account details for this workspace.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

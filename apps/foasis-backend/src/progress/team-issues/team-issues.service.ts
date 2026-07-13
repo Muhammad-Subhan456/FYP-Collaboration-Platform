@@ -33,9 +33,25 @@ import {
   serializeIssueSnapshot,
 } from './team-issues-realtime';
 
+const ISSUE_LIST_COMMENT_TAKE = 20;
+const ISSUE_LIST_ACTIVITY_TAKE = 10;
+
+/** Full history for single-issue reload / realtime snapshots. */
 const ISSUE_INCLUDE = {
   comments: { orderBy: { createdAt: 'asc' as const } },
   activities: { orderBy: { createdAt: 'desc' as const } },
+};
+
+/** Capped nested rows for board/list endpoints. */
+const ISSUE_LIST_INCLUDE = {
+  comments: {
+    orderBy: { createdAt: 'asc' as const },
+    take: ISSUE_LIST_COMMENT_TAKE,
+  },
+  activities: {
+    orderBy: { createdAt: 'desc' as const },
+    take: ISSUE_LIST_ACTIVITY_TAKE,
+  },
 };
 
 @Injectable()
@@ -329,7 +345,7 @@ export class TeamIssuesService {
   async getIssuesForTeam(teamId: string) {
     return this.prisma.teamIssue.findMany({
       where: { teamId },
-      include: ISSUE_INCLUDE,
+      include: ISSUE_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -341,7 +357,7 @@ export class TeamIssuesService {
 
     return this.prisma.teamIssue.findMany({
       where: { teamId: { in: teamIds } },
-      include: ISSUE_INCLUDE,
+      include: ISSUE_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -718,7 +734,7 @@ export class TeamIssuesService {
   async getIssuesForUser(authUserId: string) {
     return this.prisma.teamIssue.findMany({
       where: { assignedToId: authUserId },
-      include: ISSUE_INCLUDE,
+      include: ISSUE_LIST_INCLUDE,
       orderBy: { updatedAt: 'desc' },
     });
   }

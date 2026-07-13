@@ -1,14 +1,17 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import { AuthService } from '../../auth/auth.service';
+import { AppUrlsService } from '../../common/app-urls.service';
 import { DomainEvents } from '../../domain-events/domain-event.constants';
 import { DomainEventService } from '../../domain-events/domain-event.service';
+import { EmailService } from '../../email/email.service';
+import { buildDeliverableTemplateAvailableEmail } from '../../email/email.templates';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
@@ -27,6 +30,8 @@ const templateInclude = {
 
 @Injectable()
 export class DeliverableTemplatesService {
+  private readonly logger = new Logger(DeliverableTemplatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
@@ -34,6 +39,8 @@ export class DeliverableTemplatesService {
     private readonly activityLogsService: ActivityLogsService,
     private readonly domainEventService: DomainEventService,
     private readonly gpaCalculationService: GpaCalculationService,
+    private readonly emailService: EmailService,
+    private readonly appUrls: AppUrlsService,
   ) {}
 
   listTemplates(workspaceId: string, phaseId?: string) {
@@ -150,6 +157,7 @@ export class DeliverableTemplatesService {
       scope: { type: 'workspace', id: workspaceId },
       entity: { type: 'DELIVERABLE_TEMPLATE', id: template.id },
       payload: {
+        workspaceId,
         template: {
           id: template.id,
           title: template.title,
@@ -265,7 +273,41 @@ export class DeliverableTemplatesService {
         updatedTemplate.workspaceId,
         updatedTemplate.phaseId,
       );
+
+      this.domainEventService.emitSafe({
+        name: DomainEvents.GPA_RECALCULATED,
+        timestamp: new Date().toISOString(),
+        scope: {
+          type: 'workspace',
+          id: updatedTemplate.workspaceId,
+        },
+        entity: { type: 'PHASE', id: updatedTemplate.phaseId },
+        payload: {
+          workspaceId: updatedTemplate.workspaceId,
+          phaseId: updatedTemplate.phaseId,
+          teamId: '',
+        },
+      });
     }
+
+    this.domainEventService.emitSafe({
+      name: DomainEvents.DELIVERABLE_TEMPLATE_UPDATED,
+      timestamp: new Date().toISOString(),
+      scope: {
+        type: 'workspace',
+        id: updatedTemplate.workspaceId,
+      },
+      entity: { type: 'DELIVERABLE_TEMPLATE', id: updatedTemplate.id },
+      payload: {
+        workspaceId: updatedTemplate.workspaceId,
+        template: {
+          id: updatedTemplate.id,
+          title: updatedTemplate.title,
+          phaseId: updatedTemplate.phaseId,
+          phaseName: updatedTemplate.phase.name,
+        },
+      },
+    });
 
     return updatedTemplate;
   }
@@ -279,6 +321,22 @@ export class DeliverableTemplatesService {
         'Cannot delete a template that has published deliverables',
       );
     }
+
+    this.domainEventService.emitSafe({
+      name: DomainEvents.DELIVERABLE_TEMPLATE_DELETED,
+      timestamp: new Date().toISOString(),
+      scope: { type: 'workspace', id: template.workspaceId },
+      entity: { type: 'DELIVERABLE_TEMPLATE', id: template.id },
+      payload: {
+        workspaceId: template.workspaceId,
+        template: {
+          id: template.id,
+          title: template.title,
+          phaseId: template.phaseId,
+          phaseName: template.phase.name,
+        },
+      },
+    });
 
     await this.prisma.deliverableTemplate.delete({
       where: { id: templateId },
@@ -303,18 +361,20 @@ export class DeliverableTemplatesService {
     template: {
       id: string;
       title: string;
+      description: string;
+      dueDate: Date | null;
       phase: { name: string };
     },
   ) {
-    const members =
-      await this.authService.listActiveUserIds(workspaceId);
-    const supervisors = members.filter(
-      (member) => member.role === UserRole.SUPERVISOR,
-    );
+    const supervisors =
+      await this.authService.listSupervisors(workspaceId);
 
     if (!supervisors.length) {
       return;
     }
+
+    const actionPath = '/supervisor/work-stream?tab=templates';
+    const actionUrl = this.appUrls.portalUrl(actionPath);
 
     await this.notificationDispatch.sendBulk(
       supervisors.map((supervisor) => ({
@@ -324,8 +384,31 @@ export class DeliverableTemplatesService {
         type: 'DELIVERABLE_TEMPLATE_CREATED',
         entityType: 'DELIVERABLE_TEMPLATE',
         entityId: template.id,
-        route: '/supervisor/work-stream?tab=templates',
+        route: actionPath,
       })),
     );
+
+    void Promise.all(
+      supervisors
+        .filter((supervisor) => Boolean(supervisor.email))
+        .map((supervisor) =>
+          this.emailService.send(
+            buildDeliverableTemplateAvailableEmail({
+              to: supervisor.email,
+              deliverableTitle: template.title,
+              phaseName: template.phase.name,
+              dueDate: template.dueDate,
+              description: template.description,
+              actionUrl,
+            }),
+          ),
+        ),
+    ).catch((error) => {
+      this.logger.warn(
+        `Failed to send deliverable-template emails for ${template.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
   }
 }

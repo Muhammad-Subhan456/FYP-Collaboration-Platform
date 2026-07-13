@@ -16,6 +16,9 @@ import {
 const GROUPABLE_NOTIFICATION_TYPES = new Set([
   'TEAM_ISSUE_COMMENTED',
   'WORKSTREAM_COMMENTED',
+  'RESULT_PUBLISHED',
+  'RESULT_UPDATED',
+  'EVALUATION_SUBMITTED',
 ]);
 
 @Injectable()
@@ -27,7 +30,7 @@ export class NotificationsService {
   private requireWorkspaceId(): string {
     const workspaceId = getWorkspaceIdFromContext();
     if (!workspaceId) {
-      throw new Error('Workspace context missing');
+      throw new ForbiddenException('Workspace context is required');
     }
     return workspaceId;
   }
@@ -77,19 +80,40 @@ export class NotificationsService {
     return this.prisma.notification.update({
       where: { id: existing.id },
       data: {
+        title: createNotificationDto.title ?? existing.title,
         message: this.buildGroupedMessage(
+          type,
           existing.message,
           createNotificationDto.message,
         ),
+        route: createNotificationDto.route ?? existing.route,
         createdAt: new Date(),
       },
     });
   }
 
   private buildGroupedMessage(
+    type: string,
     existingMessage: string,
     latestMessage: string,
   ) {
+    if (
+      type === 'RESULT_PUBLISHED' ||
+      type === 'RESULT_UPDATED' ||
+      type === 'EVALUATION_SUBMITTED'
+    ) {
+      const groupedMatch = existingMessage.match(
+        /^(\d+) evaluation updates\./,
+      );
+
+      if (groupedMatch) {
+        const count = Number(groupedMatch[1]) + 1;
+        return `${count} evaluation updates. Latest: ${this.latestSnippet(latestMessage)}`;
+      }
+
+      return `2 evaluation updates. Latest: ${this.latestSnippet(latestMessage)}`;
+    }
+
     const groupedMatch = existingMessage.match(
       /^(\d+) new comments on this thread\./,
     );

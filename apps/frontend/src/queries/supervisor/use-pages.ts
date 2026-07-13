@@ -40,13 +40,6 @@ export function useSupervisorMilestonesQuery(
   });
 }
 
-export function useSupervisorEvaluationsQuery() {
-  return useSupervisorAuthQuery(
-    "evaluations",
-    supervisorPageService.getEvaluations,
-  );
-}
-
 export function useSupervisorWorkStreamQuery(
   teamId?: string | null,
   phaseId?: string | null,

@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
+import { runWithWorkspaceContext } from '../workspace/workspace-als';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 import { ProposalsService } from '../proposals/proposals.service';
@@ -693,6 +694,81 @@ async getTeamMembers(teamId: string) {
   });
 }
 
+/**
+ * JWT callers must be a coordinator, team member, or assigned supervisor.
+ * Internal API-key callers must supply a workspaceId (header) so ALS can scope.
+ */
+async getTeamMembersForRequester(
+  teamId: string,
+  user?: { userId: string; role: string } | null,
+  workspaceId?: string,
+) {
+  if (!user) {
+    if (!workspaceId) {
+      throw new BadRequestException(
+        'Workspace context is required for internal team member access',
+      );
+    }
+
+    return runWithWorkspaceContext(workspaceId, async () => {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, workspaceId },
+        select: { id: true },
+      });
+      if (!team) {
+        throw new NotFoundException('Team not found');
+      }
+      return this.getTeamMembers(teamId);
+    });
+  }
+
+  if (user.role === 'COORDINATOR') {
+    if (workspaceId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, workspaceId },
+        select: { id: true },
+      });
+      if (!team) {
+        throw new NotFoundException('Team not found');
+      }
+    }
+    return this.getTeamMembers(teamId);
+  }
+
+  if (user.role === 'STUDENT') {
+    const membership = await this.prisma.teamMember.findFirst({
+      where: { teamId, authUserId: user.userId },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ForbiddenException(
+        'You can only view members of your own team',
+      );
+    }
+    return this.getTeamMembers(teamId);
+  }
+
+  if (user.role === 'SUPERVISOR') {
+    const supervised = await this.prisma.proposal.findFirst({
+      where: {
+        teamId,
+        assignedSupervisorId: user.userId,
+      },
+      select: { id: true },
+    });
+    if (!supervised) {
+      throw new ForbiddenException(
+        'You can only view members of teams you supervise',
+      );
+    }
+    return this.getTeamMembers(teamId);
+  }
+
+  throw new ForbiddenException(
+    'You do not have permission to view team members',
+  );
+}
+
 async getMyTeamMembers(
   authUserId: string,
   teamId?: string,
@@ -948,6 +1024,36 @@ async getStudentTeamOverview(
 
     await this.proposalsService.syncProposalFromTeam(team.id);
 
+    const payload = {
+      workspaceId: updated.workspaceId,
+      teamId: updated.id,
+      team: {
+        id: updated.id,
+        name: updated.name,
+        domain: updated.domain,
+        projectTitle: updated.projectTitle,
+        projectAbstract: updated.projectAbstract,
+        proposalPdfUrl: updated.proposalPdfUrl,
+        maxMembers: updated.maxMembers,
+        isOpen: updated.isOpen,
+      },
+    };
+
+    this.publishTeamEvent(
+      DomainEvents.TEAM_UPDATED,
+      leaderId,
+      { type: 'team', id: updated.id },
+      payload,
+      updated.id,
+    );
+    this.publishTeamEvent(
+      DomainEvents.TEAM_UPDATED,
+      leaderId,
+      { type: 'workspace', id: updated.workspaceId },
+      payload,
+      updated.id,
+    );
+
     return updated;
   }
 
@@ -973,6 +1079,28 @@ async getStudentTeamOverview(
     where: { teamId: team.id },
     select: { id: true },
   });
+
+  const deletedPayload = {
+    workspaceId: team.workspaceId,
+    teamId: team.id,
+    name: team.name,
+  };
+
+  // Emit before delete so members still in the team room receive it.
+  this.publishTeamEvent(
+    DomainEvents.TEAM_DELETED,
+    leaderId,
+    { type: 'team', id: team.id },
+    deletedPayload,
+    team.id,
+  );
+  this.publishTeamEvent(
+    DomainEvents.TEAM_DELETED,
+    leaderId,
+    { type: 'workspace', id: team.workspaceId },
+    deletedPayload,
+    team.id,
+  );
 
   await this.prisma.$transaction(async (tx) => {
     if (proposal) {

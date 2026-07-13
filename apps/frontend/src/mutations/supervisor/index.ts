@@ -1,5 +1,4 @@
 export {
-  invalidateSupervisorEvaluations,
   invalidateSupervisorInvitations,
   invalidateSupervisorMilestones,
   invalidateSupervisorNotifications,
@@ -13,7 +12,6 @@ export {
   useSupervisorRequestMutations,
 } from "./use-requests-invitations";
 export { useSupervisorTeamIssueCommentMutation } from "./use-team-issues";
-export { useSupervisorEvaluationResultMutation } from "./use-evaluations";
 export { useUpdateSupervisorProfileMutation } from "./use-profile";
 export { useSupervisorNotificationMutations } from "./use-notifications";
 export {

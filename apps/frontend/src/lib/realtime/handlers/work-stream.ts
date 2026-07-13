@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   applyAnnouncementDeleted,
   applyAnnouncementSnapshot,
+  applyDeliverableDeleted,
   applyDeliverableSnapshot,
   applySubmissionSnapshot,
   applyWorkStreamCommentEvent,
@@ -10,6 +11,7 @@ import {
 import type {
   RealtimeAnnouncementDeletedPayload,
   RealtimeAnnouncementPayload,
+  RealtimeDeliverableDeletedPayload,
   RealtimeDeliverablePayload,
   RealtimeEventEnvelope,
   RealtimeSubmissionPayload,
@@ -25,6 +27,21 @@ function teamIdFromEnvelope(envelope: RealtimeEventEnvelope) {
   return payload.teamId ?? null;
 }
 
+function invalidateCoordinatorSubmissionQueues(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "finalized-submissions"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "submission-overview"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "submission-evaluations"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "submissions"],
+  });
+}
+
 export function handleWorkstreamEvent(
   queryClient: QueryClient,
   userId: string,
@@ -33,13 +50,10 @@ export function handleWorkstreamEvent(
   envelope: RealtimeEventEnvelope,
 ) {
   const teamId = teamIdFromEnvelope(envelope);
-  if (!teamId) {
-    return;
-  }
 
   switch (envelope.event) {
     case RealtimeEvents.WORKSTREAM_COMMENT_CREATED: {
-      if (envelope.actorId === userId) {
+      if (!teamId || envelope.actorId === userId) {
         break;
       }
       const payload = envelope.payload as RealtimeWorkstreamCommentPayload;
@@ -57,6 +71,7 @@ export function handleWorkstreamEvent(
     }
     case RealtimeEvents.ANNOUNCEMENT_CREATED:
     case RealtimeEvents.ANNOUNCEMENT_UPDATED: {
+      if (!teamId) break;
       const payload = envelope.payload as RealtimeAnnouncementPayload;
       applyAnnouncementSnapshot(
         queryClient,
@@ -69,6 +84,7 @@ export function handleWorkstreamEvent(
       break;
     }
     case RealtimeEvents.ANNOUNCEMENT_DELETED: {
+      if (!teamId) break;
       const payload = envelope.payload as RealtimeAnnouncementDeletedPayload;
       applyAnnouncementDeleted(
         queryClient,
@@ -83,6 +99,7 @@ export function handleWorkstreamEvent(
     case RealtimeEvents.DELIVERABLE_CREATED:
     case RealtimeEvents.DELIVERABLE_UPDATED:
     case RealtimeEvents.DELIVERABLE_DEADLINE_EXTENDED: {
+      if (!teamId) break;
       const payload = envelope.payload as RealtimeDeliverablePayload;
       applyDeliverableSnapshot(
         queryClient,
@@ -94,8 +111,22 @@ export function handleWorkstreamEvent(
       );
       break;
     }
+    case RealtimeEvents.DELIVERABLE_DELETED: {
+      if (!teamId) break;
+      const payload = envelope.payload as RealtimeDeliverableDeletedPayload;
+      applyDeliverableDeleted(
+        queryClient,
+        teamId,
+        userId,
+        role,
+        workspaceId,
+        payload.deliverableId,
+      );
+      break;
+    }
     case RealtimeEvents.SUBMISSION_CREATED:
     case RealtimeEvents.SUBMISSION_REVIEWED: {
+      if (!teamId) break;
       const payload = envelope.payload as RealtimeSubmissionPayload;
       applySubmissionSnapshot(
         queryClient,
@@ -110,6 +141,29 @@ export function handleWorkstreamEvent(
           reviewed: envelope.event === RealtimeEvents.SUBMISSION_REVIEWED,
         },
       );
+      break;
+    }
+    case RealtimeEvents.SUBMISSION_FINALIZED: {
+      const payload = envelope.payload as RealtimeSubmissionPayload;
+      if (teamId) {
+        applySubmissionSnapshot(
+          queryClient,
+          teamId,
+          userId,
+          role,
+          workspaceId,
+          payload.deliverableId,
+          payload.submission,
+          { reviewed: true },
+        );
+      }
+      invalidateCoordinatorSubmissionQueues(queryClient);
+      void queryClient.invalidateQueries({
+        queryKey: ["supervisor", "work-stream"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["student", "work-stream"],
+      });
       break;
     }
     default:

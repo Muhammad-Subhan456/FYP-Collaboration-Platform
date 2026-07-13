@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../../auth/auth.module';
+import { AppUrlsService } from '../../common/app-urls.service';
 import { DomainEventsModule } from '../../domain-events/domain-events.module';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
@@ -18,7 +19,11 @@ import { DeliverableTemplatesService } from './deliverable-templates.service';
     DomainEventsModule,
   ],
   controllers: [DeliverableTemplatesController],
-  providers: [DeliverableTemplatesService, GpaCalculationService],
+  providers: [
+    DeliverableTemplatesService,
+    GpaCalculationService,
+    AppUrlsService,
+  ],
   exports: [DeliverableTemplatesService],
 })
 export class DeliverableTemplatesModule {}

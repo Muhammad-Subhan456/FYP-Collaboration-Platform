@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Search, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, Search, Users } from "lucide-react";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { StatusBadge } from "@/components/common/status-badge";
+import {
+  ProfileAvatar,
+  ProfileViewModal,
+} from "@/components/profile/profile-view-modal";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -24,12 +29,24 @@ import {
 import type { TeamMember } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
 
+function memberLabel(
+  profiles: Record<string, UserProfile>,
+  authUserId: string,
+) {
+  const profile = profiles[authUserId];
+  const name = getDisplayName(profiles, authUserId);
+  const registration = profile?.registrationNumber?.trim();
+  return registration ? `${name} — ${registration}` : name;
+}
+
 function TeamMembers({
   members,
   profiles,
+  onViewProfile,
 }: {
   members: TeamMember[];
   profiles: Record<string, UserProfile>;
+  onViewProfile: (profile: UserProfile) => void;
 }) {
   if (members.length === 0) {
     return <p className="text-sm text-muted-foreground">No members found.</p>;
@@ -37,17 +54,38 @@ function TeamMembers({
 
   return (
     <ul className="space-y-2">
-      {members.map((member) => (
-        <li
-          key={member.id}
-          className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
-        >
-          <span>{getDisplayName(profiles, member.authUserId)}</span>
-          <span className="text-muted-foreground">
-            Joined {formatDate(member.joinedAt)}
-          </span>
-        </li>
-      ))}
+      {members.map((member) => {
+        const profile = profiles[member.authUserId];
+        return (
+          <li
+            key={member.id}
+            className="flex flex-col gap-3 rounded-lg border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <ProfileAvatar profile={profile} className="h-9 w-9 shrink-0" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  {memberLabel(profiles, member.authUserId)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Joined {formatDate(member.joinedAt)}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              disabled={!profile}
+              onClick={() => profile && onViewProfile(profile)}
+            >
+              <Eye className="h-4 w-4" />
+              View Profile
+            </Button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -55,6 +93,7 @@ function TeamMembers({
 export default function CoordinatorTeamsPage() {
   const [search, setSearch] = useState("");
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
 
   const pageQuery = useCoordinatorTeamsQuery();
 
@@ -87,6 +126,14 @@ export default function CoordinatorTeamsPage() {
 
   return (
     <div className="space-y-6">
+      <ProfileViewModal
+        profile={viewProfile}
+        open={!!viewProfile}
+        onOpenChange={(open) => {
+          if (!open) setViewProfile(null);
+        }}
+      />
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">All Teams</h2>
@@ -130,7 +177,7 @@ export default function CoordinatorTeamsPage() {
                       </CardTitle>
                       <CardDescription className="mt-1">
                         {team.domain} · Leader:{" "}
-                        {getDisplayName(profiles, team.leaderId)}
+                        {memberLabel(profiles, team.leaderId)}
                       </CardDescription>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -146,7 +193,9 @@ export default function CoordinatorTeamsPage() {
                     <p className="text-sm font-medium">{team.projectTitle}</p>
                   )}
                   {team.projectAbstract && (
-                    <p className="text-sm text-muted-foreground">{team.projectAbstract}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {team.projectAbstract}
+                    </p>
                   )}
                   <p className="text-xs text-muted-foreground">
                     Created {formatDate(team.createdAt)}
@@ -171,7 +220,11 @@ export default function CoordinatorTeamsPage() {
                     )}
                   </button>
                   {expanded && (
-                    <TeamMembers members={members} profiles={profiles} />
+                    <TeamMembers
+                      members={members}
+                      profiles={profiles}
+                      onViewProfile={setViewProfile}
+                    />
                   )}
                 </CardContent>
               </Card>

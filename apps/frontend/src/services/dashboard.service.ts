@@ -12,6 +12,7 @@ import type {
   Team,
   TeamMember,
 } from "@/types/student";
+import type { StudentDeliverableEvaluationStatus } from "@/services/student.service";
 
 export interface StudentDashboardStats {
   pendingSubmissions: number;
@@ -36,6 +37,7 @@ export interface CoordinatorUserStats {
   totalStudents: number;
   totalSupervisors: number;
   totalCoordinators: number;
+  totalEvaluators?: number;
 }
 
 export interface CoordinatorProposalStats {
@@ -73,6 +75,7 @@ export interface StudentDashboardOverview extends DashboardOverviewBase {
   stats: StudentDashboardStats;
   deliverables: Deliverable[];
   evaluations: EvaluationAssignment[];
+  deliverableEvaluations: StudentDeliverableEvaluationStatus[];
   teamMembers: TeamMember[];
   announcements: Announcement[];
   supervisor: UserProfile | null;
@@ -88,6 +91,7 @@ export interface SupervisorDashboardOverview extends DashboardOverviewBase {
   }>;
   supervisedTeams: Array<{
     id: string;
+    teamId: string;
     title: string;
     domain: string;
   }>;

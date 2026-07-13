@@ -260,3 +260,125 @@ export function applyRoleUpdated(
     }));
   }
 }
+
+function invalidateTeamRelatedCaches(
+  queryClient: QueryClient,
+  workspaceId: string | null,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "teams"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "all-teams"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.teams.browse("", workspaceId),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["teams", "browse"],
+  });
+}
+
+export function applyTeamUpdated(
+  queryClient: QueryClient,
+  userId: string,
+  role: string,
+  workspaceId: string | null,
+  payload: import("./types").RealtimeTeamUpdatedPayload,
+) {
+  if (
+    workspaceId &&
+    payload.workspaceId &&
+    payload.workspaceId !== workspaceId
+  ) {
+    return;
+  }
+
+  if (role === "STUDENT") {
+    patchStudentTeam(
+      queryClient,
+      userId,
+      workspaceId,
+      payload.teamId,
+      (data) => ({
+        ...data,
+        team: data.team
+          ? {
+              ...data.team,
+              ...payload.team,
+            }
+          : data.team,
+      }),
+      { syncDashboardMembers: false },
+    );
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.proposal(userId, workspaceId),
+    });
+  }
+
+  if (role === "SUPERVISOR") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.teams(userId, workspaceId),
+    });
+    void touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
+  }
+
+  if (role === "COORDINATOR") {
+    invalidateTeamRelatedCaches(queryClient, workspaceId);
+  }
+
+  void queryClient.invalidateQueries({
+    queryKey: ["teams", "browse"],
+  });
+}
+
+export function applyTeamDeleted(
+  queryClient: QueryClient,
+  userId: string,
+  role: string,
+  workspaceId: string | null,
+  payload: import("./types").RealtimeTeamDeletedPayload,
+) {
+  if (
+    workspaceId &&
+    payload.workspaceId &&
+    payload.workspaceId !== workspaceId
+  ) {
+    return;
+  }
+
+  if (role === "STUDENT") {
+    const teamKey = queryKeys.student.team(userId, workspaceId);
+    const existing = queryClient.getQueryData<StudentTeamOverview>(teamKey);
+    if (!existing?.team || existing.team.id === payload.teamId) {
+      void queryClient.invalidateQueries({ queryKey: teamKey });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.proposal(userId, workspaceId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.student.dashboard(userId, workspaceId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["student", "work-stream"],
+      });
+    }
+  }
+
+  if (role === "SUPERVISOR") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.teams(userId, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["supervisor", "work-stream"],
+    });
+    void touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
+  }
+
+  if (role === "COORDINATOR") {
+    invalidateTeamRelatedCaches(queryClient, workspaceId);
+  }
+
+  void queryClient.invalidateQueries({
+    queryKey: ["teams", "browse"],
+  });
+}

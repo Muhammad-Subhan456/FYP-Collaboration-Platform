@@ -35,6 +35,20 @@ export type SubmissionReminderEmailPayload = {
   actionUrl?: string;
 };
 
+export type ProposalAcceptedEmailPayload = {
+  to: string;
+  proposalTitle: string;
+  teamName?: string;
+  actionUrl?: string;
+};
+
+export type DeliverablePublishedEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  dueDate: Date;
+  actionUrl?: string;
+};
+
 export function buildInvitationEmail(
   payload: InvitationEmailPayload,
 ): EmailMessage {
@@ -128,6 +142,332 @@ export function buildSubmissionReminderEmail(
       ${
         payload.actionUrl
           ? `<p><a href="${payload.actionUrl}">Open supervisor work stream</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildProposalAcceptedEmail(
+  payload: ProposalAcceptedEmailPayload,
+): EmailMessage {
+  const teamLine = payload.teamName
+    ? ` for team "${payload.teamName}"`
+    : '';
+  const actionLine = payload.actionUrl
+    ? `\n\nView in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: Proposal accepted — ${payload.proposalTitle}`,
+    text: [
+      `Good news! Your FOASIS proposal "${payload.proposalTitle}"${teamLine} has been accepted by your supervisor.`,
+      'You can now continue with deliverables and project work in FOASIS.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>Good news! Your FOASIS proposal <strong>${payload.proposalTitle}</strong>${
+        payload.teamName
+          ? ` for team <strong>${payload.teamName}</strong>`
+          : ''
+      } has been accepted by your supervisor.</p>
+      <p>You can now continue with deliverables and project work in FOASIS.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">View proposal in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildDeliverablePublishedEmail(
+  payload: DeliverablePublishedEmailPayload,
+): EmailMessage {
+  const dueText = payload.dueDate.toLocaleDateString();
+  const actionLine = payload.actionUrl
+    ? `\n\nOpen in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: New deliverable — ${payload.deliverableTitle}`,
+    text: [
+      `A new deliverable "${payload.deliverableTitle}" has been assigned to your team.`,
+      `Due date: ${dueText}`,
+      'Please review the requirements and submit before the deadline.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>A new deliverable <strong>${payload.deliverableTitle}</strong> has been assigned to your team.</p>
+      <p><strong>Due date:</strong> ${dueText}</p>
+      <p>Please review the requirements and submit before the deadline.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open work stream in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export type ProposalRequestEmailPayload = {
+  to: string;
+  teamName: string;
+  projectTitle: string;
+  studentLeaderName: string;
+  workspaceName: string;
+  actionUrl?: string;
+};
+
+export type SubmissionReceivedEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  teamName: string;
+  phaseName?: string | null;
+  submittedAt: Date;
+  actionUrl?: string;
+};
+
+export type EvaluationAssignmentEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  teamName?: string | null;
+  phaseName?: string | null;
+  evaluationLabel: string;
+  actionUrl?: string;
+};
+
+export type EvaluationReminderEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  teamName: string;
+  phaseName?: string | null;
+  statusLabel: string;
+  actionUrl?: string;
+};
+
+export type DeliverableTemplateAvailableEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  phaseName: string;
+  dueDate?: Date | null;
+  description?: string | null;
+  actionUrl?: string;
+};
+
+export function buildProposalRequestEmail(
+  payload: ProposalRequestEmailPayload,
+): EmailMessage {
+  const actionLine = payload.actionUrl
+    ? `\n\nReview in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: Proposal request — ${payload.projectTitle}`,
+    text: [
+      `A team has submitted a proposal request for your review on FOASIS.`,
+      '',
+      `Workspace: ${payload.workspaceName}`,
+      `Team: ${payload.teamName}`,
+      `Project: ${payload.projectTitle}`,
+      `Student leader: ${payload.studentLeaderName}`,
+      '',
+      'Please respond promptly so the team can continue.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>A team has submitted a proposal request for your review on FOASIS.</p>
+      <ul>
+        <li><strong>Workspace:</strong> ${payload.workspaceName}</li>
+        <li><strong>Team:</strong> ${payload.teamName}</li>
+        <li><strong>Project:</strong> ${payload.projectTitle}</li>
+        <li><strong>Student leader:</strong> ${payload.studentLeaderName}</li>
+      </ul>
+      <p>Please respond promptly so the team can continue.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open proposal review in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildSubmissionReceivedEmail(
+  payload: SubmissionReceivedEmailPayload,
+): EmailMessage {
+  const submittedText = payload.submittedAt.toLocaleString();
+  const phaseLine = payload.phaseName
+    ? `Phase: ${payload.phaseName}`
+    : null;
+  const actionLine = payload.actionUrl
+    ? `\n\nReview in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: Submission received — ${payload.deliverableTitle}`,
+    text: [
+      `A team has submitted work for "${payload.deliverableTitle}".`,
+      '',
+      `Team: ${payload.teamName}`,
+      ...(phaseLine ? [phaseLine] : []),
+      `Submitted at: ${submittedText}`,
+      '',
+      'Please review the submission in your work stream.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>A team has submitted work for <strong>${payload.deliverableTitle}</strong>.</p>
+      <ul>
+        <li><strong>Team:</strong> ${payload.teamName}</li>
+        ${
+          payload.phaseName
+            ? `<li><strong>Phase:</strong> ${payload.phaseName}</li>`
+            : ''
+        }
+        <li><strong>Submitted at:</strong> ${submittedText}</li>
+      </ul>
+      <p>Please review the submission in your work stream.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open submission review in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildEvaluationAssignmentEmail(
+  payload: EvaluationAssignmentEmailPayload,
+): EmailMessage {
+  const actionLine = payload.actionUrl
+    ? `\n\nOpen in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: Evaluation assignment — ${payload.deliverableTitle}`,
+    text: [
+      `You have been assigned an evaluation on FOASIS.`,
+      '',
+      `Deliverable: ${payload.deliverableTitle}`,
+      ...(payload.teamName ? [`Team: ${payload.teamName}`] : []),
+      ...(payload.phaseName ? [`Phase: ${payload.phaseName}`] : []),
+      `Details: ${payload.evaluationLabel}`,
+      '',
+      'Please complete the evaluation when ready.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>You have been assigned an evaluation on FOASIS.</p>
+      <ul>
+        <li><strong>Deliverable:</strong> ${payload.deliverableTitle}</li>
+        ${
+          payload.teamName
+            ? `<li><strong>Team:</strong> ${payload.teamName}</li>`
+            : ''
+        }
+        ${
+          payload.phaseName
+            ? `<li><strong>Phase:</strong> ${payload.phaseName}</li>`
+            : ''
+        }
+        <li><strong>Details:</strong> ${payload.evaluationLabel}</li>
+      </ul>
+      <p>Please complete the evaluation when ready.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open evaluation in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildEvaluationReminderEmail(
+  payload: EvaluationReminderEmailPayload,
+): EmailMessage {
+  const actionLine = payload.actionUrl
+    ? `\n\nOpen in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: Evaluation reminder — ${payload.deliverableTitle}`,
+    text: [
+      `This is a reminder to complete your pending evaluation on FOASIS.`,
+      '',
+      `Deliverable: ${payload.deliverableTitle}`,
+      `Team: ${payload.teamName}`,
+      ...(payload.phaseName ? [`Phase: ${payload.phaseName}`] : []),
+      `Status: ${payload.statusLabel}`,
+      '',
+      'Please complete the evaluation when ready.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>This is a reminder to complete your pending evaluation on FOASIS.</p>
+      <ul>
+        <li><strong>Deliverable:</strong> ${payload.deliverableTitle}</li>
+        <li><strong>Team:</strong> ${payload.teamName}</li>
+        ${
+          payload.phaseName
+            ? `<li><strong>Phase:</strong> ${payload.phaseName}</li>`
+            : ''
+        }
+        <li><strong>Status:</strong> ${payload.statusLabel}</li>
+      </ul>
+      <p>Please complete the evaluation when ready.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open evaluation in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildDeliverableTemplateAvailableEmail(
+  payload: DeliverableTemplateAvailableEmailPayload,
+): EmailMessage {
+  const dueText = payload.dueDate
+    ? payload.dueDate.toLocaleString()
+    : 'Not set';
+  const description = payload.description?.trim() || 'No description provided.';
+  const actionLine = payload.actionUrl
+    ? `\n\nOpen in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    subject: `FOASIS: New deliverable template — ${payload.deliverableTitle}`,
+    text: [
+      `A new deliverable template is available for you to publish to your teams.`,
+      '',
+      `Title: ${payload.deliverableTitle}`,
+      `Phase: ${payload.phaseName}`,
+      `Due date: ${dueText}`,
+      `Description: ${description}`,
+      '',
+      'Publish it from your work stream when ready.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>A new deliverable template is available for you to publish to your teams.</p>
+      <ul>
+        <li><strong>Title:</strong> ${payload.deliverableTitle}</li>
+        <li><strong>Phase:</strong> ${payload.phaseName}</li>
+        <li><strong>Due date:</strong> ${dueText}</li>
+        <li><strong>Description:</strong> ${description}</li>
+      </ul>
+      <p>Publish it from your work stream when ready.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open deliverable templates in FOASIS</a></p>`
           : ''
       }
     `,

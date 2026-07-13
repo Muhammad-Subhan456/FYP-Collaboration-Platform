@@ -8,6 +8,7 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 
+import { resolveCorsOrigin } from '../common/cors.config';
 import type { DomainEvent } from '../domain-events/domain-event.types';
 
 import type { RealtimeEventDto } from './dto/realtime-event.dto';
@@ -19,7 +20,7 @@ import {
 @WebSocketGateway({
   namespace: '/realtime',
   cors: {
-    origin: true,
+    origin: resolveCorsOrigin(),
     credentials: true,
   },
   transports: ['websocket', 'polling'],

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -39,7 +40,8 @@ export class GlobalAnnouncementsController {
       );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR', 'EVALUATOR')
   @Get()
   getAnnouncements(
     @Req()
@@ -47,12 +49,29 @@ export class GlobalAnnouncementsController {
       workspaceId: string;
       user: { role: string };
     },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
+    const pageNum =
+      page !== undefined && page !== ''
+        ? Number(page)
+        : undefined;
+    const limitNum =
+      limit !== undefined && limit !== ''
+        ? Number(limit)
+        : undefined;
+
     return this.globalAnnouncementsService.getAnnouncements(
       req.workspaceId,
       req.user.role,
       {
         coordinatorView: req.user.role === 'COORDINATOR',
+        ...(pageNum != null || limitNum != null
+          ? {
+              page: Number.isFinite(pageNum) ? pageNum : 1,
+              limit: Number.isFinite(limitNum) ? limitNum : 6,
+            }
+          : {}),
       },
     );
   }

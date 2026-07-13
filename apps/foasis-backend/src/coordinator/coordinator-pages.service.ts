@@ -34,9 +34,114 @@ export class CoordinatorPagesService {
   }
 
   getAnalytics(workspaceId: string) {
-    return this.dashboardService.getCoordinatorDashboard(
-      workspaceId,
-    );
+    return this.buildCoordinatorAnalytics(workspaceId);
+  }
+
+  private async buildCoordinatorAnalytics(workspaceId: string) {
+    const [
+      users,
+      totalTeams,
+      proposalGroups,
+      submissionGroups,
+      evaluationGroups,
+      phaseGroups,
+      templateTotal,
+      templateLocked,
+      activeDeliverables,
+      publishedPhaseResults,
+    ] = await Promise.all([
+      this.authService.getUserStats(workspaceId),
+      this.teamsService.getTeamCountForCoordinator(workspaceId),
+      this.prisma.proposal.groupBy({
+        by: ['status'],
+        where: { workspaceId },
+        _count: { _all: true },
+      }),
+      this.prisma.submission.groupBy({
+        by: ['status'],
+        where: { workspaceId },
+        _count: { _all: true },
+      }),
+      this.prisma.submissionEvaluation.groupBy({
+        by: ['status'],
+        where: { workspaceId },
+        _count: { _all: true },
+      }),
+      this.prisma.phase.groupBy({
+        by: ['status'],
+        where: { workspaceId },
+        _count: { _all: true },
+      }),
+      this.prisma.deliverableTemplate.count({ where: { workspaceId } }),
+      this.prisma.deliverableTemplate.count({
+        where: { workspaceId, isLocked: true },
+      }),
+      this.prisma.deliverable.count({
+        where: { workspaceId, isActive: true },
+      }),
+      this.prisma.studentPhaseResult.count({
+        where: { workspaceId },
+      }),
+    ]);
+
+    const toMap = <T extends string>(
+      rows: Array<{ status: T; _count: { _all: number } }>,
+    ) =>
+      Object.fromEntries(
+        rows.map((row) => [row.status, row._count._all]),
+      ) as Partial<Record<T, number>>;
+
+    const proposalsByStatus = toMap(proposalGroups);
+    const submissionsByStatus = toMap(submissionGroups);
+    const evaluationsByStatus = toMap(evaluationGroups);
+    const phasesByStatus = toMap(phaseGroups);
+
+    const pendingEvaluations =
+      (evaluationsByStatus.ASSIGNED ?? 0) +
+      (evaluationsByStatus.IN_PROGRESS ?? 0);
+
+    return {
+      summary: {
+        totalTeams,
+        activePhases: phasesByStatus.ACTIVE ?? 0,
+        deliverableTemplates: templateTotal,
+        lockedTemplates: templateLocked,
+        activeDeliverables,
+        pendingEvaluations,
+        finalizedSubmissions: submissionsByStatus.FINALIZED ?? 0,
+        publishedPhaseResults,
+      },
+      users,
+      proposalsByStatus: {
+        DRAFT: proposalsByStatus.DRAFT ?? 0,
+        PENDING_SUPERVISOR: proposalsByStatus.PENDING_SUPERVISOR ?? 0,
+        SUPERVISOR_ASSIGNED: proposalsByStatus.SUPERVISOR_ASSIGNED ?? 0,
+        APPROVED: proposalsByStatus.APPROVED ?? 0,
+        REJECTED: proposalsByStatus.REJECTED ?? 0,
+        IGNORED: proposalsByStatus.IGNORED ?? 0,
+      },
+      submissionsByStatus: {
+        SUBMITTED: submissionsByStatus.SUBMITTED ?? 0,
+        CHANGES_REQUIRED: submissionsByStatus.CHANGES_REQUIRED ?? 0,
+        APPROVED: submissionsByStatus.APPROVED ?? 0,
+        FINALIZED: submissionsByStatus.FINALIZED ?? 0,
+      },
+      evaluationsByStatus: {
+        ASSIGNED: evaluationsByStatus.ASSIGNED ?? 0,
+        IN_PROGRESS: evaluationsByStatus.IN_PROGRESS ?? 0,
+        SUBMITTED: evaluationsByStatus.SUBMITTED ?? 0,
+      },
+      phasesByStatus: {
+        ACTIVE: phasesByStatus.ACTIVE ?? 0,
+        INACTIVE: phasesByStatus.INACTIVE ?? 0,
+        PUBLISHED: phasesByStatus.PUBLISHED ?? 0,
+      },
+      templates: {
+        total: templateTotal,
+        locked: templateLocked,
+        unlocked: Math.max(0, templateTotal - templateLocked),
+      },
+    };
   }
 
   getUsers(workspaceId: string) {
@@ -202,43 +307,5 @@ export class CoordinatorPagesService {
 
   getProfile(coordinatorId: string) {
     return this.profilesService.getMyProfile(coordinatorId);
-  }
-
-  async getSystemHealth() {
-    const timestamp = new Date().toISOString();
-
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-
-      return {
-        status: 'ok',
-        service: 'foasis-backend',
-        database: 'connected',
-        services: [
-          {
-            name: 'foasis-backend',
-            status: 'ok',
-            database: 'connected',
-            timestamp,
-          },
-        ],
-        timestamp,
-      };
-    } catch {
-      return {
-        status: 'error',
-        service: 'foasis-backend',
-        database: 'disconnected',
-        services: [
-          {
-            name: 'foasis-backend',
-            status: 'error',
-            database: 'disconnected',
-            timestamp,
-          },
-        ],
-        timestamp,
-      };
-    }
   }
 }

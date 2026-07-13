@@ -41,22 +41,22 @@ export function invalidateDashboard(
 ) {
   if (role === "STUDENT") {
     return queryClient.invalidateQueries({
-      queryKey: queryKeys.student.dashboard(),
+      queryKey: ["student", "dashboard"],
     });
   }
   if (role === "SUPERVISOR") {
     return queryClient.invalidateQueries({
-      queryKey: queryKeys.supervisor.dashboard(),
+      queryKey: ["supervisor", "dashboard"],
     });
   }
   if (role === "COORDINATOR") {
     return queryClient.invalidateQueries({
-      queryKey: queryKeys.coordinator.dashboard(),
+      queryKey: ["coordinator", "dashboard"],
     });
   }
   if (role === "EVALUATOR") {
     return queryClient.invalidateQueries({
-      queryKey: queryKeys.evaluator.dashboard(),
+      queryKey: ["evaluator", "dashboard"],
     });
   }
 

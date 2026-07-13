@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { SystemHealthResponse } from "@/types/coordinator";
 import type {
   CreateWorkspaceInput,
   UpdateWorkspaceInput,
@@ -40,6 +41,13 @@ export const workspaceService = {
   restore: async (id: string) => {
     const res = await api.post<Workspace>(
       `/super-admin/workspaces/${id}/restore`,
+    );
+    return res.data;
+  },
+
+  getSystemHealth: async () => {
+    const res = await api.get<SystemHealthResponse>(
+      "/super-admin/system-health",
     );
     return res.data;
   },

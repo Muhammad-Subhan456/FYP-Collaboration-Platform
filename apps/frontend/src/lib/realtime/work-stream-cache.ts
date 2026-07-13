@@ -419,12 +419,17 @@ export function applyAnnouncementDeleted(
   );
 
   if (role === "STUDENT") {
-    touchStudentDashboard(queryClient, userId, (dashboard) => ({
-      ...dashboard,
-      announcements: dashboard.announcements.filter(
-        (item) => item.id !== announcementId,
-      ),
-    }));
+    touchStudentDashboard(
+      queryClient,
+      userId,
+      (dashboard) => ({
+        ...dashboard,
+        announcements: dashboard.announcements.filter(
+          (item) => item.id !== announcementId,
+        ),
+      }),
+      workspaceId,
+    );
   }
 }
 
@@ -467,6 +472,7 @@ export function applyAnnouncementSnapshot(
       queryClient,
       userId,
       toDashboardAnnouncement(incoming),
+      workspaceId,
     );
   }
 }
@@ -502,14 +508,95 @@ export function applyDeliverableSnapshot(
   );
 
   if (role === "STUDENT") {
-    syncStudentDashboardDeliverable(queryClient, userId, dashboardDeliverable);
+    syncStudentDashboardDeliverable(
+      queryClient,
+      userId,
+      dashboardDeliverable,
+      workspaceId,
+    );
   }
 
   if (role === "SUPERVISOR") {
-    touchSupervisorDashboard(queryClient, userId, (dashboard) => {
+    touchSupervisorDashboard(
+      queryClient,
+      userId,
+      (dashboard) => {
       const deliverables = upsertDashboardDeliverable(
         dashboard.deliverables,
         dashboardDeliverable,
+      ).slice(0, 3);
+      return {
+        ...dashboard,
+        deliverables,
+        stats: {
+          ...dashboard.stats,
+          activeDeliverables: deliverables.filter((item) => item.isActive).length,
+        },
+      };
+    },
+      workspaceId,
+    );
+  }
+}
+
+export function applyDeliverableDeleted(
+  queryClient: QueryClient,
+  teamId: string,
+  userId: string,
+  role: string,
+  workspaceId: string | null,
+  deliverableId: string,
+) {
+  patchWorkStreamCaches(
+    queryClient,
+    teamId,
+    userId,
+    role,
+    workspaceId,
+    teamId,
+    {
+      student: (data) => ({
+        ...data,
+        deliverables: data.deliverables.filter((item) => item.id !== deliverableId),
+      }),
+      supervisor: (data) => ({
+        ...data,
+        deliverables: data.deliverables.filter((item) => item.id !== deliverableId),
+      }),
+    },
+  );
+
+  if (role === "STUDENT") {
+    touchStudentDashboard(
+      queryClient,
+      userId,
+      (dashboard) => {
+      const deliverables = (dashboard.deliverables ?? []).filter(
+        (item) => item.id !== deliverableId,
+      );
+      return {
+        ...dashboard,
+        deliverables,
+        stats: {
+          ...dashboard.stats,
+          upcomingDeliverables: deliverables.filter(
+            (item) =>
+              item.isActive && new Date(item.dueDate).getTime() >= Date.now(),
+          ).length,
+        },
+      };
+    },
+      workspaceId,
+    );
+  }
+
+  if (role === "SUPERVISOR") {
+    touchSupervisorDashboard(
+      queryClient,
+      userId,
+      (dashboard) => {
+      const deliverables = dashboard.deliverables.filter(
+        (item) => item.id !== deliverableId,
       );
       return {
         ...dashboard,
@@ -519,7 +606,9 @@ export function applyDeliverableSnapshot(
           activeDeliverables: deliverables.filter((item) => item.isActive).length,
         },
       };
-    });
+    },
+      workspaceId,
+    );
   }
 }
 

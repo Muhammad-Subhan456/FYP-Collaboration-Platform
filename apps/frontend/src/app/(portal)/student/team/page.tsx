@@ -62,7 +62,11 @@ const createTeamSchema = z.object({
   domain: z.string().min(2, "Domain is required"),
   projectTitle: z.string().optional(),
   projectAbstract: z.string().optional(),
-  maxMembers: z.number().min(2).max(6),
+  maxMembers: z
+    .number({ message: "Team size is required" })
+    .int("Team size must be a whole number")
+    .min(1, "Team size must be between 1 and 4 members")
+    .max(4, "Team size must be between 1 and 4 members"),
 });
 
 const editTeamSchema = z.object({
@@ -707,7 +711,6 @@ export default function StudentTeamPage() {
     setJoiningTeamId(teamId);
     joinMutation.mutate(teamId, {
       onSuccess: () => {
-        toast.success("Join request sent!");
         setJoinedTeamIds((prev) => new Set(prev).add(teamId));
       },
       onSettled: () => setJoiningTeamId(null),
@@ -891,12 +894,12 @@ export default function StudentTeamPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="maxMembers">Max Members</Label>
+                <Label htmlFor="maxMembers">Max Members (1–4)</Label>
                 <Input
                   id="maxMembers"
                   type="number"
-                  min={2}
-                  max={6}
+                  min={1}
+                  max={4}
                   {...register("maxMembers", { valueAsNumber: true })}
                 />
                 {errors.maxMembers && (

@@ -42,9 +42,29 @@ export interface StudentAnnouncementsPageData {
   announcements: Announcement[];
 }
 
+export interface StudentDeliverableEvaluationStatus {
+  submissionId: string;
+  deliverableId: string;
+  deliverableTitle: string;
+  phaseId: string | null;
+  phaseName: string | null;
+  templateId: string;
+  templateTitle: string;
+  status: "UNASSIGNED" | "ASSIGNED" | "IN_PROGRESS" | "SUBMITTED";
+  evaluatorCount: number;
+  submittedEvaluatorCount: number;
+  evaluations: Array<{
+    id: string;
+    status: string;
+    evaluatorId: string;
+    submittedAt: string | null;
+  }>;
+}
+
 export interface StudentEvaluationsPageData {
   team: Team | null;
   evaluations: EvaluationAssignment[];
+  deliverableEvaluations: StudentDeliverableEvaluationStatus[];
 }
 
 export interface StudentResultsPageData {

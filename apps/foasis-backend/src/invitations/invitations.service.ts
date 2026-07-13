@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -18,6 +19,27 @@ import {
 import { EmailService } from '../email/email.service';
 import { buildInvitationEmail } from '../email/email.templates';
 import { PrismaService } from '../prisma/prisma.service';
+
+/** Safe user-facing reason for CSV row skips — never raw Prisma/internal text. */
+function getSafeSkipReason(error: unknown): string {
+  if (error instanceof HttpException) {
+    const response = error.getResponse();
+    if (typeof response === 'string') {
+      return response;
+    }
+    if (typeof response === 'object' && response !== null) {
+      const message = (response as { message?: string | string[] }).message;
+      if (typeof message === 'string') {
+        return message;
+      }
+      if (Array.isArray(message)) {
+        return message.join(', ');
+      }
+    }
+    return error.message;
+  }
+  return 'Skipped';
+}
 
 export type InviteUserInput = {
   email: string;
@@ -289,14 +311,14 @@ export class InvitationsService {
           role,
           status: 'invited',
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         skipped++;
         rows.push({
           row: rowNumber,
           email,
           role,
           status: 'skipped',
-          reason: error?.message ?? 'Skipped',
+          reason: getSafeSkipReason(error),
         });
       }
     }

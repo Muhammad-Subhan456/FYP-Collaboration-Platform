@@ -298,11 +298,11 @@ export class ProposalsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get(':proposalId')
   getProposalById(
     @Req() req: any,
-    @Headers('authorization') authorization: string,
     @Param('proposalId') proposalId: string,
   ) {
     return this.proposalsService.getProposalById(

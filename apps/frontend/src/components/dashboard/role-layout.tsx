@@ -1,9 +1,11 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { getNavForRole } from "@/constants/navigation";
+import { ROLE_ROUTES } from "@/constants/routes";
 import { getGreeting } from "@/hooks/use-profiles";
 import { useAuth } from "@/providers/auth-provider";
 import type { UserRole } from "@/types";
@@ -16,7 +18,8 @@ interface RoleLayoutProps {
 
 export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
   const pathname = usePathname();
-  const { profile } = useAuth();
+  const router = useRouter();
+  const { user, profile, isLoading } = useAuth();
   const navItems = getNavForRole(role);
   const current = navItems.find((item) => item.href === pathname);
   const title = current?.title ?? "Dashboard";
@@ -29,8 +32,25 @@ export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
         : role === "SUPERVISOR"
           ? "Supervise teams and review work on FOASIS"
           : role === "COORDINATOR"
-            ? "Oversee the FOASIS program"
-            : "Manage FOASIS workspaces";
+            ? pathname.endsWith("/profile")
+              ? "Manage your coordinator profile"
+              : "Oversee the FOASIS program"
+            : role === "EVALUATOR"
+              ? pathname.endsWith("/profile")
+                ? "Manage your evaluator profile"
+                : "Complete assigned evaluations on FOASIS"
+              : "Manage FOASIS workspaces";
+
+  useEffect(() => {
+    if (isLoading || !user?.role) return;
+    if (user.role !== role) {
+      router.replace(`${ROLE_ROUTES[user.role]}/dashboard`);
+    }
+  }, [isLoading, user?.role, role, router]);
+
+  if (!isLoading && user?.role && user.role !== role) {
+    return null;
+  }
 
   return (
     <DashboardLayout

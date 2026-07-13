@@ -7,6 +7,7 @@ import { AnnouncementsService } from '../progress/announcements/announcements.se
 import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { EvaluationResultsService } from '../progress/evaluation-results/evaluation-results.service';
 import { EvaluationsService } from '../progress/evaluations/evaluations.service';
+import { SubmissionEvaluationsService } from '../progress/submission-evaluations/submission-evaluations.service';
 import { TeamIssuesService } from '../progress/team-issues/team-issues.service';
 import { SubmissionsService } from '../progress/submissions/submissions.service';
 import { WorkStreamService } from '../progress/work-stream/work-stream.service';
@@ -30,6 +31,7 @@ export class StudentPagesService {
     private readonly teamIssuesService: TeamIssuesService,
     private readonly evaluationsService: EvaluationsService,
     private readonly evaluationResultsService: EvaluationResultsService,
+    private readonly submissionEvaluationsService: SubmissionEvaluationsService,
     private readonly proposalsService: ProposalsService,
     private readonly authService: AuthService,
     private readonly notificationsService: NotificationsService,
@@ -206,20 +208,28 @@ export class StudentPagesService {
     };
   }
 
-  async getEvaluations(authUserId: string) {
+  async getEvaluations(authUserId: string, workspaceId: string) {
     const ctx =
       await this.studentContextService.load(authUserId);
 
-    const evaluations = ctx.teamId
-      ? await this.evaluationsService
-          .getMyEvaluationsByUserId(
-            authUserId,
-            ctx.teamId,
-          )
-          .catch(() => [])
-      : [];
+    const [evaluations, deliverableEvaluations] = await Promise.all([
+      ctx.teamId
+        ? this.evaluationsService
+            .getMyEvaluationsByUserId(authUserId, ctx.teamId)
+            .catch(() => [])
+        : Promise.resolve([]),
+      ctx.teamId
+        ? this.submissionEvaluationsService
+            .getTeamDeliverableEvaluationStatuses(workspaceId, ctx.teamId)
+            .catch(() => [])
+        : Promise.resolve([]),
+    ]);
 
-    return { team: ctx.team, evaluations };
+    return {
+      team: ctx.team,
+      evaluations,
+      deliverableEvaluations,
+    };
   }
 
   async getResults(authUserId: string) {

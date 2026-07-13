@@ -37,6 +37,7 @@ import { notificationService } from "@/services/notification.service";
 import type { NotificationReadFilter } from "@/services/notification.service";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/types";
 import type { Notification } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
 
@@ -87,7 +88,7 @@ function StudentNotificationsList() {
     useStudentNotificationMutations();
 
   const handleNotificationClick = async (notification: Notification) => {
-    const href = resolveNotificationHref(notification);
+    const href = resolveNotificationHref(notification, "STUDENT");
 
     try {
       if (!notification.isRead) {
@@ -119,6 +120,7 @@ function StudentNotificationsList() {
 
   return (
     <NotificationListContent
+      role="STUDENT"
       notifications={notifications}
       meta={meta}
       page={page}
@@ -149,7 +151,7 @@ function SupervisorNotificationsList() {
     useSupervisorNotificationMutations();
 
   const handleNotificationClick = async (notification: Notification) => {
-    const href = resolveNotificationHref(notification);
+    const href = resolveNotificationHref(notification, "SUPERVISOR");
 
     try {
       if (!notification.isRead) {
@@ -181,6 +183,7 @@ function SupervisorNotificationsList() {
 
   return (
     <NotificationListContent
+      role="SUPERVISOR"
       notifications={notifications}
       meta={meta}
       page={page}
@@ -211,7 +214,7 @@ function CoordinatorNotificationsList() {
     useCoordinatorNotificationMutations();
 
   const handleNotificationClick = async (notification: Notification) => {
-    const href = resolveNotificationHref(notification);
+    const href = resolveNotificationHref(notification, "COORDINATOR");
 
     try {
       if (!notification.isRead) {
@@ -243,6 +246,7 @@ function CoordinatorNotificationsList() {
 
   return (
     <NotificationListContent
+      role="COORDINATOR"
       notifications={notifications}
       meta={meta}
       page={page}
@@ -294,7 +298,7 @@ function GenericNotificationsList({
   });
 
   const handleNotificationClick = async (notification: Notification) => {
-    const href = resolveNotificationHref(notification);
+    const href = resolveNotificationHref(notification, user?.role);
 
     try {
       if (!notification.isRead) {
@@ -324,6 +328,7 @@ function GenericNotificationsList({
 
   return (
     <NotificationListContent
+      role={user?.role}
       notifications={notifications}
       meta={meta}
       page={page}
@@ -341,6 +346,7 @@ function GenericNotificationsList({
 }
 
 interface NotificationListContentProps {
+  role?: UserRole | null;
   notifications: Notification[];
   meta: PaginatedResponse<Notification>["meta"];
   page: number;
@@ -353,6 +359,7 @@ interface NotificationListContentProps {
 }
 
 function NotificationListContent({
+  role,
   notifications,
   meta,
   page,
@@ -411,7 +418,7 @@ function NotificationListContent({
         <div className="space-y-2">
           {notifications.map((notification) => {
             const Icon = getNotificationIcon(notification);
-            const actionable = isNotificationActionable(notification);
+            const actionable = isNotificationActionable(notification, role);
 
             return (
               <Card

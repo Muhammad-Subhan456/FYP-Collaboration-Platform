@@ -19,4 +19,10 @@ export class AppUrlsService {
   passwordResetUrl(token: string): string {
     return `${this.frontendBaseUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
   }
+
+  /** Absolute frontend URL for a portal path (e.g. `/student/proposal`). */
+  portalUrl(path: string): string {
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    return `${this.frontendBaseUrl}${normalized}`;
+  }
 }

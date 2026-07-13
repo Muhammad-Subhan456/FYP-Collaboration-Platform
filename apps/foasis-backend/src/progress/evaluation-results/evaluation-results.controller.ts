@@ -7,7 +7,6 @@ import {
   Post,
   Req,
   UseGuards,
-  Headers,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -27,7 +26,7 @@ export class EvaluationResultsController {
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPERVISOR')
+  @Roles('SUPERVISOR', 'EVALUATOR')
   @Post(':evaluationId')
   createResult(
     @Req() req: any,
@@ -43,7 +42,7 @@ export class EvaluationResultsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPERVISOR')
+  @Roles('SUPERVISOR', 'EVALUATOR')
   @Patch(':resultId')
   updateResult(
     @Req() req: any,
@@ -80,14 +79,14 @@ export class EvaluationResultsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('my')
   getMyResults(
-    @Headers('authorization')
-    authorization: string,
+    @Req() req: { user: { userId: string } },
   ) {
-    return this.evaluationResultsService.getMyResults(
-      authorization,
+    return this.evaluationResultsService.getMyResultsByUserId(
+      req.user.userId,
     );
   }
 }

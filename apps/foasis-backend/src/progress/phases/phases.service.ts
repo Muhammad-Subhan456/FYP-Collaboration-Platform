@@ -6,6 +6,9 @@ import {
 import { PhaseStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { PhaseRealtimePayload } from '../../domain-events/domain-event.types';
 import { GpaCalculationService } from '../gpa/gpa-calculation.service';
 
 import { CreatePhaseDto } from './dto/create-phase.dto';
@@ -16,7 +19,37 @@ export class PhasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gpaCalculationService: GpaCalculationService,
+    private readonly domainEventService: DomainEventService,
   ) {}
+
+  private emitPhaseEvent(
+    name:
+      | typeof DomainEvents.PHASE_CREATED
+      | typeof DomainEvents.PHASE_UPDATED
+      | typeof DomainEvents.PHASE_CONFIGURATION_PUBLISHED
+      | typeof DomainEvents.PHASE_DELETED,
+    workspaceId: string,
+    phase: {
+      id: string;
+      name: string;
+      status: string;
+      isConfigurationPublished: boolean;
+    },
+  ) {
+    this.domainEventService.emitSafe<PhaseRealtimePayload>({
+      name,
+      timestamp: new Date().toISOString(),
+      scope: { type: 'workspace', id: workspaceId },
+      entity: { type: 'PHASE', id: phase.id },
+      payload: {
+        workspaceId,
+        phaseId: phase.id,
+        name: phase.name,
+        status: phase.status,
+        isConfigurationPublished: phase.isConfigurationPublished,
+      },
+    });
+  }
 
   listPhases(workspaceId: string, status?: PhaseStatus) {
     return this.prisma.phase.findMany({
@@ -73,6 +106,9 @@ export class PhasesService {
         status: dto.status ?? PhaseStatus.ACTIVE,
         sortOrder: dto.sortOrder ?? 0,
       },
+    }).then((phase) => {
+      this.emitPhaseEvent(DomainEvents.PHASE_CREATED, workspaceId, phase);
+      return phase;
     });
   }
 
@@ -101,7 +137,7 @@ export class PhasesService {
       }
     }
 
-    return this.prisma.phase.update({
+    const updated = await this.prisma.phase.update({
       where: { id: phaseId },
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
@@ -115,6 +151,14 @@ export class PhasesService {
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
       },
     });
+
+    this.emitPhaseEvent(
+      DomainEvents.PHASE_UPDATED,
+      updated.workspaceId,
+      updated,
+    );
+
+    return updated;
   }
 
   async validatePhaseWeightages(phaseId: string) {
@@ -175,6 +219,12 @@ export class PhasesService {
     await this.gpaCalculationService.recalculateForPhase(
       phase.workspaceId,
       phaseId,
+    );
+
+    this.emitPhaseEvent(
+      DomainEvents.PHASE_CONFIGURATION_PUBLISHED,
+      phase.workspaceId,
+      updated,
     );
 
     return {
@@ -243,6 +293,12 @@ export class PhasesService {
     await this.prisma.phase.delete({
       where: { id: phaseId },
     });
+
+    this.emitPhaseEvent(
+      DomainEvents.PHASE_DELETED,
+      phase.workspaceId,
+      phase,
+    );
 
     return { success: true };
   }

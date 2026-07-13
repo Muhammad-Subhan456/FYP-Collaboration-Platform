@@ -4,24 +4,37 @@ import type { Proposal, Team, TeamMember } from "@/types/student";
 import type { PaginatedResponse } from "@/types";
 import type {
   CoordinatorDashboardOverview,
-  CoordinatorProposalStats,
-  CoordinatorProgressStats,
   CoordinatorUserStats,
 } from "@/services/dashboard.service";
 import type {
   CoordinatorEvaluation,
   EvaluationPanel,
   GlobalAnnouncement,
-  SystemHealthResponse,
 } from "@/types/coordinator";
 import type { Notification } from "@/types/student";
 import type { Supervisor } from "@/types/student";
 
 export interface CoordinatorAnalyticsData {
-  users: CoordinatorUserStats;
-  totalTeams: number;
-  proposals: CoordinatorProposalStats;
-  progress: CoordinatorProgressStats;
+  summary: {
+    totalTeams: number;
+    activePhases: number;
+    deliverableTemplates: number;
+    lockedTemplates: number;
+    activeDeliverables: number;
+    pendingEvaluations: number;
+    finalizedSubmissions: number;
+    publishedPhaseResults: number;
+  };
+  users: CoordinatorUserStats & { totalEvaluators?: number };
+  proposalsByStatus: Record<string, number>;
+  submissionsByStatus: Record<string, number>;
+  evaluationsByStatus: Record<string, number>;
+  phasesByStatus: Record<string, number>;
+  templates: {
+    total: number;
+    locked: number;
+    unlocked: number;
+  };
 }
 
 export interface CoordinatorTeamsPageData {
@@ -149,13 +162,6 @@ export const coordinatorPageService = {
     const res = await api.get<UserProfile>("/coordinator/profile");
     return res.data;
   },
-
-  getSystemHealth: async () => {
-    const res = await api.get<SystemHealthResponse>(
-      "/coordinator/system-health",
-    );
-    return res.data;
-  },
 };
 
-export type { CoordinatorProposalStats };
+export type { CoordinatorUserStats };

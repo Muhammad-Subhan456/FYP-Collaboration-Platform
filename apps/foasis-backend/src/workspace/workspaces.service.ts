@@ -211,4 +211,42 @@ export class WorkspacesService {
       });
     }
   }
+
+  async getSystemHealth() {
+    const timestamp = new Date().toISOString();
+
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+
+      return {
+        status: 'ok',
+        service: 'foasis-backend',
+        database: 'connected',
+        services: [
+          {
+            name: 'foasis-backend',
+            status: 'ok',
+            database: 'connected',
+            timestamp,
+          },
+        ],
+        timestamp,
+      };
+    } catch {
+      return {
+        status: 'error',
+        service: 'foasis-backend',
+        database: 'disconnected',
+        services: [
+          {
+            name: 'foasis-backend',
+            status: 'error',
+            database: 'disconnected',
+            timestamp,
+          },
+        ],
+        timestamp,
+      };
+    }
+  }
 }

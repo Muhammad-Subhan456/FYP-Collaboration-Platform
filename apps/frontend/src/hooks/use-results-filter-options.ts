@@ -80,17 +80,14 @@ export function useSupervisorResultsFilterOptions(phaseId = ALL_FILTER_VALUE) {
     enabled: !!user?.workspaceId,
   });
 
+  // Shares cache with supervisor teams page / realtime patches (SupervisorTeamsPageData).
   const teamsQuery = useQuery({
     queryKey: queryKeys.supervisor.teams(user?.userId, user?.workspaceId),
     queryFn: async () => {
       const { supervisorPageService } = await import(
         "@/services/supervisor-page.service"
       );
-      const data = await supervisorPageService.getTeams();
-      return data.proposals.map((proposal) => ({
-        id: proposal.teamId,
-        name: proposal.title,
-      }));
+      return supervisorPageService.getTeams();
     },
     enabled: !!user?.workspaceId,
   });
@@ -104,9 +101,14 @@ export function useSupervisorResultsFilterOptions(phaseId = ALL_FILTER_VALUE) {
     enabled: !!user?.workspaceId,
   });
 
+  const teams = (teamsQuery.data?.proposals ?? []).map((proposal) => ({
+    id: proposal.teamId,
+    name: proposal.title,
+  }));
+
   return {
     phases: phasesQuery.data ?? [],
-    teams: teamsQuery.data ?? [],
+    teams,
     templates: templatesQuery.data ?? [],
     isLoading:
       phasesQuery.isLoading ||

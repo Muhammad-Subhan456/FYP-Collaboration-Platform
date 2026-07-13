@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -36,6 +37,7 @@ export class AuthController {
   ) {}
 
   @SkipWorkspace()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   async register(
     @Body() registerDto: RegisterDto,
@@ -44,6 +46,7 @@ export class AuthController {
   }
 
   @SkipWorkspace()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
@@ -55,12 +58,14 @@ export class AuthController {
   }
 
   @SkipWorkspace()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
   @SkipWorkspace()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(
@@ -154,7 +159,8 @@ export class AuthController {
     return this.authService.getUserStats(req.workspaceId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get('supervisors')
   listSupervisors(@Req() req: { workspaceId: string }) {
     return this.authService.listSupervisors(req.workspaceId);

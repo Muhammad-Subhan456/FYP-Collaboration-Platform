@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { RubricCriteriaEditor } from "@/components/coordinator/rubric-criteria-editor";
 import { PhaseFilter } from "@/components/common/phase-filter";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
-import { ErrorState } from "@/components/common/state-blocks";
+import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -245,11 +245,10 @@ export default function CoordinatorDeliverableTemplatesPage() {
       </div>
 
       {phases.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">
-            Create at least one academic phase before adding deliverable templates.
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="No phases available"
+          description="Create at least one academic phase before adding deliverable templates."
+        />
       ) : (
         <Card>
           <CardHeader>
@@ -260,7 +259,10 @@ export default function CoordinatorDeliverableTemplatesPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {templates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No templates yet.</p>
+              <EmptyState
+                title="No templates yet"
+                description="Create a deliverable template for the selected phase."
+              />
             ) : (
               templates.map((template) => (
                 <div

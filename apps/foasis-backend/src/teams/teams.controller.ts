@@ -40,13 +40,15 @@ export class TeamsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'COORDINATOR')
   @Get()
   getAllTeams(@Req() req: { workspaceId: string }) {
     return this.teamsService.getAllTeams(req.workspaceId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('search')
   searchTeams(
     @Query('domain') domain: string,
@@ -58,13 +60,15 @@ export class TeamsController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('my-team')
   getMyTeam(@Req() req: any) {
     return this.teamsService.getMyTeam(req.user.userId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
   @Get('my-team/members')
   getMyTeamMembers(@Req() req: any) {
     return this.teamsService.getMyTeamMembers(req.user.userId);
@@ -203,7 +207,24 @@ export class TeamsController {
 
   @UseGuards(InternalOrJwtAuthGuard)
   @Get(':teamId/members')
-  getTeamMembers(@Param('teamId') teamId: string) {
-    return this.teamsService.getTeamMembers(teamId);
+  getTeamMembers(
+    @Param('teamId') teamId: string,
+    @Req()
+    req: {
+      user?: { userId: string; role: string };
+      workspaceId?: string;
+      headers?: { 'x-workspace-id'?: string };
+    },
+  ) {
+    const workspaceId =
+      req.workspaceId ??
+      req.headers?.['x-workspace-id'] ??
+      undefined;
+
+    return this.teamsService.getTeamMembersForRequester(
+      teamId,
+      req.user,
+      workspaceId,
+    );
   }
 }

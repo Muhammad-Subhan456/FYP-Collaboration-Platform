@@ -23,9 +23,18 @@ export default function CoordinatorAnalyticsPage() {
     );
   }
 
+  if (!pageQuery.data) {
+    return (
+      <ErrorState
+        message="Failed to load analytics."
+        onRetry={() => pageQuery.refetch()}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <CoordinatorCharts data={pageQuery.data ?? {}} />
+      <CoordinatorCharts data={pageQuery.data} />
     </div>
   );
 }
