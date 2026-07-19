@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
+import { GradePromotionCell } from "@/components/results/grade-promotion-cell";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useSupervisorResultsFilterOptions } from "@/hooks/use-results-filter-options";
-import { formatGpa, formatPercent } from "@/lib/format";
+import { formatGpa, formatGrade, formatPercent } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -28,6 +30,7 @@ import {
 
 export default function SupervisorResultsPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<ResultsFilters>(EMPTY_RESULTS_FILTERS);
   const apiParams = useMemo(() => buildResultsApiParams(filters), [filters]);
   const filterOptions = useSupervisorResultsFilterOptions(filters.phaseId);
@@ -39,6 +42,23 @@ export default function SupervisorResultsPage() {
     ),
     queryFn: () => submissionResultsService.getSupervisorResults(apiParams),
     enabled: !!user?.workspaceId,
+  });
+
+  const promoteMutation = useMutation({
+    mutationFn: ({
+      phaseId,
+      studentId,
+    }: {
+      phaseId: string;
+      studentId: string;
+    }) => submissionResultsService.promoteGrade(phaseId, studentId),
+    onSuccess: () => {
+      toast.success("Grade promoted (+1 mark)");
+      void queryClient.invalidateQueries({
+        queryKey: ["supervisor", "submission-results"],
+      });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const deliverableResults = useMemo(
@@ -126,8 +146,10 @@ export default function SupervisorResultsPage() {
                     <th className="px-3 py-2 text-left">Phase</th>
                     <th className="px-3 py-2 text-left">Student</th>
                     <th className="px-3 py-2 text-left">Phase marks</th>
+                    <th className="px-3 py-2 text-left">Grade</th>
                     <th className="px-3 py-2 text-left">GPA</th>
                     <th className="px-3 py-2 text-left">Status</th>
+                    <th className="px-3 py-2 text-left">Grade improvement</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -138,11 +160,26 @@ export default function SupervisorResultsPage() {
                       <td className="px-3 py-2">
                         {formatPercent(result.weightedMarks)}
                       </td>
+                      <td className="px-3 py-2 font-medium">
+                        {formatGrade(result.grade)}
+                      </td>
                       <td className="px-3 py-2">{formatGpa(result.gpa)}</td>
                       <td className="px-3 py-2">
                         <Badge variant="outline">
                           {result.isComplete ? "Complete" : "In progress"}
                         </Badge>
+                      </td>
+                      <td className="px-3 py-2">
+                        <GradePromotionCell
+                          result={result}
+                          isPending={promoteMutation.isPending}
+                          onPromote={() =>
+                            promoteMutation.mutate({
+                              phaseId: result.phaseId,
+                              studentId: result.studentId,
+                            })
+                          }
+                        />
                       </td>
                     </tr>
                   ))}

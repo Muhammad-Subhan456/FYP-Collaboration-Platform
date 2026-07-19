@@ -143,7 +143,8 @@ export function handleWorkstreamEvent(
       );
       break;
     }
-    case RealtimeEvents.SUBMISSION_FINALIZED: {
+    case RealtimeEvents.SUBMISSION_FINALIZED:
+    case RealtimeEvents.SUBMISSION_UNFINALIZED: {
       const payload = envelope.payload as RealtimeSubmissionPayload;
       if (teamId) {
         applySubmissionSnapshot(

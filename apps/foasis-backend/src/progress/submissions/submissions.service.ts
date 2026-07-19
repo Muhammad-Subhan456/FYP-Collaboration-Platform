@@ -582,6 +582,99 @@ export class SubmissionsService {
     return updatedSubmission;
   }
 
+  async unfinalizeSubmission(
+    submissionId: string,
+    supervisorId: string,
+  ) {
+    const submission =
+      await this.prisma.submission.findUnique({
+        where: { id: submissionId },
+        include: {
+          deliverable: true,
+        },
+      });
+
+    if (!submission) {
+      throw new BadRequestException('Submission not found');
+    }
+
+    if (submission.deliverable.supervisorId !== supervisorId) {
+      throw new ForbiddenException(
+        'You can only unfinalize submissions for your own deliverables',
+      );
+    }
+
+    if (submission.status !== 'FINALIZED') {
+      throw new BadRequestException(
+        'Only finalized submissions can be unfinalized',
+      );
+    }
+
+    // Block rollback once the submission has entered the evaluation process.
+    const evaluationCount =
+      await this.prisma.submissionEvaluation.count({
+        where: { submissionId },
+      });
+
+    if (evaluationCount > 0) {
+      throw new BadRequestException(
+        'This submission has entered the evaluation process and can no longer be unfinalized',
+      );
+    }
+
+    const updatedSubmission =
+      await this.prisma.submission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'APPROVED',
+          finalizedAt: null,
+        },
+      });
+
+    await this.activityLogsService.logActivity(
+      supervisorId,
+      'Submission Unfinalized',
+      submission.deliverable.title,
+    );
+
+    const activeUsers =
+      await this.authService.listActiveUserIds(
+        submission.workspaceId,
+      );
+    const coordinatorIds = activeUsers.filter(
+      (member) => member.role === UserRole.COORDINATOR,
+    );
+
+    if (coordinatorIds.length > 0) {
+      await this.notificationDispatch.sendBulk(
+        coordinatorIds.map((coordinator) => ({
+          authUserId: coordinator.id,
+          title: 'Finalized Submission Withdrawn',
+          message: `${submission.deliverable.title} was unfinalized by the supervisor and removed from the final submissions queue.`,
+          type: 'SUBMISSION_REVIEWED',
+          entityType: 'SUBMISSION',
+          entityId: submission.id,
+          route: '/coordinator/submissions',
+        })),
+      );
+    }
+
+    this.domainEventService.emitSafe<SubmissionSnapshotPayload>({
+      name: DomainEvents.SUBMISSION_UNFINALIZED,
+      timestamp: new Date().toISOString(),
+      actorId: supervisorId,
+      scope: { type: 'workspace', id: submission.workspaceId },
+      entity: { type: 'SUBMISSION', id: updatedSubmission.id },
+      payload: {
+        teamId: submission.teamId,
+        deliverableId: submission.deliverableId,
+        submission: serializeSubmission(updatedSubmission),
+      },
+    });
+
+    return updatedSubmission;
+  }
+
   async getFinalizedSubmissions(
     workspaceId: string,
     phaseId?: string,

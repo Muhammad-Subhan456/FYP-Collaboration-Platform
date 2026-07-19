@@ -1,29 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { SubmissionEvaluationStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { DomainEvents } from '../../domain-events/domain-event.constants';
+import { DomainEventService } from '../../domain-events/domain-event.service';
+import type { GpaRecalculatedPayload } from '../../domain-events/domain-event.types';
 
 import { averageTemplateScoreForStudent } from '../submission-evaluations/submission-scoring.util';
+import { calculateGradePoints, resolveGrade } from './grading-policy';
 
 /**
- * HEC-style absolute grading scale on phase percentage (0–100).
+ * Official university absolute grading scale on phase percentage (0–100).
+ * See `grading-policy.ts` for the letter grade / grade point mapping.
  */
 export type GradingPolicy = {
   calculateGpa: (percentage: number) => number;
+  resolveGrade: (percentage: number) => { grade: string; gradePoints: number };
 };
 
 const DEFAULT_GRADING_POLICY: GradingPolicy = {
-  calculateGpa(percentage: number) {
-    if (percentage >= 85) return 4.0;
-    if (percentage >= 80) return 3.7;
-    if (percentage >= 75) return 3.3;
-    if (percentage >= 70) return 3.0;
-    if (percentage >= 65) return 2.7;
-    if (percentage >= 60) return 2.3;
-    if (percentage >= 55) return 2.0;
-    if (percentage >= 50) return 1.7;
-    return 0.0;
-  },
+  calculateGpa: calculateGradePoints,
+  resolveGrade,
 };
 
 export type DeliverableBreakdownItem = {
@@ -42,7 +43,10 @@ export type DeliverableBreakdownItem = {
 
 @Injectable()
 export class GpaCalculationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly domainEventService: DomainEventService,
+  ) {}
 
   getGradingPolicy(): GradingPolicy {
     return DEFAULT_GRADING_POLICY;
@@ -219,11 +223,22 @@ export class GpaCalculationService {
       totalEffectiveWeight > 0
         ? (rawWeightedSum / totalEffectiveWeight) * 100
         : 0;
-    const roundedMarks = Math.round(phasePercentage * 100) / 100;
+    const basePercentage = Math.round(phasePercentage * 100) / 100;
+
+    // Preserve a previously applied discretionary +1 mark promotion across
+    // recalculations (e.g. when new evaluations arrive for the phase).
+    const existing = await this.prisma.studentPhaseResult.findUnique({
+      where: { phaseId_studentId: { phaseId, studentId } },
+      select: { promotionApplied: true },
+    });
+    const promotionApplied = existing?.promotionApplied ?? false;
+    const effectivePercentage = promotionApplied
+      ? Math.min(100, Math.round((basePercentage + 1) * 100) / 100)
+      : basePercentage;
 
     const canComputeGpa = isComplete;
     const gpa = canComputeGpa
-      ? this.getGradingPolicy().calculateGpa(roundedMarks)
+      ? this.getGradingPolicy().calculateGpa(effectivePercentage)
       : null;
 
     return this.prisma.studentPhaseResult.upsert({
@@ -234,19 +249,121 @@ export class GpaCalculationService {
         workspaceId,
         phaseId,
         studentId,
-        weightedMarks: roundedMarks,
+        weightedMarks: effectivePercentage,
+        basePercentage,
         gpa: gpa ?? 0,
         isComplete,
         breakdown,
       },
       update: {
-        weightedMarks: roundedMarks,
+        weightedMarks: effectivePercentage,
+        basePercentage,
         gpa: gpa ?? 0,
         isComplete,
         breakdown,
         calculatedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Apply the university's discretionary +1 mark grade improvement.
+   *
+   * Allowed only when the student's phase percentage is exactly one mark below
+   * the next grade boundary (so a single mark changes the grade), the phase is
+   * fully evaluated, and no promotion has been applied yet.
+   */
+  async promoteStudentPhaseGrade(
+    workspaceId: string,
+    phaseId: string,
+    studentId: string,
+    actor: { id: string; role: string },
+  ) {
+    if (actor.role === 'SUPERVISOR') {
+      const membership = await this.prisma.teamMember.findFirst({
+        where: {
+          authUserId: studentId,
+          team: {
+            workspaceId,
+            proposal: { assignedSupervisorId: actor.id },
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!membership) {
+        throw new ForbiddenException(
+          'You can only promote grades for students on your supervised teams',
+        );
+      }
+    }
+
+    const result = await this.prisma.studentPhaseResult.findUnique({
+      where: { phaseId_studentId: { phaseId, studentId } },
+    });
+
+    if (!result || result.workspaceId !== workspaceId) {
+      throw new BadRequestException('Phase result not found');
+    }
+
+    if (!result.isComplete) {
+      throw new BadRequestException(
+        'Grade can be promoted only after the phase is fully evaluated',
+      );
+    }
+
+    if (result.promotionApplied) {
+      throw new BadRequestException(
+        'This grade has already been promoted for this phase',
+      );
+    }
+
+    const base = result.basePercentage ?? result.weightedMarks;
+    const promotedPercentage = Math.min(
+      100,
+      Math.round((base + 1) * 100) / 100,
+    );
+    const before = resolveGrade(base);
+    const after = resolveGrade(promotedPercentage);
+
+    if (after.gradePoints <= before.gradePoints) {
+      throw new BadRequestException(
+        'This student is not one mark below the next grade boundary',
+      );
+    }
+
+    const updated = await this.prisma.studentPhaseResult.update({
+      where: { phaseId_studentId: { phaseId, studentId } },
+      data: {
+        basePercentage: base,
+        weightedMarks: promotedPercentage,
+        gpa: after.gradePoints,
+        promotionApplied: true,
+        promotedById: actor.id,
+        promotedAt: new Date(),
+        calculatedAt: new Date(),
+      },
+    });
+
+    const teamMember = await this.prisma.teamMember.findFirst({
+      where: { authUserId: studentId, team: { workspaceId } },
+      select: { teamId: true },
+    });
+
+    this.domainEventService.emitSafe<GpaRecalculatedPayload>({
+      name: DomainEvents.GPA_RECALCULATED,
+      timestamp: new Date().toISOString(),
+      actorId: actor.id,
+      scope: { type: 'workspace', id: workspaceId },
+      entity: { type: 'PHASE', id: phaseId },
+      payload: {
+        workspaceId,
+        phaseId,
+        teamId: teamMember?.teamId ?? '',
+      },
+    });
+
+    return updated;
   }
 
   async recalculateForTeamPhase(

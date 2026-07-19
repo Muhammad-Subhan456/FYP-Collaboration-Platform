@@ -48,6 +48,7 @@ export class RealtimeEventDispatcher {
   @OnEvent(DomainEvents.SUBMISSION_CREATED)
   @OnEvent(DomainEvents.SUBMISSION_REVIEWED)
   @OnEvent(DomainEvents.SUBMISSION_FINALIZED)
+  @OnEvent(DomainEvents.SUBMISSION_UNFINALIZED)
   @OnEvent(DomainEvents.PHASE_CREATED)
   @OnEvent(DomainEvents.PHASE_UPDATED)
   @OnEvent(DomainEvents.PHASE_CONFIGURATION_PUBLISHED)

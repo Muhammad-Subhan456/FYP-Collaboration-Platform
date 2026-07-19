@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useResultsFilterOptions } from "@/hooks/use-results-filter-options";
-import { formatDate, formatGpa, formatPercent } from "@/lib/format";
+import { formatDate, formatGpa, formatGrade, formatPercent } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -137,6 +137,17 @@ export default function StudentResultsPage() {
                 <p className="text-2xl font-semibold">
                   {formatPercent(phaseResult.weightedMarks)}
                 </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Grade</p>
+                <p className="text-2xl font-semibold">
+                  {formatGrade(phaseResult.grade)}
+                </p>
+                {phaseResult.promotionApplied ? (
+                  <Badge variant="secondary" className="mt-1">
+                    Improved +1
+                  </Badge>
+                ) : null}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Phase GPA</p>

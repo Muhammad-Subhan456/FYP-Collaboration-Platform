@@ -1,10 +1,21 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
+import { GpaCalculationService } from '../gpa/gpa-calculation.service';
+
 import { ListResultsQueryDto } from './dto/list-submissions-query.dto';
+import { PromoteGradeDto } from './dto/promote-grade.dto';
 import { SubmissionResultsService } from './submission-results.service';
 
 type AuthedRequest = {
@@ -17,6 +28,7 @@ type AuthedRequest = {
 export class SubmissionResultsController {
   constructor(
     private readonly submissionResultsService: SubmissionResultsService,
+    private readonly gpaCalculationService: GpaCalculationService,
   ) {}
 
   @Get('my')
@@ -68,6 +80,20 @@ export class SubmissionResultsController {
         studentId: query.studentId,
         evaluatorId: query.evaluatorId,
       },
+    );
+  }
+
+  @Post('promote')
+  @Roles('SUPERVISOR', 'COORDINATOR')
+  promoteGrade(
+    @Req() req: AuthedRequest,
+    @Body() body: PromoteGradeDto,
+  ) {
+    return this.gpaCalculationService.promoteStudentPhaseGrade(
+      req.workspaceId,
+      body.phaseId,
+      body.studentId,
+      { id: req.user.userId, role: req.user.role ?? '' },
     );
   }
 }

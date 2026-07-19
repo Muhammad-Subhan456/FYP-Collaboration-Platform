@@ -114,6 +114,19 @@ export class SubmissionsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPERVISOR')
+  @Patch(':id/unfinalize')
+  unfinalizeSubmission(
+    @Req() req: any,
+    @Param('id') submissionId: string,
+  ) {
+    return this.submissionsService.unfinalizeSubmission(
+      submissionId,
+      req.user.userId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPERVISOR')
   @Patch(':id/review')
   reviewSubmission(
     @Req() req: any,

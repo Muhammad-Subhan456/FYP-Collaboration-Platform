@@ -19,6 +19,7 @@ export const DomainEvents = {
   SUBMISSION_CREATED: 'submission.created',
   SUBMISSION_REVIEWED: 'submission.reviewed',
   SUBMISSION_FINALIZED: 'submission.finalized',
+  SUBMISSION_UNFINALIZED: 'submission.unfinalized',
 
   PHASE_CREATED: 'phase.created',
   PHASE_UPDATED: 'phase.updated',

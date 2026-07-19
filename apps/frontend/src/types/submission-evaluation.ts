@@ -124,8 +124,14 @@ export interface StudentPhaseResult {
   phaseId: string;
   studentId: string;
   weightedMarks: number;
+  basePercentage?: number;
   gpa: number | null;
+  grade: string | null;
   isComplete: boolean;
+  promotionApplied?: boolean;
+  promotionEligible?: boolean;
+  promotedByName?: string | null;
+  promotedAt?: string | null;
   breakdown: DeliverableBreakdownItem[] | null;
   calculatedAt: string;
   phase: {

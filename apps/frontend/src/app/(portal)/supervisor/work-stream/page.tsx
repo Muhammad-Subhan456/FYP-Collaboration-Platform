@@ -26,6 +26,7 @@ import { SubmissionRemarks } from "@/components/work-stream/submission-remarks";
 import { RichContent } from "@/components/work-stream/rich-content";
 import { SegmentedControl } from "@/components/work-stream/segmented-control";
 import { PublishTemplateDialog } from "@/components/supervisor/publish-template-dialog";
+import { TemplateDetailsDialog } from "@/components/supervisor/template-details-dialog";
 import { TeamFilterSelect } from "@/components/work-stream/team-filter-select";
 import { TeamMultiSelect } from "@/components/work-stream/team-multi-select";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,9 @@ export default function SupervisorWorkStreamPage() {
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [publishTemplate, setPublishTemplate] =
     useState<DeliverableTemplate | null>(null);
+  const [detailsTemplateId, setDetailsTemplateId] = useState<string | null>(
+    null,
+  );
 
   const [teamAssignError, setTeamAssignError] = useState<string | undefined>();
 
@@ -209,6 +213,7 @@ export default function SupervisorWorkStreamPage() {
     toggleSubmissionsMutation,
     reviewMutation,
     finalizeMutation,
+    unfinalizeMutation,
     commentMutation,
   } = useSupervisorWorkStreamMutations({
     onFormSuccess: resetForm,
@@ -742,6 +747,18 @@ export default function SupervisorWorkStreamPage() {
                           Finalize
                         </Button>
                       )}
+                      {submission.status === "FINALIZED" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={unfinalizeMutation.isPending}
+                          onClick={() =>
+                            unfinalizeMutation.mutate(submission.id)
+                          }
+                        >
+                          Unfinalize
+                        </Button>
+                      )}
                     </div>
                     <SubmissionRemarks
                       remarks={submission.remarks}
@@ -846,6 +863,14 @@ export default function SupervisorWorkStreamPage() {
         }}
       />
 
+      <TemplateDetailsDialog
+        templateId={detailsTemplateId}
+        open={!!detailsTemplateId}
+        onOpenChange={(open) => {
+          if (!open) setDetailsTemplateId(null);
+        }}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <div className="space-y-3">
           <TeamFilterSelect
@@ -888,12 +913,21 @@ export default function SupervisorWorkStreamPage() {
                       <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
                         {template.description}
                       </p>
-                      <Button
-                        size="sm"
-                        onClick={() => setPublishTemplate(template)}
-                      >
-                        Publish to teams
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDetailsTemplateId(template.id)}
+                        >
+                          View details
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => setPublishTemplate(template)}
+                        >
+                          Publish to teams
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))

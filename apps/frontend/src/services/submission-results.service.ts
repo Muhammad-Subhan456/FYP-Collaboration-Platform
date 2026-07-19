@@ -44,4 +44,12 @@ export const submissionResultsService = {
     );
     return res.data;
   },
+
+  promoteGrade: async (phaseId: string, studentId: string) => {
+    const res = await api.post("/submission-results/promote", {
+      phaseId,
+      studentId,
+    });
+    return res.data;
+  },
 };

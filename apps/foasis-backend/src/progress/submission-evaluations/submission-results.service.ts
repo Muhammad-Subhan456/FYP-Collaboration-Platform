@@ -8,6 +8,7 @@ import {
   averageStudentDeliverableScores,
   averageTemplateScoreForStudent,
 } from './submission-scoring.util';
+import { resolveGrade } from '../gpa/grading-policy';
 
 @Injectable()
 export class SubmissionResultsService {
@@ -39,6 +40,48 @@ export class SubmissionResultsService {
 
   private async loadEvaluatorNames(evaluatorIds: string[]) {
     return this.loadPersonNames(evaluatorIds);
+  }
+
+  private async loadPromoterNames(
+    results: Array<{ promotedById: string | null }>,
+  ) {
+    const ids = [
+      ...new Set(
+        results
+          .map((result) => result.promotedById)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    return this.loadPersonNames(ids);
+  }
+
+  private buildPromotionFields(
+    result: {
+      isComplete: boolean;
+      promotionApplied: boolean;
+      basePercentage: number | null;
+      weightedMarks: number;
+      promotedById: string | null;
+      promotedAt: Date | null;
+    },
+    promoterNames: Map<string, string>,
+  ) {
+    const base = result.basePercentage ?? result.weightedMarks;
+    const promotionEligible =
+      result.isComplete &&
+      !result.promotionApplied &&
+      resolveGrade(Math.min(100, base + 1)).gradePoints >
+        resolveGrade(base).gradePoints;
+
+    return {
+      promotionApplied: result.promotionApplied,
+      promotionEligible,
+      basePercentage: base,
+      promotedAt: result.promotedAt ? result.promotedAt.toISOString() : null,
+      promotedByName: result.promotedById
+        ? (promoterNames.get(result.promotedById) ?? null)
+        : null,
+    };
   }
 
   private async resolveFilteredStudentIds(
@@ -297,12 +340,15 @@ export class SubmissionResultsService {
       };
     });
 
+    const promoterNames = await this.loadPromoterNames(phaseResultsRaw);
     const phaseResults = phaseResultsRaw.map((result) => ({
       ...result,
       gpa: result.isComplete ? result.gpa : null,
+      grade: result.isComplete ? resolveGrade(result.weightedMarks).grade : null,
       gpaAvailable: result.isComplete,
       configurationPublished: result.phase.isConfigurationPublished,
       breakdown: Array.isArray(result.breakdown) ? result.breakdown : [],
+      ...this.buildPromotionFields(result, promoterNames),
     }));
 
     return {
@@ -446,6 +492,7 @@ export class SubmissionResultsService {
       },
     );
 
+    const promoterNames = await this.loadPromoterNames(phaseResultsRaw);
     const phaseResults = this.filterPhaseResultsByStudents(
       phaseResultsRaw,
       await this.resolveFilteredStudentIds(workspaceId, {
@@ -456,8 +503,10 @@ export class SubmissionResultsService {
       ...result,
       studentName: studentNames.get(result.studentId) ?? 'Student',
       gpa: result.isComplete ? result.gpa : null,
+      grade: result.isComplete ? resolveGrade(result.weightedMarks).grade : null,
       gpaAvailable: result.isComplete,
       configurationPublished: result.phase.isConfigurationPublished,
+      ...this.buildPromotionFields(result, promoterNames),
     }));
 
     return {
@@ -660,6 +709,7 @@ export class SubmissionResultsService {
       },
     );
 
+    const promoterNames = await this.loadPromoterNames(phaseResultsRaw);
     const phaseResults = this.filterPhaseResultsByStudents(
       phaseResultsRaw,
       await this.resolveFilteredStudentIds(workspaceId, {
@@ -673,9 +723,11 @@ export class SubmissionResultsService {
       ...result,
       studentName: studentNames.get(result.studentId) ?? 'Student',
       gpa: result.isComplete ? result.gpa : null,
+      grade: result.isComplete ? resolveGrade(result.weightedMarks).grade : null,
       gpaAvailable: result.isComplete,
       configurationPublished: result.phase.isConfigurationPublished,
       breakdown: Array.isArray(result.breakdown) ? result.breakdown : [],
+      ...this.buildPromotionFields(result, promoterNames),
     }));
 
     return {

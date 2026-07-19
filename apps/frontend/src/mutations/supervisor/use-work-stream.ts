@@ -222,6 +222,17 @@ export function useSupervisorWorkStreamMutations(options?: {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const unfinalizeMutation = useMutation({
+    mutationFn: (submissionId: string) =>
+      supervisorService.unfinalizeSubmission(submissionId),
+    onSuccess: () => {
+      toast.success("Submission unfinalized and withdrawn from the coordinator");
+      options?.onReviewSuccess?.();
+      invalidate();
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   const commentMutation = useMutation({
     mutationFn: workStreamService.createComment,
     onSuccess: (comment, variables) => {
@@ -248,6 +259,7 @@ export function useSupervisorWorkStreamMutations(options?: {
     toggleSubmissionsMutation,
     reviewMutation,
     finalizeMutation,
+    unfinalizeMutation,
     commentMutation,
     invalidateWorkStream: invalidate,
   };

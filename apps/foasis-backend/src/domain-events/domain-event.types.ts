@@ -185,6 +185,7 @@ export interface SubmissionWire {
   feedback?: string | null;
   grade?: number | null;
   submittedAt: string;
+  finalizedAt?: string | null;
 }
 
 export interface SubmissionSnapshotPayload {

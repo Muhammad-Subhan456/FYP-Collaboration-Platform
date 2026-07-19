@@ -111,5 +111,8 @@ export function serializeSubmission(
     feedback: submission.feedback,
     grade: submission.grade,
     submittedAt: submission.submittedAt.toISOString(),
+    finalizedAt: submission.finalizedAt
+      ? submission.finalizedAt.toISOString()
+      : null,
   };
 }

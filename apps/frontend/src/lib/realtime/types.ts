@@ -82,6 +82,7 @@ export const RealtimeEvents = {
   SUBMISSION_CREATED: "submission.created",
   SUBMISSION_REVIEWED: "submission.reviewed",
   SUBMISSION_FINALIZED: "submission.finalized",
+  SUBMISSION_UNFINALIZED: "submission.unfinalized",
   PHASE_CREATED: "phase.created",
   PHASE_UPDATED: "phase.updated",
   PHASE_CONFIGURATION_PUBLISHED: "phase.configuration_published",
@@ -201,6 +202,7 @@ export interface RealtimeSubmissionWire {
   feedback?: string | null;
   grade?: number | null;
   submittedAt: string;
+  finalizedAt?: string | null;
 }
 
 export interface RealtimeSubmissionPayload {
@@ -221,6 +223,7 @@ export const WORKSTREAM_EVENTS = [
   RealtimeEvents.SUBMISSION_CREATED,
   RealtimeEvents.SUBMISSION_REVIEWED,
   RealtimeEvents.SUBMISSION_FINALIZED,
+  RealtimeEvents.SUBMISSION_UNFINALIZED,
 ] as const;
 
 export const CONFIG_EVENTS = [
