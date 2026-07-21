@@ -189,6 +189,8 @@ model UserProfile {
   semester           Int?
   skills             String[]    @default([])
   interests          String[]    @default([])
+  cgpa               Float?
+  phone              String?
   linkedIn           String?
   github             String?
   bio                String?
@@ -215,17 +217,23 @@ enum JoinRequestStatus {
 }
 
 model Team {
-  id              String   @id @default(uuid())
-  workspaceId     String
-  name            String
-  domain          String
-  projectTitle    String?
-  projectAbstract String?
-  proposalPdfUrl  String?
-  maxMembers      Int
-  leaderId        String
-  isOpen          Boolean  @default(true)
-  createdAt       DateTime @default(now())
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  name               String
+  domain             String
+  domains            String[] @default([])
+  otherDomain        String?
+  nature             ProjectNature?
+  sdgs               Int[]    @default([])
+  sdgJustification   String?
+  previousObjectives String?
+  projectTitle       String?
+  projectAbstract    String?
+  proposalPdfUrl     String?
+  maxMembers         Int
+  leaderId           String
+  isOpen             Boolean  @default(true)
+  createdAt          DateTime @default(now())
   workspace       Workspace @relation(fields: [workspaceId], references: [id])
   members         TeamMember[]
   joinRequests    JoinRequest[]
@@ -270,6 +278,12 @@ enum ProposalStatus {
   IGNORED
 }
 
+enum ProjectNature {
+  DEVELOPMENT
+  RESEARCH_AND_DEVELOPMENT
+  HYBRID
+}
+
 enum RequestStatus {
   PENDING
   ACCEPTED
@@ -283,8 +297,15 @@ model Proposal {
   teamId               String         @unique
   workspaceId          String
   teamLeaderAuthUserId String?
+  projectCode          String?        @unique
   title                String
   domain               String
+  domains              String[]       @default([])
+  otherDomain          String?
+  nature               ProjectNature?
+  sdgs                 Int[]          @default([])
+  sdgJustification     String?
+  previousObjectives   String?
   abstract             String
   proposalPdfUrl       String?
   status               ProposalStatus @default(DRAFT)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ExternalLink, Loader2, X } from "lucide-react";
+import { Check, ExternalLink, Eye, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -33,6 +33,7 @@ import {
   isSupervisorQueryInitialLoading,
   useSupervisorRequestsQuery,
 } from "@/queries/supervisor";
+import { ProposalDocumentDialog } from "@/components/proposal/proposal-document-dialog";
 import type { Proposal } from "@/types/student";
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -47,6 +48,7 @@ export default function SupervisorRequestsPage() {
     type: "accept" | "reject";
   } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [viewProposalId, setViewProposalId] = useState<string | null>(null);
 
   const pageQuery = useSupervisorRequestsQuery();
   const { acceptMutation, rejectMutation } = useSupervisorRequestMutations();
@@ -151,7 +153,15 @@ export default function SupervisorRequestsPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setViewProposalId(proposal.id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                      View full proposal
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() =>
@@ -228,6 +238,12 @@ export default function SupervisorRequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProposalDocumentDialog
+        proposalId={viewProposalId}
+        open={!!viewProposalId}
+        onOpenChange={(open) => !open && setViewProposalId(null)}
+      />
     </div>
   );
 }

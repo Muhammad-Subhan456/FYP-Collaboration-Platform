@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Megaphone, Paperclip, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,11 +40,14 @@ import {
 } from "@/components/ui/select";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { gaTrace } from "@/lib/realtime/ga-trace";
+import { datetimeLocalToIso } from "@/lib/validation/announcement";
 import { useCoordinatorCreateAnnouncementMutation } from "@/mutations/coordinator";
 import {
   isCoordinatorQueryInitialLoading,
   useCoordinatorAnnouncementsQuery,
 } from "@/queries/coordinator";
+import { useAuth } from "@/providers/auth-provider";
 import { uploadService } from "@/services/progress.service";
 import type { WorkStreamAttachment } from "@/types/work-stream";
 
@@ -70,6 +73,18 @@ export default function CoordinatorAnnouncementsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pageQuery = useCoordinatorAnnouncementsQuery();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const announcements = pageQuery.data ?? [];
+    gaTrace("14-component-render", {
+      queryKey: ["coordinator", "announcements", user?.userId, user?.workspaceId],
+      cacheLength: announcements.length,
+      announcementIds: announcements.map((item) => item.id),
+      isFetching: pageQuery.isFetching,
+      isStale: pageQuery.isStale,
+    });
+  }, [pageQuery.data, pageQuery.isFetching, pageQuery.isStale, user?.userId, user?.workspaceId]);
 
   const resetForm = () => {
     setTitle("");
@@ -123,7 +138,7 @@ export default function CoordinatorAnnouncementsPage() {
         message: message.trim(),
         type,
         audienceRoles,
-        publishAt: publishAt || undefined,
+        publishAt: publishAt ? datetimeLocalToIso(publishAt) : undefined,
         attachments,
       });
     } catch (error) {
@@ -169,15 +184,14 @@ export default function CoordinatorAnnouncementsPage() {
                     <Megaphone className="h-4 w-4 text-primary" />
                     {item.title}
                   </CardTitle>
-                  {item.status === "SCHEDULED" ? (
-                    <Badge variant="outline">Scheduled</Badge>
-                  ) : null}
                   {item.type ? (
                     <Badge variant="secondary">{item.type}</Badge>
                   ) : null}
                 </div>
                 <CardDescription>
-                  {formatDateTime(item.publishedAt ?? item.createdAt)}
+                  {formatDateTime(
+                    item.publishAt ?? item.publishedAt ?? item.createdAt,
+                  )}
                   {item.audienceRoles?.length
                     ? ` · ${formatAudienceRoles(item.audienceRoles)}`
                     : null}
@@ -237,13 +251,17 @@ export default function CoordinatorAnnouncementsPage() {
                 onChange={setAudienceRoles}
               />
               <div className="space-y-2">
-                <Label htmlFor="publishAt">Schedule (optional)</Label>
+                <Label htmlFor="publishAt">Display date &amp; time (optional)</Label>
                 <Input
                   id="publishAt"
                   type="datetime-local"
                   value={publishAt}
                   onChange={(e) => setPublishAt(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Shown on the announcement card only. Publishing is always
+                  immediate.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Attachments</Label>
@@ -309,7 +327,7 @@ export default function CoordinatorAnnouncementsPage() {
                 {(createMutation.isPending || uploading) && (
                   <Loader2 className="animate-spin" />
                 )}
-                {publishAt ? "Schedule" : "Publish now"}
+                Publish
               </Button>
             </DialogFooter>
           </form>

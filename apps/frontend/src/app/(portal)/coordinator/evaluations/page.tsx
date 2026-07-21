@@ -40,7 +40,11 @@ import { useAuth } from "@/providers/auth-provider";
 import { coordinatorPageService } from "@/services/coordinator-page.service";
 import { deliverableTemplateService } from "@/services/deliverable-template.service";
 import { submissionEvaluationService } from "@/services/submission-evaluation.service";
-import type { SubmissionEvaluationStatus } from "@/types/submission-evaluation";
+import type {
+  EligibleSubmissionRow,
+  SubmissionEvaluationPerson,
+  SubmissionEvaluationStatus,
+} from "@/types/submission-evaluation";
 
 const STATUS_OPTIONS: Array<{
   value: SubmissionEvaluationStatus | "all";
@@ -160,6 +164,14 @@ export default function CoordinatorEvaluationsPage() {
   const [remindingSubmissionId, setRemindingSubmissionId] = useState<
     string | null
   >(null);
+  const [remindDialogOpen, setRemindDialogOpen] = useState(false);
+  const [remindSubmissionId, setRemindSubmissionId] = useState<string | null>(
+    null,
+  );
+  const [remindEvaluatorIds, setRemindEvaluatorIds] = useState<string[]>([]);
+  const [pendingRemindEvaluators, setPendingRemindEvaluators] = useState<
+    SubmissionEvaluationPerson[]
+  >([]);
 
   const remindMutation = useMutation({
     mutationFn: submissionEvaluationService.remindEvaluators,
@@ -170,6 +182,10 @@ export default function CoordinatorEvaluationsPage() {
           : `Reminder sent to ${result.remindedCount} evaluators`,
       );
       setRemindingSubmissionId(null);
+      setRemindDialogOpen(false);
+      setRemindSubmissionId(null);
+      setRemindEvaluatorIds([]);
+      setPendingRemindEvaluators([]);
     },
     onError: (error) => {
       setRemindingSubmissionId(null);
@@ -221,6 +237,25 @@ export default function CoordinatorEvaluationsPage() {
     setAssignedEvaluatorIds(currentEvaluatorIds);
     setSelectedEvaluatorIds([]);
     setAssignDialogOpen(true);
+  };
+
+  const openRemindDialog = (row: EligibleSubmissionRow) => {
+    const pending = row.evaluations.filter(
+      (assignment) =>
+        assignment.status === "ASSIGNED" ||
+        assignment.status === "IN_PROGRESS",
+    );
+    setRemindSubmissionId(row.submissionId);
+    setPendingRemindEvaluators(
+      pending
+        .map((assignment) => assignment.evaluator)
+        .filter(
+          (evaluator): evaluator is NonNullable<typeof evaluator> =>
+            evaluator != null,
+        ),
+    );
+    setRemindEvaluatorIds(pending.map((assignment) => assignment.evaluatorId));
+    setRemindDialogOpen(true);
   };
 
   return (
@@ -431,10 +466,7 @@ export default function CoordinatorEvaluationsPage() {
                                 remindingSubmissionId === row.submissionId &&
                                 remindMutation.isPending
                               }
-                              onClick={() => {
-                                setRemindingSubmissionId(row.submissionId);
-                                remindMutation.mutate(row.submissionId);
-                              }}
+                              onClick={() => openRemindDialog(row)}
                             >
                               {remindingSubmissionId === row.submissionId &&
                               remindMutation.isPending ? (
@@ -504,6 +536,58 @@ export default function CoordinatorEvaluationsPage() {
               {selectedEvaluatorIds.length > 0
                 ? `(${selectedEvaluatorIds.length})`
                 : "evaluators"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={remindDialogOpen} onOpenChange={setRemindDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send evaluation reminders</DialogTitle>
+            <DialogDescription>
+              Choose one or more evaluators with pending evaluations for this
+              submission. Only selected evaluators will receive a reminder.
+            </DialogDescription>
+          </DialogHeader>
+          <EvaluatorMultiSelect
+            evaluators={pendingRemindEvaluators}
+            selectedIds={remindEvaluatorIds}
+            onChange={setRemindEvaluatorIds}
+            label="Evaluators to remind"
+            placeholder="Select evaluators"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRemindDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !remindSubmissionId ||
+                remindEvaluatorIds.length === 0 ||
+                remindMutation.isPending
+              }
+              onClick={() => {
+                if (!remindSubmissionId || remindEvaluatorIds.length === 0) {
+                  return;
+                }
+                setRemindingSubmissionId(remindSubmissionId);
+                remindMutation.mutate({
+                  submissionId: remindSubmissionId,
+                  evaluatorIds: remindEvaluatorIds,
+                });
+              }}
+            >
+              {remindMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Send reminder
+              {remindEvaluatorIds.length > 0
+                ? ` (${remindEvaluatorIds.length})`
+                : ""}
             </Button>
           </DialogFooter>
         </DialogContent>

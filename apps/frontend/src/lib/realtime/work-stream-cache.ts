@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { queryKeys } from "@/lib/react-query";
 import type { Submission } from "@/types/student";
 import type { DeliverableType } from "@/types/student";
 import type {
@@ -231,29 +230,35 @@ function patchStudentWorkStream(
   updater: (data: StudentWorkStreamPageData) => StudentWorkStreamPageData | undefined,
   options?: { skipDashboard?: boolean },
 ) {
-  const queryKey = queryKeys.student.workStream(userId, workspaceId);
-  const existing = queryClient.getQueryData<StudentWorkStreamPageData>(queryKey);
-  if (!existing?.team?.id || existing.team.id !== teamId) {
-    return;
-  }
-
-  queryClient.setQueryData<StudentWorkStreamPageData>(queryKey, (current) => {
-    if (!current?.team?.id || current.team.id !== teamId) {
-      return current;
-    }
-    const updated = updater(current) ?? current;
-    return {
-      ...current,
-      ...updated,
-      profiles: updated.profiles ?? current.profiles ?? {},
-      commentsByEntity:
-        updated.commentsByEntity ?? current.commentsByEntity ?? {},
-      submissionHistories:
-        updated.submissionHistories ?? current.submissionHistories ?? {},
-      announcements: updated.announcements ?? current.announcements ?? [],
-      deliverables: updated.deliverables ?? current.deliverables ?? [],
-    };
-  });
+  // Student work-stream queries include phaseId in the key — patch every
+  // mounted variant for this user/workspace (fixes live comment updates).
+  queryClient.setQueriesData<StudentWorkStreamPageData>(
+    {
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey[0] === "student" &&
+        query.queryKey[1] === "work-stream" &&
+        query.queryKey[2] === userId &&
+        (workspaceId == null || query.queryKey.includes(workspaceId)),
+    },
+    (current) => {
+      if (!current?.team?.id || current.team.id !== teamId) {
+        return current;
+      }
+      const updated = updater(current) ?? current;
+      return {
+        ...current,
+        ...updated,
+        profiles: updated.profiles ?? current.profiles ?? {},
+        commentsByEntity:
+          updated.commentsByEntity ?? current.commentsByEntity ?? {},
+        submissionHistories:
+          updated.submissionHistories ?? current.submissionHistories ?? {},
+        announcements: updated.announcements ?? current.announcements ?? [],
+        deliverables: updated.deliverables ?? current.deliverables ?? [],
+      };
+    },
+  );
 }
 
 function patchSupervisorWorkStream(

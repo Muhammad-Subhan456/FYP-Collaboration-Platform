@@ -11,6 +11,8 @@ export interface StudentProfileInput {
   batch: string;
   degreeProgram: string;
   semester: number;
+  cgpa?: number;
+  phone?: string;
   skills: string[];
   interests: string[];
   linkedIn?: string;

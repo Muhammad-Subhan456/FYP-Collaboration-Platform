@@ -47,12 +47,15 @@ export const submissionEvaluationService = {
     return res.data;
   },
 
-  remindEvaluators: async (submissionId: string) => {
+  remindEvaluators: async (payload: {
+    submissionId: string;
+    evaluatorIds?: string[];
+  }) => {
     const res = await api.post<{
       success: boolean;
       remindedCount: number;
       remindedAt: string;
-    }>("/submission-evaluations/remind", { submissionId });
+    }>("/submission-evaluations/remind", payload);
     return res.data;
   },
 

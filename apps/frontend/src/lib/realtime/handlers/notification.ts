@@ -149,10 +149,6 @@ export function handleNotificationCreated(
     prependDashboardNotification(queryClient, role, userId, notification, workspaceId);
   }
 
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.recentActivity(workspaceId),
-  });
-
   if (!existingInPreview) {
     toast(notification.title, {
       description: notification.message,

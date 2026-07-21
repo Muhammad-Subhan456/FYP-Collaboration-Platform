@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { invalidateDashboard, queryKeys } from "@/lib/react-query";
+import { invalidateDashboard } from "@/lib/react-query";
 import type { UserRole } from "@/types";
 
 import type {
@@ -43,9 +43,6 @@ export function handleAuthMembershipEvent(
     return;
   }
 
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.users(),
-  });
   void queryClient.invalidateQueries({
     queryKey: ["coordinator", "users"],
   });

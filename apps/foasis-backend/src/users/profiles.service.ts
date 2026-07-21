@@ -181,6 +181,8 @@ export class ProfilesService {
         batch: dto.batch,
         degreeProgram: dto.degreeProgram,
         semester: dto.semester,
+        cgpa: dto.cgpa ?? null,
+        phone: dto.phone || null,
         skills: dto.skills ?? [],
         interests: dto.interests ?? [],
         linkedIn: dto.linkedIn || null,

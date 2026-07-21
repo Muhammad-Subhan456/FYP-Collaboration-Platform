@@ -1,6 +1,11 @@
 import api from "@/lib/axios";
 import type { UserProfile } from "@/types/profile";
-import type { JoinRequest, Team, TeamMember } from "@/types/student";
+import type {
+  JoinRequest,
+  ProjectNature,
+  Team,
+  TeamMember,
+} from "@/types/student";
 
 export interface CreateTeamInput {
   name: string;
@@ -74,9 +79,15 @@ export const teamService = {
 
   updateTeam: async (data: {
     name: string;
-    domain: string;
+    domain?: string;
     projectTitle: string;
     projectAbstract: string;
+    nature?: ProjectNature | null;
+    domains?: string[];
+    otherDomain?: string | null;
+    sdgs?: number[];
+    sdgJustification?: string | null;
+    previousObjectives?: string | null;
     proposalPdfUrl?: string | null;
   }) => {
     const res = await api.patch<Team>("/teams/my-team", data);

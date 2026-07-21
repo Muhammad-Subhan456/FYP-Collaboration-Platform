@@ -8,16 +8,14 @@ import {
 import {
   useStudentTeamMutations,
 } from "@/mutations/student";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
 import {
   Check,
   ExternalLink,
   Eye,
-  FileText,
   Loader2,
   LogOut,
   Pencil,
@@ -47,13 +45,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { useAuth } from "@/providers/auth-provider";
-import { uploadService } from "@/services/progress.service";
 import { getDisplayName } from "@/hooks/use-profiles";
 import {
   ProfileAvatar,
   ProfileViewModal,
 } from "@/components/profile/profile-view-modal";
 import { BrowseTeamDetailsDialog } from "@/components/team/browse-team-details-dialog";
+import {
+  ProposalAuthoringForm,
+  type ProposalUpdatePayload,
+} from "@/components/proposal/proposal-authoring-form";
+import { formatProjectNature, sdgLabel } from "@/constants/proposal";
 import type { UserProfile } from "@/types/profile";
 import type { Team } from "@/types/student";
 
@@ -69,15 +71,6 @@ const createTeamSchema = z.object({
     .max(4, "Team size must be between 1 and 4 members"),
 });
 
-const editTeamSchema = z.object({
-  name: z.string().min(2, "Team name is required"),
-  domain: z.string().min(2, "Domain is required"),
-  projectTitle: z.string().min(5, "Project title must be at least 5 characters"),
-  projectAbstract: z
-    .string()
-    .min(20, "Project abstract must be at least 20 characters"),
-});
-
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 function resolveFileUrl(url: string) {
@@ -85,7 +78,6 @@ function resolveFileUrl(url: string) {
 }
 
 type CreateTeamForm = z.infer<typeof createTeamSchema>;
-type EditTeamForm = z.infer<typeof editTeamSchema>;
 
 export default function StudentTeamPage() {
   const { user } = useAuth();
@@ -105,10 +97,6 @@ export default function StudentTeamPage() {
     null,
   );
   const [isEditingTeam, setIsEditingTeam] = useState(false);
-  const [editPdfUrl, setEditPdfUrl] = useState<string | null>(null);
-  const [editPdfFileName, setEditPdfFileName] = useState<string | null>(null);
-  const [uploadingPdf, setUploadingPdf] = useState(false);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const overviewQuery = useStudentTeamQuery();
 
@@ -138,46 +126,10 @@ export default function StudentTeamPage() {
     defaultValues: { maxMembers: 4 },
   });
 
-  const editTeamForm = useForm<EditTeamForm>({
-    resolver: zodResolver(editTeamSchema),
-    values: overviewQuery.data?.team
-      ? {
-          name: overviewQuery.data.team.name,
-          domain: overviewQuery.data.team.domain,
-          projectTitle: overviewQuery.data.team.projectTitle ?? "",
-          projectAbstract: overviewQuery.data.team.projectAbstract ?? "",
-        }
-      : undefined,
-  });
-
-  const handleStartEdit = () => {
-    const currentTeam = overviewQuery.data?.team;
-    setEditPdfUrl(currentTeam?.proposalPdfUrl ?? null);
-    setEditPdfFileName(
-      currentTeam?.proposalPdfUrl ? "Current proposal.pdf" : null,
-    );
-    setIsEditingTeam(true);
-  };
-
-  const handlePdfUpload = async (file: File) => {
-    if (
-      file.type !== "application/pdf" &&
-      !file.name.toLowerCase().endsWith(".pdf")
-    ) {
-      toast.error("Only PDF files are allowed");
-      return;
-    }
-    setUploadingPdf(true);
-    try {
-      const uploaded = await uploadService.uploadProposalPdf(file);
-      setEditPdfUrl(uploaded.fileUrl);
-      setEditPdfFileName(file.name);
-      toast.success("Proposal PDF uploaded");
-    } catch (e) {
-      toast.error(getErrorMessage(e));
-    } finally {
-      setUploadingPdf(false);
-    }
+  const handleSaveProposal = (payload: ProposalUpdatePayload) => {
+    updateTeamMutation.mutate(payload, {
+      onSuccess: () => setIsEditingTeam(false),
+    });
   };
 
   if (isStudentQueryPending(overviewQuery)) return <DashboardSkeleton />;
@@ -238,10 +190,10 @@ export default function StudentTeamPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={handleStartEdit}
+                    onClick={() => setIsEditingTeam(true)}
                   >
                     <Pencil className="h-4 w-4" />
-                    Edit Team Profile
+                    Edit Proposal
                   </Button>
                 )}
               </div>
@@ -249,147 +201,61 @@ export default function StudentTeamPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {isEditingTeam && isLeader && canEditProfile ? (
-              <form
-                onSubmit={editTeamForm.handleSubmit((data) => {
-                  if (!editPdfUrl) {
-                    toast.error("Please upload a proposal PDF");
-                    return;
-                  }
-                  updateTeamMutation.mutate(
-                    {
-                      ...data,
-                      proposalPdfUrl: editPdfUrl,
-                    },
-                    { onSuccess: () => setIsEditingTeam(false) },
-                  );
-                })}
-                className="space-y-4 rounded-lg border p-4"
-              >
-                <div className="space-y-2">
-                  <Label>Team Name</Label>
-                  <Input {...editTeamForm.register("name")} />
-                  {editTeamForm.formState.errors.name && (
-                    <p className="text-sm text-destructive">
-                      {editTeamForm.formState.errors.name.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Domain</Label>
-                  <Input {...editTeamForm.register("domain")} />
-                  {editTeamForm.formState.errors.domain && (
-                    <p className="text-sm text-destructive">
-                      {editTeamForm.formState.errors.domain.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Project Title</Label>
-                  <Input {...editTeamForm.register("projectTitle")} />
-                  {editTeamForm.formState.errors.projectTitle && (
-                    <p className="text-sm text-destructive">
-                      {editTeamForm.formState.errors.projectTitle.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Project Abstract</Label>
-                  <Textarea
-                    rows={4}
-                    {...editTeamForm.register("projectAbstract")}
-                  />
-                  {editTeamForm.formState.errors.projectAbstract && (
-                    <p className="text-sm text-destructive">
-                      {editTeamForm.formState.errors.projectAbstract.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Proposal PDF</Label>
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void handlePdfUpload(file);
-                    }}
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={uploadingPdf}
-                      onClick={() => pdfInputRef.current?.click()}
-                    >
-                      {uploadingPdf && <Loader2 className="animate-spin" />}
-                      <FileText className="h-4 w-4" />
-                      {editPdfUrl ? "Replace PDF" : "Upload PDF"}
-                    </Button>
-                    {editPdfUrl && (
-                      <>
-                        <Button type="button" variant="secondary" size="sm" asChild>
-                          <a
-                            href={resolveFileUrl(editPdfUrl)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            View PDF
-                          </a>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditPdfUrl(null);
-                            setEditPdfFileName(null);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Remove
-                        </Button>
-                        {editPdfFileName && (
-                          <span className="text-sm text-muted-foreground">
-                            {editPdfFileName}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    disabled={updateTeamMutation.isPending || uploadingPdf}
-                  >
-                    {updateTeamMutation.isPending && (
-                      <Loader2 className="animate-spin" />
-                    )}
-                    Save Changes
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsEditingTeam(false);
-                      setEditPdfUrl(null);
-                      setEditPdfFileName(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
+              <ProposalAuthoringForm
+                team={team}
+                members={members}
+                profiles={profiles}
+                isSaving={updateTeamMutation.isPending}
+                onCancel={() => setIsEditingTeam(false)}
+                onSubmit={handleSaveProposal}
+              />
             ) : (
               <>
             {!isProfileComplete && isLeader && (
               <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300">
-                Complete your team profile (title, abstract, domain, and
-                proposal PDF) before sending a proposal to a supervisor.
+                Complete your proposal (nature, domains, SDGs, justification,
+                title, proposal PDF, and other required fields) before sending it to a
+                supervisor.
               </p>
+            )}
+            {team.nature && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Nature of project
+                </p>
+                <p className="text-sm">{formatProjectNature(team.nature)}</p>
+              </div>
+            )}
+            {(team.domains?.length || team.otherDomain) && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Project domains
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {team.domains?.map((d) => (
+                    <Badge key={d} variant="secondary">
+                      {d}
+                    </Badge>
+                  ))}
+                  {team.otherDomain && (
+                    <Badge variant="outline">{team.otherDomain}</Badge>
+                  )}
+                </div>
+              </div>
+            )}
+            {team.sdgs && team.sdgs.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Sustainable Development Goals
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {team.sdgs.map((s) => (
+                    <Badge key={s} variant="outline">
+                      {sdgLabel(s)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             )}
             {team.projectTitle && (
               <div>

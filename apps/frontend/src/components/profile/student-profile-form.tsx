@@ -38,6 +38,8 @@ const defaultFormValues: FormData = {
   batch: "",
   degreeProgram: "",
   semester: 7,
+  cgpa: undefined,
+  phone: "",
   skills: "",
   interests: "",
   linkedIn: "",
@@ -86,6 +88,8 @@ export function StudentProfileForm({
         batch: data.batch ?? "",
         degreeProgram: data.degreeProgram ?? "",
         semester: data.semester ?? 7,
+        cgpa: data.cgpa ?? undefined,
+        phone: data.phone ?? "",
         skills: data.skills.join(", "),
         interests: data.interests.join(", "),
         linkedIn: data.linkedIn ?? "",
@@ -121,6 +125,8 @@ export function StudentProfileForm({
       batch: form.batch,
       degreeProgram: form.degreeProgram,
       semester: form.semester,
+      cgpa: typeof form.cgpa === "number" ? form.cgpa : undefined,
+      phone: form.phone?.trim() || undefined,
       skills: (form.skills ?? "")
         .split(",")
         .map((s) => s.trim())
@@ -234,6 +240,46 @@ export function StudentProfileForm({
               />
               {errors.semester && (
                 <p className="text-sm text-destructive">{errors.semester.message}</p>
+              )}
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cgpa">CGPA</Label>
+              <Input
+                id="cgpa"
+                type="number"
+                step="0.01"
+                min={0}
+                max={4}
+                placeholder="3.50"
+                {...register("cgpa", {
+                  setValueAs: (v) =>
+                    v === "" || v === null || v === undefined
+                      ? undefined
+                      : Number(v),
+                })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used on your project proposal. Scale 0.00–4.00.
+              </p>
+              {errors.cgpa && (
+                <p className="text-sm text-destructive">{errors.cgpa.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+92 300 1234567"
+                {...register("phone")}
+              />
+              <p className="text-xs text-muted-foreground">
+                Shown to your supervisor on the proposal.
+              </p>
+              {errors.phone && (
+                <p className="text-sm text-destructive">{errors.phone.message}</p>
               )}
             </div>
           </div>

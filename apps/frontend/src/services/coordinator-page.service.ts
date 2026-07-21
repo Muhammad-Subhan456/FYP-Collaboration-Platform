@@ -35,6 +35,27 @@ export interface CoordinatorAnalyticsData {
     locked: number;
     unlocked: number;
   };
+  proposalInsights?: ProposalInsights;
+}
+
+export interface ProposalInsights {
+  totalProposals: number;
+  domains: {
+    perDomain: Array<{ domain: string; count: number }>;
+    otherCount: number;
+    projectsWithDomains: number;
+    multiDomainProjects: number;
+    singleDomainProjects: number;
+    avgDomainsPerProject: number;
+    mostPopular: string | null;
+  };
+  sdgs: {
+    perSdg: Array<{ sdg: number; count: number }>;
+    projectsWithSdgs: number;
+    avgSdgsPerProject: number;
+    mostSelected: number | null;
+  };
+  crossAnalysis: Array<{ domain: string; sdg: number; count: number }>;
 }
 
 export interface CoordinatorTeamsPageData {

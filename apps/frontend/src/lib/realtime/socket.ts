@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 
 import { getRealtimeServerUrl } from "./config";
+import { gaTrace } from "./ga-trace";
 import type { AuthMembershipCallbacks } from "./handlers/auth-membership";
 import {
   registerRealtimeHandlers,
@@ -58,6 +59,12 @@ export function connectRealtime(
     activeWorkspaceId = normalizedWorkspaceId;
 
     socket.on("connect", () => {
+      gaTrace("5-socket-connected", {
+        socketId: socket?.id ?? null,
+        userId,
+        role,
+        workspaceId: normalizedWorkspaceId,
+      });
       log("socket connected", socket?.id);
     });
 
@@ -70,6 +77,11 @@ export function connectRealtime(
     });
 
     socket.on("realtime.connected", (payload: { userId: string; rooms: string[] }) => {
+      gaTrace("7-room-join", {
+        socketId: socket?.id ?? null,
+        userId: payload.userId,
+        rooms: payload.rooms,
+      });
       log("authenticated", payload);
       const hasTeamRoom = payload.rooms.some((room) => room.startsWith("team:"));
       if (!hasTeamRoom && role === "STUDENT") {
@@ -86,6 +98,7 @@ export function connectRealtime(
 
   // Always refresh handlers so queryClient / auth closures stay current.
   if (socket) {
+    gaTrace("6-socket-id", { socketId: socket.id ?? null, userId, role, workspaceId: normalizedWorkspaceId });
     unregisterRealtimeHandlers(socket);
     registerRealtimeHandlers(
       socket,

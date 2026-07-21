@@ -300,6 +300,20 @@ export class ProposalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
+  @Get(':proposalId/document')
+  getProposalDocument(
+    @Req() req: any,
+    @Param('proposalId') proposalId: string,
+  ) {
+    return this.proposalsService.getProposalDocument(
+      proposalId,
+      req.user.userId,
+      req.user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
   @Get(':proposalId')
   getProposalById(
     @Req() req: any,

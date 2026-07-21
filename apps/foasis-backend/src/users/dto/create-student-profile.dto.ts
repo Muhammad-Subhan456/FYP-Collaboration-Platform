@@ -4,9 +4,11 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -58,6 +60,23 @@ export class CreateStudentProfileDto {
   @Min(1, { message: 'Semester must be between 1 and 12' })
   @Max(12, { message: 'Semester must be between 1 and 12' })
   semester!: number;
+
+  @IsOptional()
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'CGPA must be a number with up to 2 decimal places' },
+  )
+  @Min(0, { message: 'CGPA must be between 0.00 and 4.00' })
+  @Max(4, { message: 'CGPA must be between 0.00 and 4.00' })
+  cgpa?: number;
+
+  @IsOptional()
+  @ValidateIf((_, value) => typeof value === 'string' && value.length > 0)
+  @IsString()
+  @Matches(/^[+]?[0-9\s()-]{7,20}$/, {
+    message: 'Enter a valid phone number',
+  })
+  phone?: string;
 
   @IsArray()
   @IsString({ each: true })

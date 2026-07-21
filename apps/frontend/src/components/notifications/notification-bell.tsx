@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell, ChevronRight, Loader2 } from "lucide-react";
 
@@ -28,22 +29,26 @@ import { queryKeys } from "@/lib/react-query";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
 import type { Notification } from "@/types/student";
+import type { PaginatedResponse } from "@/types";
 
 interface NotificationBellProps {
   role: UserRole;
+  unreadCount?: number;
 }
 
 function getNotificationPath(role: UserRole) {
   return `/${role.toLowerCase()}/notifications`;
 }
 
-export function NotificationBell({ role }: NotificationBellProps) {
+export function NotificationBell({ role, unreadCount: unreadCountProp }: NotificationBellProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const unreadCountQuery = useUnreadNotifications();
-  const previewQuery = useUnreadNotificationsPreview();
-  const unreadCount = unreadCountQuery.data?.count ?? 0;
+  const [open, setOpen] = useState(false);
+  const unreadCountQuery = useUnreadNotifications(unreadCountProp == null);
+  const previewQuery = useUnreadNotificationsPreview(open);
+  const unreadCount =
+    unreadCountProp ?? unreadCountQuery.data?.count ?? 0;
   const notifications = previewQuery.data?.data ?? [];
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -52,24 +57,56 @@ export function NotificationBell({ role }: NotificationBellProps) {
     try {
       if (!notification.isRead) {
         await notificationService.markAsRead(notification.id);
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.notifications.unreadCount(
-            user?.userId,
-            user?.workspaceId,
-          ),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.notifications.unreadPreview(
-            user?.userId,
-            user?.workspaceId,
-          ),
-        });
-        void queryClient.invalidateQueries({
+
+        const countKey = queryKeys.notifications.unreadCount(
+          user?.userId,
+          user?.workspaceId,
+        );
+        const previewKey = queryKeys.notifications.unreadPreview(
+          user?.userId,
+          user?.workspaceId,
+        );
+
+        queryClient.setQueryData<{ count: number }>(countKey, (previous) => ({
+          count: Math.max(0, (previous?.count ?? 0) - 1),
+        }));
+
+        queryClient.setQueryData<PaginatedResponse<Notification>>(
+          previewKey,
+          (existing) => {
+            if (!existing) return existing;
+            return {
+              ...existing,
+              data: existing.data.filter((item) => item.id !== notification.id),
+            };
+          },
+        );
+
+        queryClient.getQueryCache().findAll({
           predicate: (query) =>
             Array.isArray(query.queryKey) &&
+            query.queryKey.length >= 3 &&
+            (query.queryKey[0] === "student" ||
+              query.queryKey[0] === "supervisor" ||
+              query.queryKey[0] === "coordinator" ||
+              query.queryKey[0] === "evaluator") &&
             query.queryKey[1] === "me" &&
             (user?.workspaceId == null ||
               query.queryKey.includes(user.workspaceId)),
+        }).forEach((query) => {
+          queryClient.setQueryData<PaginatedResponse<Notification>>(
+            query.queryKey,
+            (existing) => {
+              if (!existing) return existing;
+              const index = existing.data.findIndex(
+                (item) => item.id === notification.id,
+              );
+              if (index === -1) return existing;
+              const nextData = [...existing.data];
+              nextData[index] = { ...nextData[index], isRead: true };
+              return { ...existing, data: nextData };
+            },
+          );
         });
       }
     } catch {
@@ -82,7 +119,7 @@ export function NotificationBell({ role }: NotificationBellProps) {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

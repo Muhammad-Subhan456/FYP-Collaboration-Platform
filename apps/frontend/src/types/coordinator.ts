@@ -22,6 +22,7 @@ export interface GlobalAnnouncementAttachment {
 export interface GlobalAnnouncement {
   id: string;
   coordinatorId: string;
+  coordinatorName?: string | null;
   title: string;
   message: string;
   type?: string;
@@ -30,6 +31,8 @@ export interface GlobalAnnouncement {
   publishedAt?: string | null;
   status?: "DRAFT" | "SCHEDULED" | "PUBLISHED";
   attachments?: GlobalAnnouncementAttachment[];
+  /** Present on realtime payloads when attachment metadata is available. */
+  attachmentCount?: number;
   createdAt: string;
 }
 

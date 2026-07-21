@@ -6,6 +6,10 @@ import type {
   StudentDashboardOverview,
   SupervisorDashboardOverview,
 } from "@/services/dashboard.service";
+import type { GlobalAnnouncement } from "@/types/coordinator";
+import {
+  sortGlobalAnnouncementsNewestFirst,
+} from "@/lib/global-announcements";
 import type { TeamIssueSummaries } from "@/types/team-issue";
 import type {
   Announcement,
@@ -451,5 +455,61 @@ export function prependDashboardNotification(
   }
   if (role === "COORDINATOR") {
     patchCoordinatorDashboard(queryClient, userId, workspaceId, prependNotifications);
+  }
+}
+
+/** Prepend a published global announcement into mounted dashboard caches. */
+export function prependGlobalAnnouncement(
+  queryClient: QueryClient,
+  role: DashboardRole | "EVALUATOR",
+  userId: string,
+  announcement: GlobalAnnouncement,
+  workspaceId?: string | null,
+) {
+  const prepend = <
+    T extends {
+      globalAnnouncements?: GlobalAnnouncement[];
+    },
+  >(
+    dashboard: T,
+  ): T => {
+    const existing = dashboard.globalAnnouncements ?? [];
+    if (existing.some((item) => item.id === announcement.id)) {
+      return dashboard;
+    }
+    return {
+      ...dashboard,
+      globalAnnouncements: sortGlobalAnnouncementsNewestFirst([
+        announcement,
+        ...existing,
+      ]).slice(0, 6),
+    };
+  };
+
+  if (role === "STUDENT") {
+    patchStudentDashboard(queryClient, userId, workspaceId, prepend);
+    return;
+  }
+  if (role === "SUPERVISOR") {
+    patchSupervisorDashboard(queryClient, userId, workspaceId, prepend);
+    return;
+  }
+  if (role === "COORDINATOR") {
+    patchCoordinatorDashboard(queryClient, userId, workspaceId, prepend);
+    return;
+  }
+  if (role === "EVALUATOR") {
+    queryClient.setQueriesData(
+      {
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "evaluator" &&
+          query.queryKey[1] === "dashboard",
+      },
+      (current: { globalAnnouncements?: GlobalAnnouncement[] } | undefined) => {
+        if (!current) return current;
+        return prepend(current);
+      },
+    );
   }
 }

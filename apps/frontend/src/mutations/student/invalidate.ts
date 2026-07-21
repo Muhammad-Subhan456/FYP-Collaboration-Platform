@@ -1,62 +1,56 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import {
-  invalidateDashboard,
-  queryKeys,
-} from "@/lib/react-query";
+import { invalidateDashboard } from "@/lib/react-query";
 
 export function invalidateStudentTeam(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.team(),
+    queryKey: ["student", "team"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.teams.mine(),
+    queryKey: ["team"],
   });
   void invalidateDashboard(queryClient, "STUDENT");
 }
 
 export function invalidateStudentProposal(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.proposal(),
+    queryKey: ["student", "proposal"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.team(),
+    queryKey: ["student", "team"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.proposal.all,
+    queryKey: ["proposal"],
   });
   void invalidateDashboard(queryClient, "STUDENT");
 }
 
 export function invalidateStudentWorkStream(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.workStreamPrefix(),
+    queryKey: ["student", "work-stream"],
   });
   void invalidateDashboard(queryClient, "STUDENT");
 }
 
 export function invalidateStudentMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.milestonesPrefix(),
+    queryKey: ["student", "milestones"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.activityLogs.all,
-  });
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
+    queryKey: ["activity-logs"],
   });
   invalidateDashboard(queryClient, "STUDENT");
 }
 
 export function invalidateStudentNotifications(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
+    queryKey: ["notifications", "unread-count"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadPreview(),
+    queryKey: ["notifications", "unread-preview"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.recentActivity(),
+    queryKey: ["notifications", "recent-activity"],
   });
   void queryClient.invalidateQueries({
     queryKey: ["student", "me"],
@@ -65,6 +59,6 @@ export function invalidateStudentNotifications(queryClient: QueryClient) {
 
 export function invalidateStudentProfile(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.student.profile(),
+    queryKey: ["student", "profile"],
   });
 }

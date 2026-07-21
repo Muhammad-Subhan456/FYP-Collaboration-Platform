@@ -16,26 +16,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDate, formatProposalStatus } from "@/lib/format";
+import { ProposalDocumentDialog } from "@/components/proposal/proposal-document-dialog";
+import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
 import {
   isCoordinatorQueryInitialLoading,
   useCoordinatorProposalsQuery,
 } from "@/queries/coordinator";
-import type { Proposal, ProposalStatus } from "@/types/student";
 
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "ALL", label: "All statuses" },
@@ -49,7 +43,7 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 export default function CoordinatorProposalsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [viewProposal, setViewProposal] = useState<Proposal | null>(null);
+  const [viewProposalId, setViewProposalId] = useState<string | null>(null);
 
   const pageQuery = useCoordinatorProposalsQuery();
 
@@ -177,10 +171,10 @@ export default function CoordinatorProposalsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setViewProposal(proposal)}
+                  onClick={() => setViewProposalId(proposal.id)}
                 >
                   <Eye className="h-4 w-4" />
-                  View details
+                  View full proposal
                 </Button>
               </CardContent>
             </Card>
@@ -188,69 +182,11 @@ export default function CoordinatorProposalsPage() {
         </div>
       )}
 
-      <Dialog
-        open={!!viewProposal}
-        onOpenChange={(open) => !open && setViewProposal(null)}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          {viewProposal && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{viewProposal.title}</DialogTitle>
-                <p className="text-sm text-muted-foreground">
-                  {viewProposal.domain} ·{" "}
-                  {formatProposalStatus(viewProposal.status as ProposalStatus)}
-                </p>
-              </DialogHeader>
-              <div className="space-y-4 text-sm">
-                <div>
-                  <p className="font-medium">Abstract</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {viewProposal.abstract}
-                  </p>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div>
-                    <p className="font-medium">Team leader</p>
-                    <p className="text-muted-foreground">
-                      {viewProposal.teamLeaderAuthUserId
-                        ? getDisplayName(
-                            profiles,
-                            viewProposal.teamLeaderAuthUserId,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Supervisor</p>
-                    <p className="text-muted-foreground">
-                      {viewProposal.assignedSupervisorId
-                        ? getDisplayName(
-                            profiles,
-                            viewProposal.assignedSupervisorId,
-                          )
-                        : "Not assigned"}
-                    </p>
-                  </div>
-                </div>
-                {viewProposal.reviewFeedback && (
-                  <div className="rounded-lg border bg-muted/50 p-3">
-                    <p className="font-medium">Supervisor review feedback</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {viewProposal.reviewFeedback}
-                    </p>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Submitted {formatDate(viewProposal.createdAt)}
-                  {viewProposal.reviewedAt &&
-                    ` · Reviewed ${formatDate(viewProposal.reviewedAt)}`}
-                </p>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ProposalDocumentDialog
+        proposalId={viewProposalId}
+        open={!!viewProposalId}
+        onOpenChange={(open) => !open && setViewProposalId(null)}
+      />
     </div>
   );
 }

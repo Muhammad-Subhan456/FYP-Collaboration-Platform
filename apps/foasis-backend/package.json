@@ -16,6 +16,10 @@
     "db:validate-data": "ts-node scripts/validate-data-migration.ts",
     "db:cutover": "ts-node scripts/db-cutover.ts",
     "smoke-test": "ts-node scripts/smoke-test.ts",
+    "ga-trace-test": "ts-node scripts/ga-trace-test.ts",
+    "ga-trace-e2e": "ts-node scripts/ga-trace-e2e.ts",
+    "ga-trace-nest": "ts-node scripts/ga-trace-nest.ts",
+    "ga-browser-trace": "ts-node scripts/ga-browser-trace.ts",
     "benchmark": "ts-node scripts/benchmark-endpoints.ts",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix"
   },
@@ -58,7 +62,9 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.15.5",
     "dotenv": "^16.6.1",
+    "playwright": "^1.58.2",
     "prisma": "^6.16.2",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }

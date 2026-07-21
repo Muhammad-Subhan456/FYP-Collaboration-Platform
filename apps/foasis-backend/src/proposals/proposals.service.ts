@@ -12,9 +12,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { TeamsService } from '../teams/teams.service';
 import {
+  getTeamProfileErrors,
   getTeamProfileSnapshot,
   isTeamProfileComplete,
 } from '../teams/team-profile.util';
+import { generateProjectCode } from './proposal-constants';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
 import { AuthContextService } from '../common/auth-context.service';
@@ -405,6 +407,20 @@ export class ProposalsService {
     return team;
   }
 
+  private async generateUniqueProjectCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = generateProjectCode();
+      const existing = await this.prisma.proposal.findUnique({
+        where: { projectCode: code },
+        select: { id: true },
+      });
+      if (!existing) {
+        return code;
+      }
+    }
+    return generateProjectCode();
+  }
+
   async syncProposalFromTeam(teamId: string) {
     const team = await this.prisma.team.findUnique({
       where: { id: teamId },
@@ -438,6 +454,12 @@ export class ProposalsService {
       data: {
         title: snapshot.title || proposal.title,
         domain: snapshot.domain,
+        domains: snapshot.domains,
+        otherDomain: snapshot.otherDomain,
+        nature: snapshot.nature,
+        sdgs: snapshot.sdgs,
+        sdgJustification: snapshot.sdgJustification,
+        previousObjectives: snapshot.previousObjectives,
         abstract: snapshot.abstract || proposal.abstract,
         proposalPdfUrl: snapshot.proposalPdfUrl,
         ...(wasResettable
@@ -474,10 +496,12 @@ export class ProposalsService {
       throw new BadRequestException('Proposal workflow is locked');
     }
 
-    if (!isTeamProfileComplete(team)) {
-      throw new BadRequestException(
-        'Complete your team profile before sending a proposal',
-      );
+    const profileErrors = getTeamProfileErrors(team);
+    if (profileErrors.length > 0) {
+      throw new BadRequestException([
+        'Complete your proposal before sending it to a supervisor:',
+        ...profileErrors,
+      ]);
     }
 
     const snapshot = getTeamProfileSnapshot(team);
@@ -497,10 +521,17 @@ export class ProposalsService {
         teamId,
         workspaceId: team.workspaceId,
         teamLeaderAuthUserId: leaderId,
+        projectCode: await this.generateUniqueProjectCode(),
         title: snapshot.title,
         domain: snapshot.domain,
+        domains: snapshot.domains,
+        otherDomain: snapshot.otherDomain,
+        nature: snapshot.nature,
+        sdgs: snapshot.sdgs,
+        sdgJustification: snapshot.sdgJustification,
+        previousObjectives: snapshot.previousObjectives,
         abstract: snapshot.abstract,
-        proposalPdfUrl: snapshot.proposalPdfUrl!,
+        proposalPdfUrl: snapshot.proposalPdfUrl,
         status: 'DRAFT',
       },
     });
@@ -750,10 +781,16 @@ async submitProposalToSupervisor(
     where: { id: teamId },
   });
 
-  if (!team || !isTeamProfileComplete(team)) {
-    throw new BadRequestException(
-      'Complete your team profile before submitting a proposal',
-    );
+  if (!team) {
+    throw new BadRequestException('Team not found');
+  }
+
+  const submitErrors = getTeamProfileErrors(team);
+  if (submitErrors.length > 0) {
+    throw new BadRequestException([
+      'Complete your proposal before submitting:',
+      ...submitErrors,
+    ]);
   }
 
   await this.expirePendingSupervisorRequests();
@@ -763,12 +800,6 @@ async submitProposalToSupervisor(
   proposal = await this.prisma.proposal.findUniqueOrThrow({
     where: { id: proposal.id },
   });
-
-  if (!proposal.proposalPdfUrl) {
-    throw new BadRequestException(
-      'Upload a proposal PDF on your team page before submitting',
-    );
-  }
 
   const expiresAt = new Date(
     Date.now() + ProposalsService.REQUEST_TTL_MS,
@@ -1380,6 +1411,129 @@ async getProposalByTeamId(teamId: string) {
   return this.prisma.proposal.findUnique({
     where: { teamId },
   });
+}
+
+/**
+ * Returns a fully-hydrated university-format proposal document (registration,
+ * team members with CGPA/phone, SDGs, content) for viewing by the team,
+ * assigned/pending supervisor, or a coordinator.
+ */
+async getProposalDocument(
+  proposalId: string,
+  authUserId: string,
+  role: string,
+) {
+  const proposal = await this.prisma.proposal.findUnique({
+    where: { id: proposalId },
+    include: { team: true },
+  });
+
+  if (!proposal) {
+    throw new BadRequestException('Proposal not found');
+  }
+
+  if (role === 'COORDINATOR') {
+    // Coordinators oversee proposals within their workspace.
+  } else if (role === 'SUPERVISOR') {
+    const isParticipant =
+      proposal.assignedSupervisorId === authUserId ||
+      proposal.pendingSupervisorId === authUserId;
+    const hasRelation = isParticipant
+      ? true
+      : Boolean(
+          (await this.prisma.supervisorRequest.findFirst({
+            where: { proposalId, supervisorId: authUserId },
+            select: { id: true },
+          })) ||
+            (await this.prisma.supervisorInvitation.findFirst({
+              where: { proposalId, supervisorId: authUserId },
+              select: { id: true },
+            })),
+        );
+    if (!hasRelation) {
+      throw new ForbiddenException('Access denied');
+    }
+  } else if (role === 'STUDENT') {
+    const teamId = await this.getTeamIdForUser(authUserId);
+    if (proposal.teamId !== teamId) {
+      throw new ForbiddenException('Access denied');
+    }
+  } else {
+    throw new ForbiddenException('Access denied');
+  }
+
+  const members = await this.prisma.teamMember.findMany({
+    where: { teamId: proposal.teamId },
+    orderBy: { joinedAt: 'asc' },
+  });
+
+  const authIds = [
+    ...new Set([
+      proposal.team.leaderId,
+      ...members.map((member) => member.authUserId),
+      ...(proposal.assignedSupervisorId
+        ? [proposal.assignedSupervisorId]
+        : []),
+    ]),
+  ];
+
+  const profiles = await this.prisma.userProfile.findMany({
+    where: { authUserId: { in: authIds } },
+  });
+  const profileMap = new Map(
+    profiles.map((profile) => [profile.authUserId, profile]),
+  );
+
+  const memberDocs = members
+    .map((member) => {
+      const profile = profileMap.get(member.authUserId);
+      return {
+        authUserId: member.authUserId,
+        isLeader: member.authUserId === proposal.team.leaderId,
+        teamRole: member.teamRole ?? null,
+        fullName: profile?.fullName ?? null,
+        registrationNumber: profile?.registrationNumber ?? null,
+        cgpa: profile?.cgpa ?? null,
+        email: profile?.email ?? null,
+        phone: profile?.phone ?? null,
+      };
+    })
+    .sort((a, b) => (a.isLeader === b.isLeader ? 0 : a.isLeader ? -1 : 1));
+
+  const supervisorName = proposal.assignedSupervisorId
+    ? (profileMap.get(proposal.assignedSupervisorId)?.fullName ?? null)
+    : null;
+
+  return {
+    proposal: {
+      id: proposal.id,
+      projectCode: proposal.projectCode,
+      title: proposal.title,
+      domain: proposal.domain,
+      domains: proposal.domains,
+      otherDomain: proposal.otherDomain,
+      nature: proposal.nature,
+      sdgs: proposal.sdgs,
+      sdgJustification: proposal.sdgJustification,
+      previousObjectives: proposal.previousObjectives,
+      abstract: proposal.abstract,
+      proposalPdfUrl: proposal.proposalPdfUrl,
+      status: proposal.status,
+      assignedSupervisorId: proposal.assignedSupervisorId,
+      pendingSupervisorId: proposal.pendingSupervisorId,
+      pendingExpiresAt: proposal.pendingExpiresAt?.toISOString() ?? null,
+      reviewFeedback: proposal.reviewFeedback,
+      reviewedAt: proposal.reviewedAt?.toISOString() ?? null,
+      createdAt: proposal.createdAt.toISOString(),
+    },
+    team: {
+      id: proposal.team.id,
+      name: proposal.team.name,
+      maxMembers: proposal.team.maxMembers,
+    },
+    members: memberDocs,
+    supervisorName,
+  };
 }
 
 async getSupervisorInvitations(

@@ -21,11 +21,15 @@ export class NotificationDispatchService {
     private readonly domainEventService: DomainEventService,
   ) {}
 
-  async send(payload: NotificationPayload): Promise<void> {
+  async send(
+    payload: NotificationPayload,
+    workspaceId?: string,
+  ): Promise<void> {
     try {
       const notification =
         await this.notificationsService.createOrGroup(
           buildNotification(payload),
+          workspaceId,
         );
 
       this.publishNotificationCreated(notification);
@@ -39,13 +43,14 @@ export class NotificationDispatchService {
 
   async sendBulk(
     notifications: NotificationPayload[],
+    workspaceId?: string,
   ): Promise<void> {
     if (notifications.length === 0) {
       return;
     }
 
     await Promise.all(
-      notifications.map((payload) => this.send(payload)),
+      notifications.map((payload) => this.send(payload, workspaceId)),
     );
   }
 

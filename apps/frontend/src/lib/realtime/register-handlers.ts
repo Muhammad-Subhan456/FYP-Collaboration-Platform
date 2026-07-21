@@ -4,6 +4,7 @@ import type { Socket } from "socket.io-client";
 import { queryKeys } from "@/lib/react-query";
 
 import { handleGlobalAnnouncementPublished } from "./global-announcement-cache";
+import { gaTrace } from "./ga-trace";
 import {
   handleAuthMembershipEvent,
   type AuthMembershipCallbacks,
@@ -11,7 +12,6 @@ import {
 import { handleConfigEvent } from "./handlers/config";
 import {
   handleEvaluationEvent,
-  invalidateEvaluationCachesOnReconnect,
 } from "./handlers/evaluation";
 import {
   handleIssueCommentCreated,
@@ -45,20 +45,34 @@ function invalidateOnReconnect(
     queryKey: queryKeys.notifications.unreadPreview(userId, workspaceId),
   });
 
-  // Role-scoped catch-up — avoid invalidating every portal's caches for one user.
-  if (role === "STUDENT") {
-    void queryClient.invalidateQueries({ queryKey: ["student"] });
-  } else if (role === "SUPERVISOR") {
-    void queryClient.invalidateQueries({ queryKey: ["supervisor"] });
-  } else if (role === "COORDINATOR") {
-    void queryClient.invalidateQueries({ queryKey: ["coordinator"] });
-    void queryClient.invalidateQueries({ queryKey: ["phases"] });
-    void queryClient.invalidateQueries({ queryKey: ["deliverable-templates"] });
-  } else if (role === "EVALUATOR") {
-    void queryClient.invalidateQueries({ queryKey: ["evaluator"] });
+  // Targeted catch-up — only refresh always-visible or high-churn views.
+  const normalizedRole = role.toUpperCase();
+  if (normalizedRole === "STUDENT") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.dashboard(undefined, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.workStreamPrefix(),
+    });
+  } else if (normalizedRole === "SUPERVISOR") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.dashboard(undefined, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.workStreamPrefix(),
+    });
+  } else if (normalizedRole === "COORDINATOR") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.coordinator.dashboard(undefined, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["coordinator", "announcements"],
+    });
+  } else if (normalizedRole === "EVALUATOR") {
+    void queryClient.invalidateQueries({
+      queryKey: ["evaluator", "dashboard"],
+    });
   }
-
-  invalidateEvaluationCachesOnReconnect(queryClient, workspaceId);
 }
 
 export function registerRealtimeHandlers(
@@ -162,11 +176,20 @@ export function registerRealtimeHandlers(
     });
   }
 
+  gaTrace("8-listener-registered", {
+    eventName: RealtimeEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED,
+    socketId: socket.id ?? null,
+    userId,
+    role,
+    workspaceId,
+  });
+
   socket.on(RealtimeEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED, (envelope) => {
     handleGlobalAnnouncementPublished(
       queryClient,
       role,
       workspaceId,
+      userId,
       envelope,
     );
   });

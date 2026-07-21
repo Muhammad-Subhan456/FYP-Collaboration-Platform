@@ -27,8 +27,8 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
   ) {}
 
-  private requireWorkspaceId(): string {
-    const workspaceId = getWorkspaceIdFromContext();
+  private resolveWorkspaceId(explicit?: string): string {
+    const workspaceId = explicit ?? getWorkspaceIdFromContext();
     if (!workspaceId) {
       throw new ForbiddenException('Workspace context is required');
     }
@@ -37,17 +37,19 @@ export class NotificationsService {
 
   create(
     createNotificationDto: CreateNotificationDto,
+    workspaceId?: string,
   ) {
     return this.prisma.notification.create({
       data: {
         ...createNotificationDto,
-        workspaceId: this.requireWorkspaceId(),
+        workspaceId: this.resolveWorkspaceId(workspaceId),
       },
     });
   }
 
   async createOrGroup(
     createNotificationDto: CreateNotificationDto,
+    workspaceId?: string,
   ) {
     const { type, entityType, entityId, authUserId } =
       createNotificationDto;
@@ -58,7 +60,7 @@ export class NotificationsService {
       !entityId ||
       !GROUPABLE_NOTIFICATION_TYPES.has(type)
     ) {
-      return this.create(createNotificationDto);
+      return this.create(createNotificationDto, workspaceId);
     }
 
     const existing =
@@ -74,7 +76,7 @@ export class NotificationsService {
       });
 
     if (!existing) {
-      return this.create(createNotificationDto);
+      return this.create(createNotificationDto, workspaceId);
     }
 
     return this.prisma.notification.update({
@@ -137,8 +139,9 @@ export class NotificationsService {
 
   createBulk(
     notifications: CreateNotificationDto[],
+    explicitWorkspaceId?: string,
   ) {
-    const workspaceId = this.requireWorkspaceId();
+    const workspaceId = this.resolveWorkspaceId(explicitWorkspaceId);
     return this.prisma.notification.createMany({
       data: notifications.map((n) => ({
         ...n,

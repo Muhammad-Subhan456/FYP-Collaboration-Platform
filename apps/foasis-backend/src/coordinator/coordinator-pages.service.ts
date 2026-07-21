@@ -49,6 +49,7 @@ export class CoordinatorPagesService {
       templateLocked,
       activeDeliverables,
       publishedPhaseResults,
+      proposalContent,
     ] = await Promise.all([
       this.authService.getUserStats(workspaceId),
       this.teamsService.getTeamCountForCoordinator(workspaceId),
@@ -82,6 +83,10 @@ export class CoordinatorPagesService {
       this.prisma.studentPhaseResult.count({
         where: { workspaceId },
       }),
+      this.prisma.proposal.findMany({
+        where: { workspaceId },
+        select: { domains: true, otherDomain: true, sdgs: true },
+      }),
     ]);
 
     const toMap = <T extends string>(
@@ -99,6 +104,8 @@ export class CoordinatorPagesService {
     const pendingEvaluations =
       (evaluationsByStatus.ASSIGNED ?? 0) +
       (evaluationsByStatus.IN_PROGRESS ?? 0);
+
+    const proposalInsights = this.buildProposalInsights(proposalContent);
 
     return {
       summary: {
@@ -141,6 +148,108 @@ export class CoordinatorPagesService {
         locked: templateLocked,
         unlocked: Math.max(0, templateTotal - templateLocked),
       },
+      proposalInsights,
+    };
+  }
+
+  private buildProposalInsights(
+    proposals: Array<{
+      domains: string[];
+      otherDomain: string | null;
+      sdgs: number[];
+    }>,
+  ) {
+    const domainCounts = new Map<string, number>();
+    const sdgCounts = new Map<number, number>();
+    const crossCounts = new Map<string, number>();
+
+    let otherCount = 0;
+    let projectsWithDomains = 0;
+    let multiDomainProjects = 0;
+    let singleDomainProjects = 0;
+    let totalDomainSelections = 0;
+
+    let projectsWithSdgs = 0;
+    let totalSdgSelections = 0;
+
+    for (const proposal of proposals) {
+      const domains = proposal.domains ?? [];
+      const hasOther = Boolean(proposal.otherDomain?.trim());
+      const effectiveDomainCount = domains.length + (hasOther ? 1 : 0);
+
+      if (effectiveDomainCount > 0) {
+        projectsWithDomains += 1;
+        totalDomainSelections += effectiveDomainCount;
+        if (effectiveDomainCount > 1) {
+          multiDomainProjects += 1;
+        } else {
+          singleDomainProjects += 1;
+        }
+      }
+      for (const domain of domains) {
+        domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
+      }
+      if (hasOther) {
+        otherCount += 1;
+      }
+
+      const sdgs = proposal.sdgs ?? [];
+      if (sdgs.length > 0) {
+        projectsWithSdgs += 1;
+        totalSdgSelections += sdgs.length;
+      }
+      for (const sdg of sdgs) {
+        sdgCounts.set(sdg, (sdgCounts.get(sdg) ?? 0) + 1);
+      }
+
+      for (const domain of domains) {
+        for (const sdg of sdgs) {
+          const key = `${domain}||${sdg}`;
+          crossCounts.set(key, (crossCounts.get(key) ?? 0) + 1);
+        }
+      }
+    }
+
+    const perDomain = [...domainCounts.entries()]
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const perSdg = [...sdgCounts.entries()]
+      .map(([sdg, count]) => ({ sdg, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const crossAnalysis = [...crossCounts.entries()]
+      .map(([key, count]) => {
+        const [domain, sdg] = key.split('||');
+        return { domain, sdg: Number(sdg), count };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+
+    return {
+      totalProposals: proposals.length,
+      domains: {
+        perDomain,
+        otherCount,
+        projectsWithDomains,
+        multiDomainProjects,
+        singleDomainProjects,
+        avgDomainsPerProject: projectsWithDomains
+          ? round2(totalDomainSelections / projectsWithDomains)
+          : 0,
+        mostPopular: perDomain[0]?.domain ?? null,
+      },
+      sdgs: {
+        perSdg,
+        projectsWithSdgs,
+        avgSdgsPerProject: projectsWithSdgs
+          ? round2(totalSdgSelections / projectsWithSdgs)
+          : 0,
+        mostSelected: perSdg[0]?.sdg ?? null,
+      },
+      crossAnalysis,
     };
   }
 

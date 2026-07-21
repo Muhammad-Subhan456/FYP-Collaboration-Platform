@@ -65,6 +65,10 @@ export function ProfileViewModal({
               {profile.semester != null && (
                 <Row label="Semester" value={String(profile.semester)} />
               )}
+              {profile.cgpa != null && (
+                <Row label="CGPA" value={profile.cgpa.toFixed(2)} />
+              )}
+              {profile.phone && <Row label="Phone" value={profile.phone} />}
               {profile.skills?.length > 0 && (
                 <div>
                   <p className="mb-1 font-medium text-muted-foreground">Skills</p>

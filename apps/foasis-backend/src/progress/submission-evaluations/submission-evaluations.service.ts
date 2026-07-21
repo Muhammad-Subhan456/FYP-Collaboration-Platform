@@ -494,6 +494,7 @@ export class SubmissionEvaluationsService {
     workspaceId: string,
     coordinatorId: string,
     submissionId: string,
+    evaluatorIds?: string[],
   ) {
     const submission = await this.prisma.submission.findFirst({
       where: {
@@ -538,6 +539,22 @@ export class SubmissionEvaluationsService {
       );
     }
 
+    const selectedEvaluatorIds = evaluatorIds?.length
+      ? [...new Set(evaluatorIds.map((id) => id.trim()))]
+      : undefined;
+
+    const evaluationsToRemind = selectedEvaluatorIds?.length
+      ? submission.evaluations.filter((item) =>
+          selectedEvaluatorIds.includes(item.evaluatorId),
+        )
+      : submission.evaluations;
+
+    if (!evaluationsToRemind.length) {
+      throw new BadRequestException(
+        'None of the selected evaluators have a pending evaluation for this submission',
+      );
+    }
+
     const team = await this.prisma.team.findUnique({
       where: { id: submission.teamId },
       select: { name: true, projectTitle: true },
@@ -546,11 +563,11 @@ export class SubmissionEvaluationsService {
     const phaseName = submission.deliverable.phase?.name ?? null;
     const deliverableTitle = submission.deliverable.title;
 
-    const evaluatorIds = [
-      ...new Set(submission.evaluations.map((item) => item.evaluatorId)),
+    const evaluatorIdsToNotify = [
+      ...new Set(evaluationsToRemind.map((item) => item.evaluatorId)),
     ];
     const evaluators = await this.prisma.user.findMany({
-      where: { id: { in: evaluatorIds } },
+      where: { id: { in: evaluatorIdsToNotify } },
       select: { id: true, email: true, fullName: true },
     });
     const evaluatorById = new Map(
@@ -559,7 +576,7 @@ export class SubmissionEvaluationsService {
 
     let remindedCount = 0;
 
-    for (const evaluation of submission.evaluations) {
+    for (const evaluation of evaluationsToRemind) {
       const route = `/evaluator/evaluations/${evaluation.id}`;
       const statusLabel =
         evaluation.status === SubmissionEvaluationStatus.IN_PROGRESS

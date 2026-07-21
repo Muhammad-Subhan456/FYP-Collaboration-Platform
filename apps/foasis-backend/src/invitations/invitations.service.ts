@@ -2,6 +2,7 @@ import {
   BadRequestException,
   HttpException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -72,6 +73,8 @@ const INVITABLE_ROLES: UserRole[] = [
 
 @Injectable()
 export class InvitationsService {
+  private readonly logger = new Logger(InvitationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -208,15 +211,26 @@ export class InvitationsService {
         },
       });
 
-    await this.emailService.send(
-      buildInvitationEmail({
-        to: email,
-        workspaceName: invitation.workspace.name,
-        role,
-        invitationUrl: this.appUrls.invitationUrl(rawToken),
-        expiresAt,
-      }),
-    );
+    let emailSent = true;
+    try {
+      await this.emailService.send(
+        buildInvitationEmail({
+          to: email,
+          workspaceName: invitation.workspace.name,
+          role,
+          invitationUrl: this.appUrls.invitationUrl(rawToken),
+          expiresAt,
+        }),
+      );
+    } catch (error) {
+      // Don't fail onboarding if the mail provider hiccups — the invitation
+      // record exists and can be resent from the workspace admin UI.
+      emailSent = false;
+      this.logger.error(
+        `Failed to send invitation email to ${email}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
 
     return {
       id: invitation.id,
@@ -224,6 +238,7 @@ export class InvitationsService {
       role: invitation.role,
       status: invitation.status,
       expiresAt: invitation.expiresAt,
+      emailSent,
     };
   }
 

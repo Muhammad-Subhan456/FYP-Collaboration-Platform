@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import type { Proposal, Supervisor } from "@/types/student";
+import type { ProposalDocument } from "@/types/proposal";
 import type {
   SupervisorInvitation,
   SupervisorRequest,
@@ -16,6 +17,13 @@ export interface CreateProposalInput {
 export const proposalService = {
   getMyProposal: async () => {
     const res = await api.get<Proposal | null>("/proposals/my-proposal");
+    return res.data;
+  },
+
+  getProposalDocument: async (proposalId: string) => {
+    const res = await api.get<ProposalDocument>(
+      `/proposals/${proposalId}/document`,
+    );
     return res.data;
   },
 

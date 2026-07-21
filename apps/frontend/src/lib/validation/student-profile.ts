@@ -39,6 +39,20 @@ export const studentProfileFormSchema = z.object({
     .int("Semester must be a whole number")
     .min(1, "Semester must be between 1 and 12")
     .max(12, "Semester must be between 1 and 12"),
+  cgpa: z
+    .number({ message: "CGPA must be a number" })
+    .min(0, "CGPA must be between 0.00 and 4.00")
+    .max(4, "CGPA must be between 0.00 and 4.00")
+    .optional(),
+  phone: z
+    .string()
+    .trim()
+    .regex(
+      /^[+]?[0-9\s()-]{7,20}$/,
+      "Enter a valid phone number (7-20 digits)",
+    )
+    .optional()
+    .or(z.literal("")),
   skills: z
     .string()
     .max(500, "Skills list is too long")

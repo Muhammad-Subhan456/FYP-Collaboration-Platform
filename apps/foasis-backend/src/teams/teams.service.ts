@@ -28,6 +28,7 @@ import type {
   TeamRoleUpdatedPayload,
 } from '../domain-events/domain-event.types';
 import { isTeamProfileComplete } from './team-profile.util';
+import { validateProposalContent } from '../proposals/proposal-constants';
 import {
   serializeJoinRequest,
   serializeTeamMember,
@@ -1011,13 +1012,48 @@ async getStudentTeamOverview(
         ? null
         : updateTeamDto.proposalPdfUrl?.trim() || null;
 
+    const domains = (updateTeamDto.domains ?? [])
+      .map((domain) => domain.trim())
+      .filter(Boolean);
+    const otherDomain = updateTeamDto.otherDomain?.trim() || null;
+    const nature = updateTeamDto.nature ?? null;
+    const sdgs = updateTeamDto.sdgs ?? [];
+    const sdgJustification = updateTeamDto.sdgJustification?.trim() || null;
+    const previousObjectives =
+      updateTeamDto.previousObjectives?.trim() || null;
+    const projectAbstract = updateTeamDto.projectAbstract.trim();
+
+    // Legacy free-text domain kept meaningful for existing views/search.
+    const legacyDomain = domains.length
+      ? [...domains, ...(otherDomain ? [otherDomain] : [])].join(', ')
+      : otherDomain || updateTeamDto.domain?.trim() || '';
+
+    const errors = validateProposalContent({
+      nature,
+      domains,
+      otherDomain,
+      abstract: projectAbstract,
+      previousObjectives,
+      sdgs,
+      sdgJustification,
+    });
+    if (errors.length > 0) {
+      throw new BadRequestException(errors);
+    }
+
     const updated = await this.prisma.team.update({
       where: { id: team.id },
       data: {
         name: updateTeamDto.name.trim(),
-        domain: updateTeamDto.domain.trim(),
+        domain: legacyDomain,
+        domains,
+        otherDomain,
+        nature,
+        sdgs,
+        sdgJustification,
+        previousObjectives,
         projectTitle: updateTeamDto.projectTitle.trim(),
-        projectAbstract: updateTeamDto.projectAbstract.trim(),
+        projectAbstract,
         proposalPdfUrl,
       },
     });
@@ -1031,6 +1067,12 @@ async getStudentTeamOverview(
         id: updated.id,
         name: updated.name,
         domain: updated.domain,
+        domains: updated.domains,
+        otherDomain: updated.otherDomain,
+        nature: updated.nature,
+        sdgs: updated.sdgs,
+        sdgJustification: updated.sdgJustification,
+        previousObjectives: updated.previousObjectives,
         projectTitle: updated.projectTitle,
         projectAbstract: updated.projectAbstract,
         proposalPdfUrl: updated.proposalPdfUrl,

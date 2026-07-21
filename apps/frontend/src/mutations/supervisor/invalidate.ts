@@ -1,56 +1,53 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { invalidateDashboard, queryKeys } from "@/lib/react-query";
+import { invalidateDashboard } from "@/lib/react-query";
 
 export function invalidateSupervisorTeams(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.teams(),
+    queryKey: ["supervisor", "teams"],
   });
   void invalidateDashboard(queryClient, "SUPERVISOR");
 }
 
 export function invalidateSupervisorRequests(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.requests(),
+    queryKey: ["supervisor", "requests"],
   });
   void invalidateSupervisorTeams(queryClient);
 }
 
 export function invalidateSupervisorInvitations(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.invitations(),
+    queryKey: ["supervisor", "invitations"],
   });
 }
 
 export function invalidateSupervisorMilestones(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.milestonesPrefix(),
+    queryKey: ["supervisor", "milestones"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.activityLogs.all,
+    queryKey: ["activity-logs"],
   });
   invalidateDashboard(queryClient, "SUPERVISOR");
 }
 
 export function invalidateSupervisorWorkStream(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.workStreamPrefix(),
+    queryKey: ["supervisor", "work-stream"],
   });
   void invalidateDashboard(queryClient, "SUPERVISOR");
 }
 
 export function invalidateSupervisorNotifications(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
+    queryKey: ["notifications", "unread-count"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadPreview(),
+    queryKey: ["notifications", "unread-preview"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.recentActivity(),
+    queryKey: ["notifications", "recent-activity"],
   });
   void queryClient.invalidateQueries({
     queryKey: ["supervisor", "me"],
@@ -59,6 +56,6 @@ export function invalidateSupervisorNotifications(queryClient: QueryClient) {
 
 export function invalidateSupervisorProfile(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.supervisor.profile(),
+    queryKey: ["supervisor", "profile"],
   });
 }

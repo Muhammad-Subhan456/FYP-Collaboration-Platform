@@ -22,10 +22,21 @@ export type DeliverableType =
 
 export type JoinRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export type ProjectNature =
+  | "DEVELOPMENT"
+  | "RESEARCH_AND_DEVELOPMENT"
+  | "HYBRID";
+
 export interface Team {
   id: string;
   name: string;
   domain: string;
+  domains?: string[];
+  otherDomain?: string | null;
+  nature?: ProjectNature | null;
+  sdgs?: number[];
+  sdgJustification?: string | null;
+  previousObjectives?: string | null;
   projectTitle?: string | null;
   projectAbstract?: string | null;
   proposalPdfUrl?: string | null;
@@ -55,8 +66,15 @@ export interface Proposal {
   id: string;
   teamId: string;
   teamLeaderAuthUserId?: string | null;
+  projectCode?: string | null;
   title: string;
   domain: string;
+  domains?: string[];
+  otherDomain?: string | null;
+  nature?: ProjectNature | null;
+  sdgs?: number[];
+  sdgJustification?: string | null;
+  previousObjectives?: string | null;
   abstract: string;
   proposalPdfUrl?: string | null;
   status: ProposalStatus;

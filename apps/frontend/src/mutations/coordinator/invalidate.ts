@@ -1,42 +1,42 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { invalidateDashboard, queryKeys } from "@/lib/react-query";
+import { invalidateDashboard } from "@/lib/react-query";
 
 export function invalidateCoordinatorUsers(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.users(),
+    queryKey: ["coordinator", "users"],
   });
   void invalidateDashboard(queryClient, "COORDINATOR");
 }
 
 export function invalidateCoordinatorAnnouncements(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.announcements(),
+    queryKey: ["coordinator", "announcements"],
   });
   void invalidateDashboard(queryClient, "COORDINATOR");
 }
 
 export function invalidateCoordinatorEvaluations(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.evaluations(),
+    queryKey: ["coordinator", "evaluations"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.results(),
+    queryKey: ["coordinator", "results"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.evaluatorOverview(),
+    queryKey: ["coordinator", "evaluator-overview"],
   });
 }
 
 export function invalidateCoordinatorNotifications(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadCount(),
+    queryKey: ["notifications", "unread-count"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.unreadPreview(),
+    queryKey: ["notifications", "unread-preview"],
   });
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.notifications.recentActivity(),
+    queryKey: ["notifications", "recent-activity"],
   });
   void queryClient.invalidateQueries({
     queryKey: ["coordinator", "me"],
@@ -45,6 +45,6 @@ export function invalidateCoordinatorNotifications(queryClient: QueryClient) {
 
 export function invalidateCoordinatorProfile(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
-    queryKey: queryKeys.coordinator.profile(),
+    queryKey: ["coordinator", "profile"],
   });
 }

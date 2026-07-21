@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { CoordinatorAnalyticsData } from "@/services/coordinator-page.service";
+import { ProposalInsightsCharts } from "@/components/dashboard/proposal-insights-charts";
 
 const CHART_COLORS = ["#0f766e", "#0369a1", "#b45309", "#be123c", "#4338ca", "#15803d"];
 const CHART_HEIGHT = 288;
@@ -349,6 +350,10 @@ export function CoordinatorCharts({ data }: { data: CoordinatorAnalyticsData }) 
           </CardContent>
         </Card>
       </div>
+
+      {data.proposalInsights && (
+        <ProposalInsightsCharts insights={data.proposalInsights} />
+      )}
     </div>
   );
 }

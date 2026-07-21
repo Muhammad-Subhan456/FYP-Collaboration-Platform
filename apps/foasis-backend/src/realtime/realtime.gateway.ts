@@ -9,6 +9,8 @@ import {
 import type { Server, Socket } from 'socket.io';
 
 import { resolveCorsOrigin } from '../common/cors.config';
+import { gaTrace } from '../common/trace/ga-trace';
+import { DomainEvents } from '../domain-events/domain-event.constants';
 import type { DomainEvent } from '../domain-events/domain-event.types';
 
 import type { RealtimeEventDto } from './dto/realtime-event.dto';
@@ -58,6 +60,14 @@ export class RealtimeGateway
         rooms,
       });
 
+      gaTrace('7-room-join', {
+        socketId: client.id,
+        userId: user.userId,
+        role: user.role,
+        workspaceId: user.workspaceId,
+        rooms,
+      });
+
       this.logger.log(
         `WebSocket connected: ${user.userId} (${user.role}) → [${rooms.join(', ')}]`,
       );
@@ -98,9 +108,43 @@ export class RealtimeGateway
       return;
     }
 
+    if (event.name === DomainEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED) {
+      void this.server.in(room).fetchSockets().then((sockets) => {
+        gaTrace('3-pre-emit', {
+          eventName: event.name,
+          workspaceId:
+            event.scope.type === 'workspace' ? event.scope.id : undefined,
+          targetRoom: room,
+          socketCount: sockets.length,
+          socketIds: sockets.map((socket) => socket.id),
+          announcementId: (event.payload as { announcement?: { id?: string } })
+            ?.announcement?.id,
+        });
+
+        this.server.to(room).emit(event.name, wire);
+
+        gaTrace('4-post-emit', {
+          eventName: event.name,
+          targetRoom: room,
+          announcementId: (event.payload as { announcement?: { id?: string } })
+            ?.announcement?.id,
+        });
+      });
+      return;
+    }
+
+    const socketsInRoom = this.server.in(room).fetchSockets();
     this.server.to(room).emit(event.name, wire);
 
-    this.logger.debug(`Dispatched ${event.name} → ${room}`);
+    if (event.name === 'global_announcement.published' || event.name === 'notification.created') {
+      void socketsInRoom.then((sockets) => {
+        this.logger.log(
+          `Dispatched ${event.name} → ${room} (${sockets.length} socket(s))`,
+        );
+      });
+    } else {
+      this.logger.debug(`Dispatched ${event.name} → ${room}`);
+    }
   }
 
   private roomForScope(

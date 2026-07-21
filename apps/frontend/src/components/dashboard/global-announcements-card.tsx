@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Megaphone } from "lucide-react";
+import { CalendarClock, Megaphone, Paperclip, UserRound } from "lucide-react";
 
+import { formatAudienceRoles } from "@/components/coordinator/announcement-audience-picker";
+import { AttachmentList } from "@/components/work-stream/attachment-list";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,10 +23,199 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
+import {
+  getGlobalAnnouncementAttachmentCount,
+  hasGlobalAnnouncementAttachments,
+  sortGlobalAnnouncementsNewestFirst,
+} from "@/lib/global-announcements";
 import { progressService } from "@/services/progress.service";
 import type { GlobalAnnouncement } from "@/types/coordinator";
+import type { WorkStreamAttachment } from "@/types/work-stream";
 
 const VIEW_ALL_PAGE_SIZE = 6;
+
+const ANNOUNCEMENT_TYPE_LABELS: Record<string, string> = {
+  GENERAL: "General",
+  DEADLINE: "Deadline",
+  MEETING: "Meeting",
+  WORKSHOP: "Workshop",
+  VIVA: "Viva",
+};
+
+function formatAnnouncementType(type?: string) {
+  if (!type) {
+    return null;
+  }
+  return ANNOUNCEMENT_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
+}
+
+function toAttachmentList(
+  attachments?: GlobalAnnouncement["attachments"],
+): WorkStreamAttachment[] {
+  if (!attachments?.length) {
+    return [];
+  }
+
+  return attachments.map((item) => ({
+    id: item.id,
+    fileUrl: item.fileUrl,
+    fileName: item.fileName,
+    createdAt: item.createdAt,
+  }));
+}
+
+function AttachmentIndicator({ item }: { item: GlobalAnnouncement }) {
+  if (!hasGlobalAnnouncementAttachments(item)) {
+    return null;
+  }
+
+  const attachments = item.attachments ?? [];
+  const count = getGlobalAnnouncementAttachmentCount(item);
+
+  if (attachments.length === 1) {
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{attachments[0].fileName}</span>
+      </span>
+    );
+  }
+
+  if (attachments.length > 1) {
+    const preview = attachments
+      .slice(0, 2)
+      .map((attachment) => attachment.fileName)
+      .join(", ");
+    const suffix =
+      attachments.length > 2 ? ` +${attachments.length - 2} more` : "";
+
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">
+          {preview}
+          {suffix}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <Paperclip className="h-3.5 w-3.5 shrink-0" />
+      {count === 1 ? "1 attachment" : `${count} attachments`}
+    </span>
+  );
+}
+
+function AnnouncementPreviewItem({
+  item,
+  showAttachmentDetails = false,
+  truncateDescription = true,
+}: {
+  item: GlobalAnnouncement;
+  showAttachmentDetails?: boolean;
+  /** Dashboard cards truncate; View All / full pages show the complete message. */
+  truncateDescription?: boolean;
+}) {
+  const displayTimestamp =
+    item.publishAt ?? item.publishedAt ?? item.createdAt;
+  const typeLabel = formatAnnouncementType(item.type);
+  const attachments = toAttachmentList(item.attachments);
+  const createdBy = item.coordinatorName?.trim() || "Program coordinator";
+
+  return (
+    <article className="rounded-lg border bg-card p-3 text-sm shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h4 className="font-semibold leading-snug">{item.title}</h4>
+          <p
+            className={
+              truncateDescription
+                ? "line-clamp-3 text-muted-foreground"
+                : "whitespace-pre-wrap break-words text-muted-foreground"
+            }
+          >
+            {item.message}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {typeLabel ? (
+          <Badge variant="secondary" className="text-[11px]">
+            {typeLabel}
+          </Badge>
+        ) : null}
+        {item.audienceRoles?.length
+          ? item.audienceRoles.map((role) => (
+              <Badge
+                key={role}
+                variant="outline"
+                className="text-[11px] font-normal"
+              >
+                {formatAudienceRoles([role])}
+              </Badge>
+            ))
+          : (
+            <Badge variant="outline" className="text-[11px] font-normal">
+              All recipients
+            </Badge>
+          )}
+      </div>
+
+      <div className="mt-2">
+        <AttachmentIndicator item={item} />
+      </div>
+
+      {showAttachmentDetails && attachments.length > 0 ? (
+        <div className="mt-3">
+          <AttachmentList attachments={attachments} />
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <CalendarClock className="h-3.5 w-3.5" />
+          {formatDateTime(displayTimestamp)}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <UserRound className="h-3.5 w-3.5" />
+          {createdBy}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function AnnouncementRows({
+  items,
+  emptyMessage,
+  showAttachmentDetails = false,
+  truncateDescription = true,
+}: {
+  items: GlobalAnnouncement[];
+  emptyMessage: string;
+  showAttachmentDetails?: boolean;
+  truncateDescription?: boolean;
+}) {
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <AnnouncementPreviewItem
+          key={item.id}
+          item={item}
+          showAttachmentDetails={showAttachmentDetails}
+          truncateDescription={truncateDescription}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface GlobalAnnouncementsCardProps {
   announcements?: GlobalAnnouncement[];
@@ -33,38 +225,6 @@ interface GlobalAnnouncementsCardProps {
   viewAllHref?: string;
   /** When true, View all opens a paginated dialog instead of navigating. */
   viewAllDialog?: boolean;
-}
-
-function AnnouncementRows({
-  items,
-  emptyMessage,
-}: {
-  items: GlobalAnnouncement[];
-  emptyMessage: string;
-}) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div key={item.id} className="rounded-lg border p-3 text-sm">
-          <p className="font-medium">{item.title}</p>
-          <p className="line-clamp-2 text-muted-foreground">{item.message}</p>
-          {item.attachments && item.attachments.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {item.attachments.length} attachment
-              {item.attachments.length === 1 ? "" : "s"}
-            </p>
-          ) : null}
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatDateTime(item.createdAt)}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export function GlobalAnnouncementsCard({
@@ -77,10 +237,11 @@ export function GlobalAnnouncementsCard({
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
 
+  const sortedAnnouncements = sortGlobalAnnouncementsNewestFirst(announcements);
   const items =
     typeof limit === "number"
-      ? announcements.slice(0, limit)
-      : announcements;
+      ? sortedAnnouncements.slice(0, limit)
+      : sortedAnnouncements;
 
   const pageQuery = useQuery({
     queryKey: ["global-announcements", "page", page, VIEW_ALL_PAGE_SIZE],
@@ -88,9 +249,15 @@ export function GlobalAnnouncementsCard({
       progressService.getGlobalAnnouncementsPage(page, VIEW_ALL_PAGE_SIZE),
     enabled: open && viewAllDialog,
     placeholderData: keepPreviousData,
+    select: (data) => ({
+      ...data,
+      data: sortGlobalAnnouncementsNewestFirst(data.data),
+    }),
   });
 
   const showViewAll = viewAllDialog || Boolean(viewAllHref);
+  /** Dashboard widgets pass `limit` → compact truncated preview. Full pages do not. */
+  const isDashboardPreview = typeof limit === "number";
 
   return (
     <>
@@ -121,7 +288,12 @@ export function GlobalAnnouncementsCard({
           ) : null}
         </CardHeader>
         <CardContent>
-          <AnnouncementRows items={items} emptyMessage={emptyMessage} />
+          <AnnouncementRows
+            items={items}
+            emptyMessage={emptyMessage}
+            truncateDescription={isDashboardPreview}
+            showAttachmentDetails={!isDashboardPreview}
+          />
         </CardContent>
       </Card>
 
@@ -145,6 +317,8 @@ export function GlobalAnnouncementsCard({
               <AnnouncementRows
                 items={pageQuery.data?.data ?? []}
                 emptyMessage={emptyMessage}
+                showAttachmentDetails
+                truncateDescription={false}
               />
             )}
 

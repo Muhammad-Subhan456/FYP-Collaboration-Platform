@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { coordinatorPageQueryOptions, queryKeys } from "@/lib/react-query";
+import { sortGlobalAnnouncementsNewestFirst } from "@/lib/global-announcements";
 import { coordinatorPageService } from "@/services/coordinator-page.service";
 import { coordinatorService } from "@/services/coordinator.service";
 import type { AuthUserRecord } from "@/types/profile";
@@ -45,6 +46,9 @@ export function useCoordinatorAnnouncementsQuery() {
   return useCoordinatorAuthQuery(
     "announcements",
     coordinatorPageService.getAnnouncements,
+    {
+      select: (data) => sortGlobalAnnouncementsNewestFirst(data),
+    },
   );
 }
 

@@ -36,7 +36,7 @@ export class CreateGlobalAnnouncementDto {
   @IsString({ each: true })
   audienceRoles?: (typeof ALL_ANNOUNCEMENT_AUDIENCE_ROLES)[number][];
 
-  /** ISO datetime — if in the future, announcement is scheduled. */
+  /** Optional display-only date/time (ISO-8601). Does not affect delivery. */
   @IsOptional()
   @IsString()
   publishAt?: string;

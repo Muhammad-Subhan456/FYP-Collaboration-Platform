@@ -14,6 +14,8 @@ export interface UserProfile {
   batch?: string | null;
   degreeProgram?: string | null;
   semester?: number | null;
+  cgpa?: number | null;
+  phone?: string | null;
   skills: string[];
   interests: string[];
   linkedIn?: string | null;

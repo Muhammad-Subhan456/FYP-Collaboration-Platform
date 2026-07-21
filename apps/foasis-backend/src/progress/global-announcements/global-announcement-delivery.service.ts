@@ -10,6 +10,9 @@ import { NotificationDispatchService } from '../../notifications/notification-di
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 
+import { runWithWorkspaceContext } from '../../workspace/workspace-als';
+import { gaTrace } from '../../common/trace/ga-trace';
+
 import { AnnouncementAudienceService } from './announcement-audience.service';
 
 type AnnouncementWithAttachments = {
@@ -41,6 +44,19 @@ export class GlobalAnnouncementDeliveryService {
   ) {}
 
   async deliver(announcement: AnnouncementWithAttachments) {
+    return runWithWorkspaceContext(
+      announcement.workspaceId,
+      async () => this.deliverWithinContext(announcement),
+    );
+  }
+
+  private async deliverWithinContext(
+    announcement: AnnouncementWithAttachments,
+  ) {
+    this.logger.log(
+      `Delivering announcement ${announcement.id} "${announcement.title}" to roles [${announcement.audienceRoles.join(', ')}]`,
+    );
+
     const recipients =
       await this.audienceService.resolveRecipients(
         announcement.workspaceId,
@@ -54,41 +70,30 @@ export class GlobalAnnouncementDeliveryService {
       return;
     }
 
+    this.logger.log(
+      `Announcement ${announcement.id}: ${recipients.length} recipients resolved`,
+    );
+
     const notificationTitle = 'FOASIS Program Announcement';
     const notificationMessage = `${announcement.title}: ${announcement.message}`;
 
-    const existingByUser = new Set(
-      (
-        await this.prisma.notification.findMany({
-          where: {
-            workspaceId: announcement.workspaceId,
-            type: 'GLOBAL_ANNOUNCEMENT',
-            entityType: 'GLOBAL_ANNOUNCEMENT',
-            entityId: announcement.id,
-            authUserId: {
-              in: recipients.map((recipient) => recipient.id),
-            },
-          },
-          select: { authUserId: true },
-        })
-      ).map((row) => row.authUserId),
-    );
-
-    const pendingNotifications = recipients
-      .filter((recipient) => !existingByUser.has(recipient.id))
-      .map((recipient) => ({
-        authUserId: recipient.id,
-        title: notificationTitle,
-        message: notificationMessage,
-        type: 'GLOBAL_ANNOUNCEMENT',
-        entityType: 'GLOBAL_ANNOUNCEMENT',
-        entityId: announcement.id,
-        route: recipient.route,
-      }));
+    const pendingNotifications = recipients.map((recipient) => ({
+      authUserId: recipient.id,
+      title: notificationTitle,
+      message: notificationMessage,
+      type: 'GLOBAL_ANNOUNCEMENT',
+      entityType: 'GLOBAL_ANNOUNCEMENT',
+      entityId: announcement.id,
+      route: recipient.route,
+    }));
 
     if (pendingNotifications.length > 0) {
       await this.notificationDispatch.sendBulk(
         pendingNotifications,
+        announcement.workspaceId,
+      );
+      this.logger.log(
+        `Announcement ${announcement.id}: ${pendingNotifications.length} notifications dispatched`,
       );
     }
 
@@ -117,6 +122,13 @@ export class GlobalAnnouncementDeliveryService {
         ),
     );
 
+    gaTrace('2-before-socket-emit', {
+      eventName: DomainEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED,
+      workspaceId: announcement.workspaceId,
+      targetRoom: `workspace:${announcement.workspaceId}`,
+      announcementId: announcement.id,
+    });
+
     this.domainEventService.emitSafe<GlobalAnnouncementPublishedPayload>({
       name: DomainEvents.GLOBAL_ANNOUNCEMENT_PUBLISHED,
       timestamp: new Date().toISOString(),
@@ -140,6 +152,10 @@ export class GlobalAnnouncementDeliveryService {
         },
       },
     });
+
+    this.logger.log(
+      `Announcement ${announcement.id}: GLOBAL_ANNOUNCEMENT_PUBLISHED event emitted to workspace ${announcement.workspaceId}`,
+    );
   }
 
   async markPublished(announcementId: string) {

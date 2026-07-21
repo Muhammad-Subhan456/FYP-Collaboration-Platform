@@ -94,6 +94,7 @@ export class SubmissionEvaluationsController {
       req.workspaceId,
       req.user.userId,
       dto.submissionId,
+      dto.evaluatorIds,
     );
   }
 

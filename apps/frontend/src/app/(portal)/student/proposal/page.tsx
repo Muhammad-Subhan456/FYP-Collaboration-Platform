@@ -20,6 +20,7 @@ import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { StatusBadge } from "@/components/common/status-badge";
 import { SupervisorBrowseCard } from "@/components/proposal/supervisor-browse-card";
+import { ProposalDocumentDialog } from "@/components/proposal/proposal-document-dialog";
 import { SupervisorProfileModal } from "@/components/profile/supervisor-profile-modal";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,7 @@ function resolveFileUrl(url: string) {
 export default function StudentProposalPage() {
   const { user } = useAuth();
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
+  const [viewFullProposal, setViewFullProposal] = useState(false);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [sendingSupervisorId, setSendingSupervisorId] = useState<string | null>(
     null,
@@ -109,7 +111,7 @@ export default function StudentProposalPage() {
     return (
       <EmptyState
         title="Join a team first"
-        description="You need to be part of a team before sending a proposal."
+        description="You need to be part of a team before viewing the proposal."
         action={
           <Button asChild>
             <Link href="/student/team">Go to Team</Link>
@@ -119,18 +121,21 @@ export default function StudentProposalPage() {
     );
   }
 
-  if (!isTeamLeader) {
-    return (
-      <EmptyState
-        title="Awaiting team leader"
-        description="Only the team leader can send proposal requests to supervisors."
-      />
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {!isProfileComplete && (
+      {!isTeamLeader && (
+        <Card className="border-muted">
+          <CardHeader>
+            <CardTitle className="text-base">Read-only access</CardTitle>
+            <CardDescription>
+              You can view your team&apos;s proposal and its current status.
+              Only the team leader can send or manage supervision requests.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {isTeamLeader && !isProfileComplete && (
         <Card className="border-amber-500/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
@@ -182,6 +187,16 @@ export default function StudentProposalPage() {
                 <ExternalLink className="h-4 w-4" />
                 View Proposal PDF
               </a>
+            </Button>
+          )}
+          {proposal && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewFullProposal(true)}
+            >
+              <FileText className="h-4 w-4" />
+              View full proposal
             </Button>
           )}
           {proposal && (
@@ -256,6 +271,14 @@ export default function StudentProposalPage() {
                       {getDisplayName(profiles, request.supervisorId)}
                     </span>
                     <StatusBadge status={request.status} />
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => setViewProfileId(request.supervisorId)}
+                    >
+                      View supervisor profile
+                    </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Sent {formatDate(request.createdAt)}
@@ -284,19 +307,29 @@ export default function StudentProposalPage() {
         <Card className="border-amber-500/30">
           <CardHeader>
             <CardTitle>Proposal Pending Review</CardTitle>
-            <CardDescription>
-              Waiting for{" "}
-              {getDisplayName(profiles, pendingSupervisorId)} to accept or
-              reject your proposal
-              {proposal?.pendingExpiresAt && (
-                <> · expires {formatDate(proposal.pendingExpiresAt)}</>
-              )}
+            <CardDescription className="space-y-2">
+              <span className="block">
+                Waiting for{" "}
+                {getDisplayName(profiles, pendingSupervisorId)} to accept or
+                reject your proposal
+                {proposal?.pendingExpiresAt && (
+                  <> · expires {formatDate(proposal.pendingExpiresAt)}</>
+                )}
+              </span>
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto p-0"
+                onClick={() => setViewProfileId(pendingSupervisorId)}
+              >
+                View supervisor profile
+              </Button>
             </CardDescription>
           </CardHeader>
         </Card>
       )}
 
-      {interests.length > 0 && !isWorkflowLocked && (
+      {isTeamLeader && interests.length > 0 && !isWorkflowLocked && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -344,7 +377,7 @@ export default function StudentProposalPage() {
           </Card>
         )}
 
-      {canSubmitProposal && (
+      {isTeamLeader && canSubmitProposal && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -386,6 +419,12 @@ export default function StudentProposalPage() {
         onOpenChange={(open) => {
           if (!open) setViewProfileId(null);
         }}
+      />
+
+      <ProposalDocumentDialog
+        proposalId={proposal?.id ?? null}
+        open={viewFullProposal}
+        onOpenChange={setViewFullProposal}
       />
     </div>
   );

@@ -256,7 +256,7 @@ export function applyProposalSnapshot(
 
     if (isAccepted) {
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.student.dashboard(userId, workspaceId),
+        queryKey: ["student", "team"],
       });
     }
     return;

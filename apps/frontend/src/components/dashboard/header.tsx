@@ -23,12 +23,14 @@ interface DashboardHeaderProps {
   title: string;
   description?: string;
   role: UserRole;
+  unreadCount?: number;
 }
 
 export function DashboardHeader({
   title,
   description,
   role,
+  unreadCount,
 }: DashboardHeaderProps) {
   const dispatch = useAppDispatch();
   const { user, profile, logout } = useAuth();
@@ -67,7 +69,7 @@ export function DashboardHeader({
       <div className="flex items-center gap-2">
         <WorkspaceSwitcher />
         <ThemeToggle />
-        <NotificationBell role={role} />
+        <NotificationBell role={role} unreadCount={unreadCount} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -36,7 +36,15 @@ const STEPS = ["Basic Info", "Academic", "Skills", "Social Links", "Finish"];
 
 const STEP_FIELDS: Array<Array<keyof FormData>> = [
   ["fullName"],
-  ["registrationNumber", "department", "batch", "degreeProgram", "semester"],
+  [
+    "registrationNumber",
+    "department",
+    "batch",
+    "degreeProgram",
+    "semester",
+    "cgpa",
+    "phone",
+  ],
   ["skills", "interests", "bio"],
   ["linkedIn", "github"],
   [],
@@ -58,6 +66,8 @@ export function StudentOnboardingWizard() {
       registrationNumber: "",
       batch: "",
       degreeProgram: "",
+      cgpa: undefined,
+      phone: "",
       skills: "",
       interests: "",
       linkedIn: "",
@@ -129,6 +139,8 @@ export function StudentOnboardingWizard() {
         batch: data.batch.trim(),
         degreeProgram: data.degreeProgram.trim(),
         semester: data.semester,
+        cgpa: typeof data.cgpa === "number" ? data.cgpa : undefined,
+        phone: data.phone?.trim() || undefined,
         skills: (data.skills ?? "")
           .split(",")
           .map((s) => s.trim())
@@ -281,6 +293,38 @@ export function StudentOnboardingWizard() {
                     {errors.degreeProgram.message}
                   </p>
                 )}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>CGPA (optional)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={4}
+                    placeholder="3.50"
+                    {...register("cgpa", {
+                      setValueAs: (v) =>
+                        v === "" || v === null || v === undefined
+                          ? undefined
+                          : Number(v),
+                    })}
+                  />
+                  {errors.cgpa && (
+                    <p className="text-sm text-destructive">{errors.cgpa.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number (optional)</Label>
+                  <Input
+                    type="tel"
+                    placeholder="+92 300 1234567"
+                    {...register("phone")}
+                  />
+                  {errors.phone && (
+                    <p className="text-sm text-destructive">{errors.phone.message}</p>
+                  )}
+                </div>
               </div>
             </>
           )}
