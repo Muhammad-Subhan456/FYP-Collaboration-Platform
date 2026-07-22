@@ -60,7 +60,7 @@ function toAttachmentList(
     id: item.id,
     fileUrl: item.fileUrl,
     fileName: item.fileName,
-    createdAt: item.createdAt,
+    createdAt: item.createdAt ?? "",
   }));
 }
 

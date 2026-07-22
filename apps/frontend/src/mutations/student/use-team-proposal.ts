@@ -3,7 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/axios";
+import { getStoredToken } from "@/lib/auth";
 import { queryKeys } from "@/lib/react-query";
+import { reconnectRealtime } from "@/lib/realtime/socket";
+import { useAuth } from "@/providers/auth-provider";
 import { proposalService } from "@/services/proposal.service";
 import { teamService } from "@/services/team.service";
 
@@ -14,6 +17,7 @@ import {
 
 export function useStudentTeamMutations() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const invalidateTeam = () => invalidateStudentTeam(queryClient);
 
@@ -22,6 +26,18 @@ export function useStudentTeamMutations() {
     onSuccess: () => {
       toast.success("Team created successfully!");
       invalidateTeam();
+
+      // Reconnect so the leader joins team:{id} for deliverables/announcements.
+      const token = getStoredToken();
+      if (token && user?.userId) {
+        reconnectRealtime(
+          token,
+          user.userId,
+          user.role,
+          user.workspaceId ?? null,
+          queryClient,
+        );
+      }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -85,6 +101,17 @@ export function useStudentTeamMutations() {
     onSuccess: () => {
       toast.success("Team deleted");
       invalidateStudentProposal(queryClient);
+
+      const token = getStoredToken();
+      if (token && user?.userId) {
+        reconnectRealtime(
+          token,
+          user.userId,
+          user.role,
+          user.workspaceId ?? null,
+          queryClient,
+        );
+      }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -94,6 +121,17 @@ export function useStudentTeamMutations() {
     onSuccess: () => {
       toast.success("You have left the team");
       invalidateStudentProposal(queryClient);
+
+      const token = getStoredToken();
+      if (token && user?.userId) {
+        reconnectRealtime(
+          token,
+          user.userId,
+          user.role,
+          user.workspaceId ?? null,
+          queryClient,
+        );
+      }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

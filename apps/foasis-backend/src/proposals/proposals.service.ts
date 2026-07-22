@@ -1835,6 +1835,29 @@ async resubmitProposal(
     updated.id,
   );
 
+  if (updated.pendingSupervisorId) {
+    this.publishProposalEvent(
+      DomainEvents.PROPOSAL_RESUBMITTED,
+      authUserId,
+      { type: 'supervisor', id: updated.pendingSupervisorId },
+      resubmittedPayload,
+      updated.id,
+    );
+  }
+
+  if (
+    updated.assignedSupervisorId &&
+    updated.assignedSupervisorId !== updated.pendingSupervisorId
+  ) {
+    this.publishProposalEvent(
+      DomainEvents.PROPOSAL_RESUBMITTED,
+      authUserId,
+      { type: 'supervisor', id: updated.assignedSupervisorId },
+      resubmittedPayload,
+      updated.id,
+    );
+  }
+
   return updated;
 }
 

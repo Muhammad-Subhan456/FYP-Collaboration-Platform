@@ -89,6 +89,33 @@ export class RealtimeGateway
     }
   }
 
+  /**
+   * Dynamically join a connected user's sockets into a team room without
+   * requiring a full reconnect (e.g. after team create / join accept).
+   */
+  async joinUserToTeamRoom(
+    userId: string,
+    teamId: string,
+  ): Promise<void> {
+    if (!this.server) {
+      return;
+    }
+
+    const userRoom = this.roomService.userRoom(userId);
+    const teamRoom = this.roomService.teamRoom(teamId);
+    const sockets = await this.server.in(userRoom).fetchSockets();
+
+    for (const socket of sockets) {
+      await socket.join(teamRoom);
+    }
+
+    if (sockets.length > 0) {
+      this.logger.log(
+        `Joined ${sockets.length} socket(s) for ${userId} → ${teamRoom}`,
+      );
+    }
+  }
+
   /** Dispatch a domain event to the appropriate room(s). */
   dispatch(event: DomainEvent): void {
     if (!this.server) {

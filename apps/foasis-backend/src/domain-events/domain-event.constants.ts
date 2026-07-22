@@ -43,6 +43,7 @@ export const DomainEvents = {
   PROPOSAL_SUPERVISOR_ASSIGNED: 'proposal.supervisor_assigned',
   PROPOSAL_RESUBMITTED: 'proposal.resubmitted',
 
+  TEAM_CREATED: 'team.created',
   TEAM_JOIN_REQUEST_RECEIVED: 'team.join_request_received',
   TEAM_JOIN_REQUEST_RESOLVED: 'team.join_request_resolved',
   TEAM_MEMBER_JOINED: 'team.member_joined',

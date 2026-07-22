@@ -149,6 +149,36 @@ export class TeamsService {
       },
     });
 
+    const createdPayload = {
+      workspaceId: team.workspaceId,
+      teamId: team.id,
+      leaderId,
+      team: {
+        id: team.id,
+        name: team.name,
+        domain: team.domain,
+        projectTitle: team.projectTitle,
+        projectAbstract: team.projectAbstract,
+        maxMembers: team.maxMembers,
+        isOpen: team.isOpen,
+      },
+    };
+
+    this.publishTeamEvent(
+      DomainEvents.TEAM_CREATED,
+      leaderId,
+      { type: 'user', id: leaderId },
+      createdPayload,
+      team.id,
+    );
+    this.publishTeamEvent(
+      DomainEvents.TEAM_CREATED,
+      leaderId,
+      { type: 'workspace', id: team.workspaceId },
+      createdPayload,
+      team.id,
+    );
+
     return team;
   }
 
@@ -552,6 +582,13 @@ async approveRequest(
     resolvedPayload,
     approvedRequest.id,
   );
+  this.publishTeamEvent(
+    DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+    leaderId,
+    { type: 'user', id: approvedRequest.authUserId },
+    resolvedPayload,
+    approvedRequest.id,
+  );
 
   for (const cancelled of cancelledRequests) {
     const cancelledPayload: TeamJoinRequestResolvedPayload = {
@@ -569,6 +606,13 @@ async approveRequest(
       cancelledPayload,
       cancelled.id,
     );
+    this.publishTeamEvent(
+      DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+      leaderId,
+      { type: 'user', id: cancelled.authUserId },
+      cancelledPayload,
+      cancelled.id,
+    );
   }
 
   const joinedPayload: TeamMemberJoinedPayload = {
@@ -580,6 +624,13 @@ async approveRequest(
     DomainEvents.TEAM_MEMBER_JOINED,
     leaderId,
     { type: 'team', id: team.id },
+    joinedPayload,
+    member.id,
+  );
+  this.publishTeamEvent(
+    DomainEvents.TEAM_MEMBER_JOINED,
+    leaderId,
+    { type: 'user', id: approvedRequest.authUserId },
     joinedPayload,
     member.id,
   );
@@ -664,6 +715,13 @@ this.publishTeamEvent(
   DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
   leaderId,
   { type: 'team', id: team.id },
+  resolvedPayload,
+  requestId,
+);
+this.publishTeamEvent(
+  DomainEvents.TEAM_JOIN_REQUEST_RESOLVED,
+  leaderId,
+  { type: 'user', id: request.authUserId },
   resolvedPayload,
   requestId,
 );
@@ -1063,6 +1121,7 @@ async getStudentTeamOverview(
     const payload = {
       workspaceId: updated.workspaceId,
       teamId: updated.id,
+      isProfileComplete: isTeamProfileComplete(updated),
       team: {
         id: updated.id,
         name: updated.name,

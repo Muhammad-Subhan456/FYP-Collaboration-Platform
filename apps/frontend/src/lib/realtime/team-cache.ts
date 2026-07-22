@@ -7,6 +7,7 @@ import type { JoinRequest, JoinRequestStatus, TeamMember } from "@/types/student
 
 import type {
   RealtimeJoinRequestWire,
+  RealtimeTeamCreatedPayload,
   RealtimeTeamJoinRequestReceivedPayload,
   RealtimeTeamJoinRequestResolvedPayload,
   RealtimeTeamMemberJoinedPayload,
@@ -18,6 +19,7 @@ import {
   syncStudentTeamMembers,
   touchSupervisorDashboard,
 } from "./dashboard-cache";
+import { refreshStudentTeamMembership } from "./refresh-team-membership";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -156,6 +158,14 @@ export function applyJoinRequestResolved(
   }
 
   const joinRequest = toJoinRequest(payload.joinRequest);
+
+  // Affected student (accepted / rejected / cancelled elsewhere) — refresh their
+  // team overview (pendingJoinTeamIds) and reconnect for room membership.
+  if (joinRequest.authUserId === userId) {
+    refreshStudentTeamMembership(queryClient, userId, role, workspaceId);
+    return;
+  }
+
   patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
     ...data,
     joinRequests: data.joinRequests
@@ -176,6 +186,11 @@ export function applyMemberJoined(
   const member = toTeamMember(payload.member);
 
   if (role === "STUDENT") {
+    if (member.authUserId === userId) {
+      refreshStudentTeamMembership(queryClient, userId, role, workspaceId);
+      return;
+    }
+
     patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       members: upsertMember(data.members, member),
@@ -279,6 +294,34 @@ function invalidateTeamRelatedCaches(
   });
 }
 
+export function applyTeamCreated(
+  queryClient: QueryClient,
+  userId: string,
+  role: string,
+  workspaceId: string | null,
+  payload: RealtimeTeamCreatedPayload,
+) {
+  if (
+    workspaceId &&
+    payload.workspaceId &&
+    payload.workspaceId !== workspaceId
+  ) {
+    return;
+  }
+
+  if (role === "STUDENT" && payload.leaderId === userId) {
+    refreshStudentTeamMembership(queryClient, userId, role, workspaceId);
+  }
+
+  if (role === "COORDINATOR") {
+    invalidateTeamRelatedCaches(queryClient, workspaceId);
+  }
+
+  void queryClient.invalidateQueries({
+    queryKey: ["teams", "browse"],
+  });
+}
+
 export function applyTeamUpdated(
   queryClient: QueryClient,
   userId: string,
@@ -308,11 +351,16 @@ export function applyTeamUpdated(
               ...payload.team,
             }
           : data.team,
+        isProfileComplete:
+          payload.isProfileComplete ?? data.isProfileComplete,
       }),
       { syncDashboardMembers: false },
     );
     void queryClient.invalidateQueries({
       queryKey: queryKeys.student.proposal(userId, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.student.dashboard(userId, workspaceId),
     });
   }
 

@@ -8,7 +8,7 @@ import {
 import {
   useStudentTeamMutations,
 } from "@/mutations/student";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -99,6 +99,15 @@ export default function StudentTeamPage() {
   const [isEditingTeam, setIsEditingTeam] = useState(false);
 
   const overviewQuery = useStudentTeamQuery();
+
+  // Keep optimistic join chips aligned with server pending list (clears on reject/cancel).
+  useEffect(() => {
+    const pending = overviewQuery.data?.pendingJoinTeamIds;
+    if (!pending) {
+      return;
+    }
+    setJoinedTeamIds(new Set(pending));
+  }, [overviewQuery.data?.pendingJoinTeamIds]);
 
   const browseQuery = useBrowseTeamsQuery(
     activeSearch,

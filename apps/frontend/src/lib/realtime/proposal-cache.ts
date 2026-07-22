@@ -376,17 +376,33 @@ export function applyProposalResubmitted(
   role: string,
   workspaceId: string | null,
   payload: RealtimeProposalSnapshotPayload,
+  scopeType?: string,
 ) {
-  if (role !== "STUDENT") {
+  if (role === "STUDENT") {
+    const proposal = toProposal(payload.proposal);
+    patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
+      ...data,
+      proposal,
+      hasPendingProposal: false,
+      pendingSupervisorId: null,
+    }));
+    syncStudentProposalDashboard(queryClient, userId, proposal);
     return;
   }
 
-  const proposal = toProposal(payload.proposal);
-  patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
-    ...data,
-    proposal,
-    hasPendingProposal: false,
-    pendingSupervisorId: null,
-  }));
-  syncStudentProposalDashboard(queryClient, userId, proposal);
+  if (role === "SUPERVISOR") {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.requests(userId, workspaceId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.supervisor.invitations(userId, workspaceId),
+    });
+    void touchSupervisorDashboard(queryClient, userId, undefined, workspaceId);
+
+    if (scopeType === "supervisor" || scopeType === "team") {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.supervisor.teams(userId, workspaceId),
+      });
+    }
+  }
 }

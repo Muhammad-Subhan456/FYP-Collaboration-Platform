@@ -6,6 +6,7 @@ import { TeamsModule } from '../teams/teams.module';
 
 import { RealtimeEventDispatcher } from './realtime-event-dispatcher.service';
 import { RealtimeGateway } from './realtime.gateway';
+import { RealtimeRoomMembershipService } from './realtime-room-membership.service';
 import { RealtimeRoomService } from './realtime-room.service';
 
 @Module({
@@ -18,6 +19,7 @@ import { RealtimeRoomService } from './realtime-room.service';
     RealtimeGateway,
     RealtimeRoomService,
     RealtimeEventDispatcher,
+    RealtimeRoomMembershipService,
   ],
   exports: [RealtimeGateway, RealtimeRoomService],
 })

@@ -1,3 +1,5 @@
+import type { ProjectNature } from "@/types/student";
+
 export type RealtimeScopeType =
   | "user"
   | "team"
@@ -93,6 +95,7 @@ export const RealtimeEvents = {
   PROPOSAL_INTEREST_RECEIVED: "proposal.interest_received",
   PROPOSAL_INTEREST_DISMISSED: "proposal.interest_dismissed",
   PROPOSAL_RESUBMITTED: "proposal.resubmitted",
+  TEAM_CREATED: "team.created",
   TEAM_JOIN_REQUEST_RECEIVED: "team.join_request_received",
   TEAM_JOIN_REQUEST_RESOLVED: "team.join_request_resolved",
   TEAM_MEMBER_JOINED: "team.member_joined",
@@ -341,13 +344,35 @@ export interface RealtimeTeamRoleUpdatedPayload {
 export interface RealtimeTeamUpdatedPayload {
   workspaceId: string;
   teamId: string;
+  isProfileComplete?: boolean;
+  team: {
+    id: string;
+    name: string;
+    domain: string;
+    domains?: string[];
+    otherDomain?: string | null;
+    nature?: ProjectNature | null;
+    sdgs?: number[];
+    sdgJustification?: string | null;
+    previousObjectives?: string | null;
+    projectTitle: string | null;
+    projectAbstract: string | null;
+    proposalPdfUrl: string | null;
+    maxMembers: number;
+    isOpen: boolean;
+  };
+}
+
+export interface RealtimeTeamCreatedPayload {
+  workspaceId: string;
+  teamId: string;
+  leaderId: string;
   team: {
     id: string;
     name: string;
     domain: string;
     projectTitle: string | null;
     projectAbstract: string | null;
-    proposalPdfUrl: string | null;
     maxMembers: number;
     isOpen: boolean;
   };
@@ -369,6 +394,7 @@ export const PROPOSAL_EVENTS = [
 ] as const;
 
 export const TEAM_EVENTS = [
+  RealtimeEvents.TEAM_CREATED,
   RealtimeEvents.TEAM_JOIN_REQUEST_RECEIVED,
   RealtimeEvents.TEAM_JOIN_REQUEST_RESOLVED,
   RealtimeEvents.TEAM_MEMBER_JOINED,

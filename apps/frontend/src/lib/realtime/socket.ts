@@ -127,3 +127,26 @@ export function disconnectRealtime() {
     activeWorkspaceId = null;
   }
 }
+
+/**
+ * Force a fresh socket connection so server re-resolves team/supervisor rooms
+ * after membership changes (team create, join accept, proposal accept).
+ */
+export function reconnectRealtime(
+  token: string,
+  userId: string,
+  role: string,
+  workspaceId: string | null | undefined,
+  queryClient: QueryClient,
+  authCallbacks?: AuthMembershipCallbacks | null,
+) {
+  disconnectRealtime();
+  return connectRealtime(
+    token,
+    userId,
+    role,
+    workspaceId,
+    queryClient,
+    authCallbacks,
+  );
+}

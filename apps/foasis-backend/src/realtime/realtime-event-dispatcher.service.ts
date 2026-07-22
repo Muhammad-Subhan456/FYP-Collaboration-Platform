@@ -67,6 +67,7 @@ export class RealtimeEventDispatcher {
     this.dispatch(event);
   }
 
+  @OnEvent(DomainEvents.TEAM_CREATED)
   @OnEvent(DomainEvents.TEAM_JOIN_REQUEST_RECEIVED)
   @OnEvent(DomainEvents.TEAM_JOIN_REQUEST_RESOLVED)
   @OnEvent(DomainEvents.TEAM_MEMBER_JOINED)

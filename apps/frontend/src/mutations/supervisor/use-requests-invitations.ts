@@ -3,6 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/axios";
+import { getStoredToken } from "@/lib/auth";
+import { reconnectRealtime } from "@/lib/realtime/socket";
+import { useAuth } from "@/providers/auth-provider";
 import { proposalService } from "@/services/proposal.service";
 import type { InvitationBrowseTarget } from "@/services/supervisor-page.service";
 
@@ -13,6 +16,7 @@ import {
 
 export function useSupervisorRequestMutations() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const acceptMutation = useMutation({
     mutationFn: (proposalId: string) =>
@@ -20,6 +24,18 @@ export function useSupervisorRequestMutations() {
     onSuccess: () => {
       toast.success("Proposal accepted — you are now assigned as supervisor");
       invalidateSupervisorRequests(queryClient);
+
+      // Reconnect so the supervisor joins team:{id} for deliverables/work-stream.
+      const token = getStoredToken();
+      if (token && user?.userId) {
+        reconnectRealtime(
+          token,
+          user.userId,
+          user.role,
+          user.workspaceId ?? null,
+          queryClient,
+        );
+      }
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { getStoredToken } from "@/lib/auth";
+import { reconnectRealtime } from "@/lib/realtime/socket";
+
 import {
   applyProposalInterest,
   applyProposalInterestDismissed,
@@ -44,6 +47,14 @@ export function handleProposalEvent(
         envelope.payload as Parameters<typeof applyProposalSnapshot>[5],
         { removeFromSupervisorQueue: scopeType === "supervisor" },
       );
+
+      // Ensure accepting supervisor joins team room for deliverables/announcements.
+      if (role === "SUPERVISOR" && envelope.actorId === userId) {
+        const token = getStoredToken();
+        if (token) {
+          reconnectRealtime(token, userId, role, workspaceId, queryClient);
+        }
+      }
       break;
     }
     case RealtimeEvents.PROPOSAL_REJECTED: {
@@ -96,6 +107,7 @@ export function handleProposalEvent(
         role,
         workspaceId,
         envelope.payload as Parameters<typeof applyProposalResubmitted>[4],
+        scopeType,
       );
       break;
     }

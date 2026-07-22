@@ -6,6 +6,7 @@ import {
   applyMemberJoined,
   applyMemberLeft,
   applyRoleUpdated,
+  applyTeamCreated,
   applyTeamDeleted,
   applyTeamUpdated,
 } from "../team-cache";
@@ -20,6 +21,16 @@ export function handleTeamEvent(
   envelope: RealtimeEventEnvelope,
 ) {
   switch (envelope.event) {
+    case RealtimeEvents.TEAM_CREATED: {
+      applyTeamCreated(
+        queryClient,
+        userId,
+        role,
+        workspaceId,
+        envelope.payload as Parameters<typeof applyTeamCreated>[4],
+      );
+      break;
+    }
     case RealtimeEvents.TEAM_JOIN_REQUEST_RECEIVED: {
       if (envelope.actorId === userId) {
         break;
@@ -34,9 +45,8 @@ export function handleTeamEvent(
       break;
     }
     case RealtimeEvents.TEAM_JOIN_REQUEST_RESOLVED: {
-      if (envelope.actorId === userId) {
-        break;
-      }
+      // Do not skip actorId === userId: the affected student may be the actor
+      // only for leader-side resolves; requester updates use authUserId match.
       applyJoinRequestResolved(
         queryClient,
         userId,
