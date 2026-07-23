@@ -2,6 +2,7 @@
 
 import { LogOut, Menu, User } from "lucide-react";
 
+import { PageInfoButton } from "@/components/common/page-info-button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WorkspaceSwitcher } from "@/components/auth/workspace-switcher";
+import type { PageGuidance } from "@/constants/page-copy";
 import { useAuth } from "@/providers/auth-provider";
 import { openMobileMenu } from "@/store/slices/ui-slice";
 import { useAppDispatch } from "@/store/hooks";
@@ -22,6 +24,7 @@ import type { UserRole } from "@/types";
 interface DashboardHeaderProps {
   title: string;
   description?: string;
+  guidance?: PageGuidance;
   role: UserRole;
   unreadCount?: number;
 }
@@ -29,6 +32,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({
   title,
   description,
+  guidance,
   role,
   unreadCount,
 }: DashboardHeaderProps) {
@@ -44,29 +48,35 @@ export function DashboardHeader({
       .toUpperCase() ?? "U";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden"
+          className="shrink-0 lg:hidden"
           onClick={() => dispatch(openMobileMenu())}
+          aria-label="Open navigation menu"
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
-            {title}
-          </h1>
-          {description && (
-            <p className="hidden text-sm text-muted-foreground sm:block">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1">
+            <h1 className="truncate text-lg font-semibold tracking-tight sm:text-xl">
+              {title}
+            </h1>
+            {guidance ? (
+              <PageInfoButton title={title} guidance={guidance} />
+            ) : null}
+          </div>
+          {description ? (
+            <p className="hidden truncate text-sm text-muted-foreground sm:block">
               {description}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         <WorkspaceSwitcher />
         <ThemeToggle />
         <NotificationBell role={role} unreadCount={unreadCount} />
@@ -77,7 +87,7 @@ export function DashboardHeader({
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="text-xs">{initials}</AvatarFallback>
               </Avatar>
-              <span className="hidden max-w-[120px] truncate text-sm font-medium sm:inline">
+              <span className="hidden max-w-[120px] truncate text-sm font-medium md:inline">
                 {profile?.fullName ?? user?.email}
               </span>
             </Button>

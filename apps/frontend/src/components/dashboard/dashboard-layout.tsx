@@ -15,6 +15,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 import { closeMobileMenu, selectMobileMenuOpen } from "@/store/slices/ui-slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import type { PageGuidance } from "@/constants/page-copy";
 import type { UserRole } from "@/types";
 
 interface DashboardLayoutProps {
@@ -23,6 +24,7 @@ interface DashboardLayoutProps {
   roleLabel: string;
   title: string;
   description?: string;
+  guidance?: PageGuidance;
 }
 
 export function DashboardLayout({
@@ -31,6 +33,7 @@ export function DashboardLayout({
   roleLabel,
   title,
   description,
+  guidance,
 }: DashboardLayoutProps) {
   const dispatch = useAppDispatch();
   const mobileOpen = useAppSelector(selectMobileMenuOpen);
@@ -49,7 +52,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-svh overflow-hidden bg-background">
       <Sidebar items={navItems} roleLabel={roleLabel} unreadCount={unreadCount} />
 
       {mobileOpen && (
@@ -59,7 +62,7 @@ export function DashboardLayout({
             onClick={() => dispatch(closeMobileMenu())}
           />
           <div className="absolute left-0 top-0 flex h-full w-72 flex-col bg-card shadow-xl">
-            <div className="flex h-16 items-center justify-between border-b px-4">
+            <div className="flex h-16 shrink-0 items-center justify-between border-b px-4">
               <Logo />
               <Button
                 variant="ghost"
@@ -69,7 +72,7 @@ export function DashboardLayout({
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <nav className="flex-1 space-y-1 p-3">
+            <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
               {navItems.map((item) => {
                 const isActive =
                   pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -79,7 +82,7 @@ export function DashboardLayout({
                     href={item.href}
                     onClick={() => dispatch(closeMobileMenu())}
                     className={cn(
-                      "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium",
+                      "flex min-h-11 cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-accent",
@@ -99,14 +102,17 @@ export function DashboardLayout({
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <DashboardHeader
           title={title}
           description={description}
+          guidance={guidance}
           role={role}
           unreadCount={unreadCount}
         />
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-8 sm:p-6 sm:pb-10">
+          {children}
+        </main>
       </div>
     </div>
   );

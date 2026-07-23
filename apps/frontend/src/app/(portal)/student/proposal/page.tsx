@@ -111,7 +111,7 @@ export default function StudentProposalPage() {
     return (
       <EmptyState
         title="Join a team first"
-        description="You need to be part of a team before viewing the proposal."
+        description="Join or create a team to manage your proposal."
         action={
           <Button asChild>
             <Link href="/student/team">Go to Team</Link>
@@ -128,8 +128,8 @@ export default function StudentProposalPage() {
           <CardHeader>
             <CardTitle className="text-base">Read-only access</CardTitle>
             <CardDescription>
-              You can view your team&apos;s proposal and its current status.
-              Only the team leader can send or manage supervision requests.
+              You can view the proposal status. Only the team leader can send
+              requests to supervisors.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -143,8 +143,8 @@ export default function StudentProposalPage() {
               Team Profile Incomplete
             </CardTitle>
             <CardDescription>
-              Your Team Profile is incomplete. Please complete your project
-              information before sending a proposal to a supervisor.
+              Complete your project details before sending a proposal to a
+              supervisor.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -201,14 +201,13 @@ export default function StudentProposalPage() {
           )}
           {proposal && (
             <p className="text-xs text-muted-foreground">
-              Proposal record created {formatDate(proposal.createdAt)}
+              Proposal created {formatDate(proposal.createdAt)}
             </p>
           )}
           {isWorkflowLocked && (
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              Proposal workflow is locked after supervisor acceptance. Project
-              information can only be edited from the Team page before
-              acceptance.
+              After a supervisor accepts, project details can no longer be
+              edited here. Update them on the Team page before acceptance.
             </p>
           )}
           {supervisorName && (
@@ -256,7 +255,7 @@ export default function StudentProposalPage() {
               Proposal Request History
             </CardTitle>
             <CardDescription>
-              Previous supervision requests sent by your team
+              Earlier requests sent by your team
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -337,9 +336,8 @@ export default function StudentProposalPage() {
                 Supervisor Interest
               </CardTitle>
               <CardDescription>
-                Supervisors who expressed interest in supervising your project.
-                Send a proposal to proceed — only the supervisor can accept or
-                reject.
+                Supervisors interested in your project. Send a proposal to
+                continue; they decide whether to accept.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -385,8 +383,8 @@ export default function StudentProposalPage() {
               Browse Supervisors
             </CardTitle>
             <CardDescription>
-              Compare supervisor profiles and submit your proposal. Each
-              submission expires in 5 minutes if not reviewed.
+              Review supervisors and send your proposal. Unreviewed requests
+              expire after 5 minutes.
             </CardDescription>
           </CardHeader>
           <CardContent>

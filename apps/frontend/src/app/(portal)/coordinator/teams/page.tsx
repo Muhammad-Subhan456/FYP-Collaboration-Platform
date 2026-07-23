@@ -135,12 +135,6 @@ export default function CoordinatorTeamsPage() {
       />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">All Teams</h2>
-          <p className="text-sm text-muted-foreground">
-            Browse every FYP team in the program
-          </p>
-        </div>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input

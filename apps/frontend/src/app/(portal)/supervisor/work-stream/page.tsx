@@ -268,7 +268,7 @@ export default function SupervisorWorkStreamPage() {
     return (
       <EmptyState
         title="No supervised teams"
-        description="Assign teams before managing the work stream."
+        description="You need supervised teams before managing announcements and deliverables."
       />
     );
   }

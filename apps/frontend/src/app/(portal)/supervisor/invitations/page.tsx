@@ -71,10 +71,9 @@ export default function SupervisorInvitationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Browse Teams</h2>
         <p className="text-sm text-muted-foreground">
-          Express interest in teams you would like to supervise. Teams submit
-          proposals to you — you accept or reject from Proposal Reviews.
+          Show interest in teams you would like to supervise. They can then send
+          you a proposal to review.
         </p>
         {atCapacity && (
           <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
@@ -104,7 +103,7 @@ export default function SupervisorInvitationsPage() {
           {filteredTargets.length === 0 ? (
             <EmptyState
               title="No teams available"
-              description="There are no teams available for invitations right now."
+              description="No teams are open for interest right now."
             />
           ) : (
             <div className="space-y-3">
@@ -186,8 +185,8 @@ export default function SupervisorInvitationsPage() {
         <TabsContent value="sent" className="space-y-3">
           {invitations.length === 0 ? (
             <EmptyState
-              title="No invitations sent"
-              description="Browse teams and send invitations to teams that are available."
+              title="No interest expressed yet"
+              description="Browse teams and express interest where available."
             />
           ) : (
             invitations.map((invitation) => (

@@ -59,16 +59,17 @@ export function WorkspaceSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="hidden max-w-[260px] gap-2 lg:flex"
+          className="max-w-[12rem] gap-2 px-2 sm:max-w-[16rem] md:max-w-[20rem]"
           disabled={switching}
+          aria-label="Switch workspace or role"
         >
           <Building2 className="h-4 w-4 shrink-0" />
-          <span className="truncate text-left">
+          <span className="hidden truncate text-left sm:inline">
             {current
               ? `${current.workspaceName} · ${current.role}`
               : "Select workspace"}
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="hidden h-4 w-4 shrink-0 opacity-50 sm:inline" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">

@@ -81,3 +81,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Interaction affordances — clickable controls show pointer consistently */
+a[href],
+button:not(:disabled),
+summary,
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([data-disabled]),
+[role="menuitem"]:not([data-disabled]),
+[role="option"]:not([data-disabled]),
+[role="checkbox"]:not([data-disabled]),
+[role="switch"]:not([data-disabled]),
+[role="combobox"]:not([data-disabled]),
+[role="radio"]:not([data-disabled]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+[data-disabled] {
+  cursor: not-allowed;
+}

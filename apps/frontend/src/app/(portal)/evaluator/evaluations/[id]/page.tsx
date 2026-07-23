@@ -19,6 +19,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
@@ -203,8 +211,8 @@ export default function EvaluatorEvaluationDetailPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             {evaluation.deliverable.phase?.name} · Max{" "}
-            {evaluation.template.totalMarks} marks · Weightage{" "}
-            {evaluation.template.weightagePercent}%
+            {evaluation.template.totalMarks} marks ·{" "}
+            {evaluation.template.weightagePercent}% of phase
           </p>
         </div>
         <Badge className="ml-auto">{evaluation.status}</Badge>
@@ -234,95 +242,95 @@ export default function EvaluatorEvaluationDetailPage() {
         <CardHeader>
           <CardTitle>Marking sheet</CardTitle>
           <CardDescription>
-            Enter marks for each rubric criterion. Totals update automatically.
+            Enter marks for each criterion. Totals update as you go.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-[960px] text-sm">
-              <thead className="border-b bg-muted/40">
-                <tr>
-                  <th className="px-3 py-2 text-left">Student</th>
-                  <th className="px-3 py-2 text-left">Rubric criterion</th>
-                  <th className="px-3 py-2 text-left">Maximum marks</th>
-                  <th className="px-3 py-2 text-left">Awarded marks</th>
-                  <th className="px-3 py-2 text-left">Total</th>
-                  <th className="px-3 py-2 text-left">Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scores.map((studentScore) => {
-                  const studentName = getDisplayName(
-                    profilesQuery.data,
-                    studentScore.studentId,
-                  );
-                  const total =
-                    totalByStudentId.get(studentScore.studentId) ?? 0;
-                  const rowCount = rubricCriteria.length;
+          <Table minWidth={960}>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Student</TableHead>
+                <TableHead>Criterion</TableHead>
+                <TableHead>Maximum marks</TableHead>
+                <TableHead>Awarded marks</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Remarks</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {scores.map((studentScore) => {
+                const studentName = getDisplayName(
+                  profilesQuery.data,
+                  studentScore.studentId,
+                );
+                const total =
+                  totalByStudentId.get(studentScore.studentId) ?? 0;
+                const rowCount = rubricCriteria.length;
 
-                  return rubricCriteria.map((criterion, criterionIndex) => (
-                    <tr
-                      key={`${studentScore.studentId}:${criterion.id}`}
-                      className="border-b align-top"
-                    >
-                      {criterionIndex === 0 ? (
-                        <td
-                          className="px-3 py-2 font-medium"
+                return rubricCriteria.map((criterion, criterionIndex) => (
+                  <TableRow
+                    key={`${studentScore.studentId}:${criterion.id}`}
+                    className="align-top"
+                  >
+                    {criterionIndex === 0 ? (
+                      <TableCell
+                        className="font-medium"
+                        rowSpan={rowCount}
+                      >
+                        {studentName}
+                      </TableCell>
+                    ) : null}
+                    <TableCell>{criterion.title}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {criterion.maxMarks}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={criterion.maxMarks}
+                        disabled={isReadOnly}
+                        className="h-8 w-24"
+                        value={
+                          studentScore.criterionScores[criterion.id] ?? 0
+                        }
+                        onChange={(event) =>
+                          updateCriterionScore(
+                            studentScore.studentId,
+                            criterion.id,
+                            Number(event.target.value),
+                          )
+                        }
+                      />
+                    </TableCell>
+                    {criterionIndex === 0 ? (
+                      <>
+                        <TableCell
+                          className="font-medium tabular-nums"
                           rowSpan={rowCount}
                         >
-                          {studentName}
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-2">{criterion.title}</td>
-                      <td className="px-3 py-2">{criterion.maxMarks}</td>
-                      <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={criterion.maxMarks}
-                          disabled={isReadOnly}
-                          className="h-8 w-24"
-                          value={
-                            studentScore.criterionScores[criterion.id] ?? 0
-                          }
-                          onChange={(event) =>
-                            updateCriterionScore(
-                              studentScore.studentId,
-                              criterion.id,
-                              Number(event.target.value),
-                            )
-                          }
-                        />
-                      </td>
-                      {criterionIndex === 0 ? (
-                        <>
-                          <td
-                            className="px-3 py-2 font-medium"
-                            rowSpan={rowCount}
-                          >
-                            {total}/{evaluation.template.totalMarks}
-                          </td>
-                          <td className="px-3 py-2" rowSpan={rowCount}>
-                            <Textarea
-                              disabled={isReadOnly}
-                              className="min-h-[96px]"
-                              value={studentScore.remarks}
-                              onChange={(event) =>
-                                updateRemarks(
-                                  studentScore.studentId,
-                                  event.target.value,
-                                )
-                              }
-                            />
-                          </td>
-                        </>
-                      ) : null}
-                    </tr>
-                  ));
-                })}
-              </tbody>
-            </table>
-          </div>
+                          {total}/{evaluation.template.totalMarks}
+                        </TableCell>
+                        <TableCell rowSpan={rowCount}>
+                          <Textarea
+                            disabled={isReadOnly}
+                            className="min-h-[96px]"
+                            value={studentScore.remarks}
+                            onChange={(event) =>
+                              updateRemarks(
+                                studentScore.studentId,
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </TableCell>
+                      </>
+                    ) : null}
+                  </TableRow>
+                ));
+              })}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

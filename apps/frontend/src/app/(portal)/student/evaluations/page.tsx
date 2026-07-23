@@ -62,14 +62,14 @@ export default function StudentEvaluationsPage() {
         <div>
           <h2 className="text-lg font-semibold">Deliverable evaluations</h2>
           <p className="text-sm text-muted-foreground">
-            Rubric marking progress for your team&apos;s finalized submissions
+            Progress on marking for your submitted work
           </p>
         </div>
 
         {deliverableEvaluations.length === 0 ? (
           <EmptyState
-            title="No deliverable evaluations yet"
-            description="Status appears here once a coordinator assigns evaluators to your finalized submissions."
+            title="No evaluations yet"
+            description="You will see progress here after evaluators are assigned."
           />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -110,14 +110,14 @@ export default function StudentEvaluationsPage() {
         <div>
           <h2 className="text-lg font-semibold">Scheduled events</h2>
           <p className="text-sm text-muted-foreground">
-            Viva and evaluation events scheduled by your coordinator
+            Vivas and other events set by your coordinator
           </p>
         </div>
 
         {evaluations.length === 0 ? (
           <EmptyState
             title="No evaluations scheduled"
-            description="Your coordinator will schedule evaluations when the time comes."
+            description="Your coordinator will schedule these when ready."
           />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">

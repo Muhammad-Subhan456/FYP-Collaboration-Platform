@@ -176,10 +176,10 @@ export default function CoordinatorUsersPage() {
     <div className="space-y-6">
       <CoordinatorInvitePanel />
       <div>
-        <h2 className="text-lg font-semibold">User Management</h2>
+        <h2 className="text-lg font-semibold">Members</h2>
         <p className="text-sm text-muted-foreground">
-          Manage workspace memberships by role. Users with multiple roles appear
-          once per role.
+          Manage members by role. People with more than one role are listed once
+          for each.
         </p>
       </div>
 
@@ -211,8 +211,8 @@ export default function CoordinatorUsersPage() {
         <CardContent className="space-y-3">
           {users.length === 0 ? (
             <EmptyState
-              title="No memberships found"
-              description="No memberships match your search or filter."
+              title="No members found"
+              description="No members match your search or filter."
             />
           ) : (
             users.map((user) => {

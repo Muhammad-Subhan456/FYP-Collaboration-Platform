@@ -24,3 +24,4 @@ uploads/
 # MD Files
 API_TESTING.md
 BACKEND_STATUS.md
+.cursor/

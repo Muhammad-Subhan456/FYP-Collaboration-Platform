@@ -84,15 +84,11 @@ export default function CoordinatorProposalsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Proposals Oversight</h2>
-          <p className="text-sm text-muted-foreground">
-            Monitor proposal statuses and supervisor decisions across all teams.
-            {awaitingSupervisorCount > 0 && (
-              <span className="ml-1 font-medium text-amber-600">
-                · {awaitingSupervisorCount} awaiting supervisor action
-              </span>
-            )}
-          </p>
+          {awaitingSupervisorCount > 0 ? (
+            <p className="text-sm font-medium text-amber-600">
+              {awaitingSupervisorCount} awaiting supervisor action
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative w-full sm:w-56">

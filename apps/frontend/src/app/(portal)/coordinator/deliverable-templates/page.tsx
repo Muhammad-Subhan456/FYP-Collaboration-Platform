@@ -228,20 +228,12 @@ export default function CoordinatorDeliverableTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Deliverable Templates</h1>
-          <p className="text-sm text-muted-foreground">
-            Define deliverables with dynamic rubrics. Supervisors publish them to teams.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
-          <Button onClick={openCreate} disabled={phases.length === 0}>
-            <Plus className="mr-2 h-4 w-4" />
-            New template
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
+        <Button onClick={openCreate} disabled={phases.length === 0}>
+          <Plus className="mr-2 h-4 w-4" />
+          New template
+        </Button>
       </div>
 
       {phases.length === 0 ? (
@@ -254,7 +246,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
           <CardHeader>
             <CardTitle>Templates</CardTitle>
             <CardDescription>
-              Templates lock after a supervisor publishes them.
+              Templates can&apos;t be edited after a supervisor publishes them.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

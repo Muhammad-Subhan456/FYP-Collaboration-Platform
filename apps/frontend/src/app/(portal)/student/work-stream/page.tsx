@@ -172,7 +172,7 @@ export default function StudentWorkStreamPage() {
     return (
       <EmptyState
         title="No team yet"
-        description="Join a team to access your collaboration work stream."
+        description="Join a team to view announcements and deliverables."
         action={
           <Button asChild>
             <Link href="/student/team">Go to Team</Link>
@@ -464,7 +464,7 @@ export default function StudentWorkStreamPage() {
         data.announcements.length === 0 ? (
           <EmptyState
             title="No announcements yet"
-            description="Your supervisor has not published any announcements."
+            description="No announcements from your supervisor yet."
           />
         ) : (
           <div className="space-y-3">
@@ -508,7 +508,7 @@ export default function StudentWorkStreamPage() {
       ) : data.deliverables.length === 0 ? (
         <EmptyState
           title="No deliverables yet"
-          description="Your supervisor has not assigned any deliverables."
+          description="No deliverables assigned yet."
         />
       ) : (
         <div className="space-y-3">

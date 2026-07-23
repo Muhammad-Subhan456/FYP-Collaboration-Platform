@@ -37,13 +37,7 @@ export default function SuperAdminSystemHealthPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">System Health</h2>
-          <p className="text-sm text-muted-foreground">
-            Platform status for FOASIS backend and database
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <Button
           variant="outline"
           onClick={() => pageQuery.refetch()}

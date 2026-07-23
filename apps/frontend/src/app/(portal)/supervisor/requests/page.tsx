@@ -97,17 +97,16 @@ export default function SupervisorRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Proposal Reviews</h2>
         <p className="text-sm text-muted-foreground">
-          Accept or reject proposals submitted to you. You are the sole authority
-          for supervision assignment.
+          Accept or decline proposals sent to you. Your decision assigns
+          supervision.
         </p>
       </div>
 
       {proposals.length === 0 ? (
         <EmptyState
           title="No pending proposals"
-          description="When a team submits a proposal to you, it will appear here for review."
+          description="Proposals from teams appear here for review."
         />
       ) : (
         <div className="space-y-4">

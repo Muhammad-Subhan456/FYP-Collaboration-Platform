@@ -6,6 +6,7 @@ import {
   Award,
   Bell,
   Calendar,
+  CalendarDays,
   CheckSquare,
   FileText,
   Flag,
@@ -40,6 +41,7 @@ const iconMap: Record<string, LucideIcon> = {
   Package,
   Upload,
   Calendar,
+  CalendarDays,
   Award,
   Bell,
   User,
@@ -68,16 +70,16 @@ export function Sidebar({ items, roleLabel, unreadCount = 0 }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card/50 lg:flex">
-      <div className="flex h-16 items-center border-b border-border px-6">
+    <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border bg-card/50 lg:flex">
+      <div className="flex h-16 shrink-0 items-center border-b border-border px-6">
         <Logo />
       </div>
-      <div className="px-4 py-3">
+      <div className="shrink-0 px-4 py-3">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {roleLabel}
         </span>
       </div>
-      <nav className="flex-1 space-y-1 px-3 pb-6">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-6">
         {items.map((item) => {
           const Icon = iconMap[item.icon] ?? LayoutDashboard;
           const isActive =
@@ -88,7 +90,7 @@ export function Sidebar({ items, roleLabel, unreadCount = 0 }: SidebarProps) {
               key={item.title}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",

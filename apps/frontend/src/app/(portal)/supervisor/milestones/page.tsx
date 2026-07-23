@@ -103,7 +103,7 @@ export default function SupervisorMilestonesPage() {
     return (
       <EmptyState
         title="No supervised teams"
-        description="Team issues appear once you supervise at least one team."
+        description="Team tasks appear once you supervise a team."
       />
     );
   }
@@ -112,10 +112,6 @@ export default function SupervisorMilestonesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <h2 className="text-lg font-semibold">Milestones</h2>
-          <p className="text-sm text-muted-foreground">
-            Read-only view of team work — observe progress and leave feedback
-          </p>
           <div className="max-w-md">
             {teamFilterId && (
               <TeamFilterSelect
@@ -168,8 +164,8 @@ export default function SupervisorMilestonesPage() {
 
       {filteredIssues.length === 0 ? (
         <EmptyState
-          title={`No ${filter.replace(/_/g, " ")} issues`}
-          description="When team members create work items, they will appear here."
+          title={`No ${filter.replace(/_/g, " ")} tasks`}
+          description="Tasks created by the team appear here."
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">

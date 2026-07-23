@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { getNavForRole } from "@/constants/navigation";
+import { getPageDescription, getPageGuidance } from "@/constants/page-copy";
 import { ROLE_ROUTES } from "@/constants/routes";
 import { getGreeting } from "@/hooks/use-profiles";
 import { useAuth } from "@/providers/auth-provider";
@@ -21,25 +22,18 @@ export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
   const router = useRouter();
   const { user, profile, isLoading } = useAuth();
   const navItems = getNavForRole(role);
-  const current = navItems.find((item) => item.href === pathname);
-  const title = current?.title ?? "Dashboard";
+  const current = navItems.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
+  const title =
+    current?.title ??
+    (pathname.includes("/evaluations/") ? "Evaluation" : "Dashboard");
   const greeting = getGreeting(profile?.fullName);
-  const description =
-    pathname.endsWith("/dashboard")
-      ? greeting
-      : role === "STUDENT"
-        ? "Manage your FOASIS journey"
-        : role === "SUPERVISOR"
-          ? "Supervise teams and review work on FOASIS"
-          : role === "COORDINATOR"
-            ? pathname.endsWith("/profile")
-              ? "Manage your coordinator profile"
-              : "Oversee the FOASIS program"
-            : role === "EVALUATOR"
-              ? pathname.endsWith("/profile")
-                ? "Manage your evaluator profile"
-                : "Complete assigned evaluations on FOASIS"
-              : "Manage FOASIS workspaces";
+  const pageDescription = getPageDescription(pathname);
+  const description = pathname.endsWith("/dashboard")
+    ? greeting
+    : pageDescription;
+  const guidance = getPageGuidance(pathname);
 
   useEffect(() => {
     if (isLoading || !user?.role) return;
@@ -58,6 +52,7 @@ export function RoleLayout({ children, role, roleLabel }: RoleLayoutProps) {
       roleLabel={roleLabel}
       title={title}
       description={description}
+      guidance={guidance}
     >
       {children}
     </DashboardLayout>

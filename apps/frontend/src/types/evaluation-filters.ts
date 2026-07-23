@@ -26,6 +26,12 @@ export interface EvaluatorListFilters extends ResultsFilters {
   [key: string]: string;
 }
 
+/** Coordinator Submissions / Evaluations list filters (no submission status). */
+export interface CoordinatorListFilters extends ResultsFilters {
+  evaluationStatus: EvaluationFilterStatus;
+  [key: string]: string;
+}
+
 export const EMPTY_RESULTS_FILTERS: ResultsFilters = {
   phaseId: ALL_FILTER_VALUE,
   templateId: ALL_FILTER_VALUE,
@@ -39,6 +45,11 @@ export const EMPTY_EVALUATOR_FILTERS: EvaluatorListFilters = {
   ...EMPTY_RESULTS_FILTERS,
   evaluationStatus: ALL_FILTER_VALUE,
   submissionStatus: ALL_FILTER_VALUE,
+};
+
+export const EMPTY_COORDINATOR_LIST_FILTERS: CoordinatorListFilters = {
+  ...EMPTY_RESULTS_FILTERS,
+  evaluationStatus: ALL_FILTER_VALUE,
 };
 
 export type UnifiedFilterField =

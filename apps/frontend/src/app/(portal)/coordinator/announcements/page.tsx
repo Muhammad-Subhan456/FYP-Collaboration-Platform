@@ -150,13 +150,7 @@ export default function CoordinatorAnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Global Announcements</h2>
-          <p className="text-sm text-muted-foreground">
-            Publish workspace announcements with audience targeting and attachments
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           New announcement
@@ -166,7 +160,7 @@ export default function CoordinatorAnnouncementsPage() {
       {announcements.length === 0 ? (
         <EmptyState
           title="No announcements yet"
-          description="Create your first workspace announcement."
+          description="Create your first program announcement."
           action={
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4" />

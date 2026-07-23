@@ -19,6 +19,7 @@ const statusStyles: Record<string, string> = {
   UNASSIGNED: "bg-slate-500/15 text-slate-600",
   IN_PROGRESS: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
   OPEN: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  COMPLETE: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   COMPLETED: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   TODO: "bg-slate-500/15 text-slate-700 dark:text-slate-300",
   DONE: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -33,6 +34,10 @@ const statusStyles: Record<string, string> = {
   FINAL_REPORT: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   PRESENTATION: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-400",
   OTHER: "bg-slate-500/15 text-slate-600",
+  UPCOMING: "bg-slate-500/15 text-slate-700 dark:text-slate-300",
+  DUE_SOON: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  OVERDUE: "bg-red-500/15 text-red-700 dark:text-red-400",
+  CLOSED: "bg-slate-500/15 text-slate-600",
 };
 
 interface StatusBadgeProps {

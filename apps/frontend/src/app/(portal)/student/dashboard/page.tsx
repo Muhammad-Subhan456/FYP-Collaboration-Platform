@@ -72,7 +72,7 @@ export default function StudentDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Team Information</CardTitle>
-              <CardDescription>Your current FYP team</CardDescription>
+              <CardDescription>Your project team</CardDescription>
             </div>
             {team && (
               <Button variant="ghost" size="sm" asChild>
@@ -192,7 +192,7 @@ export default function StudentDashboardPage() {
             <div>
               <CardTitle>Upcoming Evaluations</CardTitle>
               <CardDescription>
-                Deliverable evaluations and scheduled events
+                Upcoming marking and viva dates
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="shrink-0" asChild>

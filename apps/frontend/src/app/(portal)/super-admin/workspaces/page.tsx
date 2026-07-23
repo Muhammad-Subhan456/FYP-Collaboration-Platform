@@ -158,13 +158,7 @@ export default function SuperAdminWorkspacesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Workspaces</h2>
-          <p className="text-sm text-muted-foreground">
-            Create and manage independent FOASIS institutions
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -182,7 +176,7 @@ export default function SuperAdminWorkspacesPage() {
       {sortedWorkspaces.length === 0 ? (
         <EmptyState
           title="No workspaces yet"
-          description="Create the first workspace to onboard a coordinator."
+          description="Create a workspace to add a coordinator."
           action={
             <Button onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4" />

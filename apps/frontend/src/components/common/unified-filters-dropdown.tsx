@@ -54,6 +54,7 @@ const EVALUATION_STATUS_OPTIONS: Array<{
   label: string;
 }> = [
   { value: ALL_FILTER_VALUE, label: "All statuses" },
+  { value: "UNASSIGNED", label: "Unassigned" },
   { value: "ASSIGNED", label: "Assigned" },
   { value: "IN_PROGRESS", label: "In progress" },
   { value: "SUBMITTED", label: "Submitted" },
@@ -208,7 +209,7 @@ export function UnifiedFiltersDropdown({
 
   return (
     <>
-      <Button variant="outline" onClick={openDialog}>
+      <Button variant="outline" size="sm" onClick={openDialog}>
         <Filter className="mr-2 h-4 w-4" />
         Filters
         {activeCount > 0 ? (
@@ -219,7 +220,7 @@ export function UnifiedFiltersDropdown({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Filters</DialogTitle>
             <DialogDescription>

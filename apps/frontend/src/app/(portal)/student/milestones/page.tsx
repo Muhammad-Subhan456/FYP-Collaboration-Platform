@@ -119,7 +119,7 @@ export default function StudentMilestonesPage() {
     return (
       <EmptyState
         title="No team yet"
-        description="Join a team to use the team work board."
+        description="Join a team to track milestones together."
         action={
           <Button asChild>
             <Link href="/student/team">Go to Team</Link>
@@ -132,12 +132,6 @@ export default function StudentMilestonesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Milestones</h2>
-          <p className="text-sm text-muted-foreground">
-            Team work board — create, claim, and track issues together
-          </p>
-        </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           New issue
@@ -183,17 +177,17 @@ export default function StudentMilestonesPage() {
 
       {filteredIssues.length === 0 ? (
         <EmptyState
-          title={`No ${filter.replace(/_/g, " ")} issues`}
+          title={`No ${filter.replace(/_/g, " ")} tasks`}
           description={
             filter === "open"
-              ? "Create the first issue for your team."
-              : "Issues will appear here when their status changes."
+              ? "Create the first task for your team."
+              : "Tasks appear here as their status changes."
           }
           action={
             filter === "open" ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Flag className="h-4 w-4" />
-                Create issue
+                Create task
               </Button>
             ) : undefined
           }

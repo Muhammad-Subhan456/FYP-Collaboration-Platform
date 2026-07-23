@@ -41,6 +41,8 @@ export interface WorkStreamDeliverableItem {
   id: string;
   supervisorId: string;
   teamId?: string | null;
+  phaseId?: string | null;
+  phase?: { id: string; name: string } | null;
   title: string;
   description: string;
   type: string;

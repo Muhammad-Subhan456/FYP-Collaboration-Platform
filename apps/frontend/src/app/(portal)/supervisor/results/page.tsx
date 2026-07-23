@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { GradePromotionCell } from "@/components/results/grade-promotion-cell";
+import { ResultsCsvExportButton } from "@/components/results/results-csv-export-button";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/status-badge";
 import {
   Card,
   CardContent,
@@ -16,10 +17,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useSupervisorResultsFilterOptions } from "@/hooks/use-results-filter-options";
 import { formatGpa, formatGrade, formatPercent } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
+import {
+  exportPhaseGpaSummaryCsv,
+  exportSupervisorDeliverableResultsCsv,
+} from "@/lib/results-csv-export";
 import { useAuth } from "@/providers/auth-provider";
 import { submissionResultsService } from "@/services/submission-results.service";
 import {
@@ -88,14 +101,7 @@ export default function SupervisorResultsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Results</h1>
-          <p className="text-sm text-muted-foreground">
-            Evaluation results for your supervised teams, including averaged
-            marks and phase GPA.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <UnifiedFiltersDropdown
           fields={["phase", "deliverable", "team"]}
           values={filters}
@@ -127,150 +133,172 @@ export default function SupervisorResultsPage() {
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Phase GPA summary</CardTitle>
-          <CardDescription>
-            Weighted phase marks and GPA for students on your teams.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>Phase GPA summary</CardTitle>
+            <CardDescription>
+              Phase marks and GPA for students on your teams.
+            </CardDescription>
+          </div>
+          <ResultsCsvExportButton
+            onExport={() => exportPhaseGpaSummaryCsv(phaseResults)}
+          />
         </CardHeader>
         <CardContent>
           {phaseResults.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No phase results match the current filters.
+              No phase results for the selected filters.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Phase</th>
-                    <th className="px-3 py-2 text-left">Student</th>
-                    <th className="px-3 py-2 text-left">Phase marks</th>
-                    <th className="px-3 py-2 text-left">Grade</th>
-                    <th className="px-3 py-2 text-left">GPA</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Grade improvement</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {phaseResults.map((result) => (
-                    <tr key={result.id} className="border-b">
-                      <td className="px-3 py-2">{result.phase.name}</td>
-                      <td className="px-3 py-2">{result.studentName}</td>
-                      <td className="px-3 py-2">
-                        {formatPercent(result.weightedMarks)}
-                      </td>
-                      <td className="px-3 py-2 font-medium">
-                        {formatGrade(result.grade)}
-                      </td>
-                      <td className="px-3 py-2">{formatGpa(result.gpa)}</td>
-                      <td className="px-3 py-2">
-                        <Badge variant="outline">
-                          {result.isComplete ? "Complete" : "In progress"}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2">
-                        <GradePromotionCell
-                          result={result}
-                          isPending={promoteMutation.isPending}
-                          onPromote={() =>
-                            promoteMutation.mutate({
-                              phaseId: result.phaseId,
-                              studentId: result.studentId,
-                            })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table minWidth={720}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Phase marks</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead>GPA</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Grade improvement</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {phaseResults.map((result) => (
+                  <TableRow key={result.id}>
+                    <TableCell className="max-w-[10rem] truncate font-medium">
+                      {result.phase.name}
+                    </TableCell>
+                    <TableCell className="max-w-[12rem] truncate">
+                      {result.studentName}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatPercent(result.weightedMarks)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {formatGrade(result.grade)}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatGpa(result.gpa)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge
+                        status={
+                          result.isComplete ? "COMPLETE" : "IN_PROGRESS"
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <GradePromotionCell
+                        result={result}
+                        isPending={promoteMutation.isPending}
+                        onPromote={() =>
+                          promoteMutation.mutate({
+                            phaseId: result.phaseId,
+                            studentId: result.studentId,
+                          })
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Deliverable results</CardTitle>
-          <CardDescription>
-            Individual evaluator marks and averaged rubric scores.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>Deliverable results</CardTitle>
+            <CardDescription>
+              Marks from each evaluator and the combined scores.
+            </CardDescription>
+          </div>
+          <ResultsCsvExportButton
+            onExport={() =>
+              exportSupervisorDeliverableResultsCsv(deliverableResults)
+            }
+          />
         </CardHeader>
         <CardContent>
           {deliverableResults.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No evaluated deliverables match the current filters.
+              No deliverable results for the selected filters.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1080px] text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Student</th>
-                    <th className="px-3 py-2 text-left">Deliverable</th>
-                    <th className="px-3 py-2 text-left">Phase</th>
-                    <th className="px-3 py-2 text-left">Evaluator marks</th>
-                    <th className="px-3 py-2 text-left">Rubric averages</th>
-                    <th className="px-3 py-2 text-left">Averaged total</th>
-                    <th className="px-3 py-2 text-left">Weightage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliverableResults.map((row) => (
-                    <tr
-                      key={`${row.submissionId}:${row.studentId}`}
-                      className="border-b align-top"
-                    >
-                      <td className="px-3 py-2">{row.studentName}</td>
-                      <td className="px-3 py-2">{row.deliverableTitle}</td>
-                      <td className="px-3 py-2">{row.phase?.name ?? "—"}</td>
-                      <td className="px-3 py-2">
-                        {row.averagedScore ? (
-                          <div className="space-y-1">
-                            {row.averagedScore.evaluatorScores.map((score) => (
-                              <div key={score.evaluationId} className="text-xs">
-                                {score.evaluatorName}: {score.totalMarks}/
-                                {row.template.totalMarks}
+            <Table minWidth={1080}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Student</TableHead>
+                  <TableHead>Deliverable</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Evaluator marks</TableHead>
+                  <TableHead>Criteria averages</TableHead>
+                  <TableHead>Combined total</TableHead>
+                  <TableHead>Weightage</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliverableResults.map((row) => (
+                  <TableRow
+                    key={`${row.submissionId}:${row.studentId}`}
+                    className="align-top"
+                  >
+                    <TableCell className="max-w-[10rem] truncate font-medium">
+                      {row.studentName}
+                    </TableCell>
+                    <TableCell className="max-w-[14rem] truncate">
+                      {row.deliverableTitle}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {row.phase?.name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {row.averagedScore ? (
+                        <div className="space-y-1">
+                          {row.averagedScore.evaluatorScores.map((score) => (
+                            <div key={score.evaluationId} className="text-xs">
+                              {score.evaluatorName}: {score.totalMarks}/
+                              {row.template.totalMarks}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">Pending</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {row.averagedScore ? (
+                        <div className="space-y-1">
+                          {row.averagedScore.criterionAverages.map(
+                            (criterion) => (
+                              <div
+                                key={criterion.rubricCriterionId}
+                                className="text-xs"
+                              >
+                                {criterion.title}: {criterion.averageMarks}/
+                                {criterion.maxMarks}
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          "Pending"
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.averagedScore ? (
-                          <div className="space-y-1">
-                            {row.averagedScore.criterionAverages.map(
-                              (criterion) => (
-                                <div
-                                  key={criterion.rubricCriterionId}
-                                  className="text-xs"
-                                >
-                                  {criterion.title}: {criterion.averageMarks}/
-                                  {criterion.maxMarks}
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-medium">
-                        {row.averagedScore
-                          ? `${row.averagedScore.averageTotalMarks}/${row.template.totalMarks}`
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.template.weightagePercent}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium tabular-nums whitespace-nowrap">
+                      {row.averagedScore
+                        ? `${row.averagedScore.averageTotalMarks}/${row.template.totalMarks}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="tabular-nums whitespace-nowrap">
+                      {row.template.weightagePercent}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

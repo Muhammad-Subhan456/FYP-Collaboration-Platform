@@ -6,9 +6,10 @@ import { Loader2, Bell, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { EvaluatorMultiSelect } from "@/components/coordinator/evaluator-multi-select";
-import { PhaseFilter } from "@/components/common/phase-filter";
+import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
+import { StatusBadge } from "@/components/common/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,48 +28,36 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useResultsFilterOptions } from "@/hooks/use-results-filter-options";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/auth-provider";
-import { coordinatorPageService } from "@/services/coordinator-page.service";
-import { deliverableTemplateService } from "@/services/deliverable-template.service";
 import { submissionEvaluationService } from "@/services/submission-evaluation.service";
+import {
+  EMPTY_COORDINATOR_LIST_FILTERS,
+  toApiFilterValue,
+  type CoordinatorListFilters,
+} from "@/types/evaluation-filters";
 import type {
   EligibleSubmissionRow,
   SubmissionEvaluationPerson,
   SubmissionEvaluationStatus,
 } from "@/types/submission-evaluation";
 
-const STATUS_OPTIONS: Array<{
-  value: SubmissionEvaluationStatus | "all";
-  label: string;
-}> = [
-  { value: "all", label: "All statuses" },
-  { value: "UNASSIGNED", label: "Unassigned" },
-  { value: "ASSIGNED", label: "Assigned" },
-  { value: "IN_PROGRESS", label: "In progress" },
-  { value: "SUBMITTED", label: "Submitted" },
-];
-
-const ALL_FILTER = "all";
-
 export default function CoordinatorEvaluationsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [phaseFilter, setPhaseFilter] = useState("all");
-  const [statusFilter, setStatusFilter] =
-    useState<SubmissionEvaluationStatus | "all">("all");
-  const [templateFilter, setTemplateFilter] = useState(ALL_FILTER);
-  const [supervisorFilter, setSupervisorFilter] = useState(ALL_FILTER);
-  const [teamFilter, setTeamFilter] = useState(ALL_FILTER);
-  const [evaluatorFilter, setEvaluatorFilter] = useState(ALL_FILTER);
+  const [filters, setFilters] = useState<CoordinatorListFilters>(
+    EMPTY_COORDINATOR_LIST_FILTERS,
+  );
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<
     string | null
@@ -80,20 +69,23 @@ export default function CoordinatorEvaluationsPage() {
     [],
   );
 
-  const phaseId = phaseFilter === "all" ? undefined : phaseFilter;
-  const templateId =
-    templateFilter === ALL_FILTER ? undefined : templateFilter;
-  const supervisorId =
-    supervisorFilter === ALL_FILTER ? undefined : supervisorFilter;
-  const teamId = teamFilter === ALL_FILTER ? undefined : teamFilter;
-  const evaluatorId =
-    evaluatorFilter === ALL_FILTER ? undefined : evaluatorFilter;
+  const phaseId = toApiFilterValue(filters.phaseId);
+  const templateId = toApiFilterValue(filters.templateId);
+  const supervisorId = toApiFilterValue(filters.supervisorId);
+  const teamId = toApiFilterValue(filters.teamId);
+  const evaluatorId = toApiFilterValue(filters.evaluatorId);
+  const evaluationStatus =
+    filters.evaluationStatus === "all"
+      ? undefined
+      : (filters.evaluationStatus as SubmissionEvaluationStatus);
+
+  const filterOptions = useResultsFilterOptions(filters.phaseId);
 
   const eligibleQuery = useQuery({
     queryKey: [
       ...queryKeys.coordinator.submissionEvaluations(
         phaseId,
-        statusFilter,
+        filters.evaluationStatus,
         user?.workspaceId,
       ),
       templateId,
@@ -108,8 +100,7 @@ export default function CoordinatorEvaluationsPage() {
         supervisorId,
         teamId,
         evaluatorId,
-        evaluationStatus:
-          statusFilter === "all" ? undefined : statusFilter,
+        evaluationStatus,
       }),
     enabled: !!user?.workspaceId,
   });
@@ -117,27 +108,6 @@ export default function CoordinatorEvaluationsPage() {
   const evaluatorsQuery = useQuery({
     queryKey: queryKeys.coordinator.evaluators(user?.workspaceId),
     queryFn: submissionEvaluationService.listEvaluators,
-    enabled: !!user?.workspaceId,
-  });
-
-  const templatesQuery = useQuery({
-    queryKey: queryKeys.coordinator.deliverableTemplates(
-      phaseId,
-      user?.workspaceId,
-    ),
-    queryFn: () => deliverableTemplateService.list(phaseId),
-    enabled: !!user?.workspaceId,
-  });
-
-  const teamsQuery = useQuery({
-    queryKey: queryKeys.coordinator.teams(user?.userId, user?.workspaceId),
-    queryFn: coordinatorPageService.getTeams,
-    enabled: !!user?.workspaceId,
-  });
-
-  const usersQuery = useQuery({
-    queryKey: queryKeys.coordinator.users(user?.userId, user?.workspaceId),
-    queryFn: coordinatorPageService.getUsers,
     enabled: !!user?.workspaceId,
   });
 
@@ -201,12 +171,6 @@ export default function CoordinatorEvaluationsPage() {
     [eligibleQuery.data],
   );
 
-  const supervisors = useMemo(
-    () =>
-      (usersQuery.data ?? []).filter((userRecord) => userRecord.role === "SUPERVISOR"),
-    [usersQuery.data],
-  );
-
   const availableEvaluators = useMemo(
     () =>
       (evaluatorsQuery.data ?? []).filter(
@@ -215,7 +179,9 @@ export default function CoordinatorEvaluationsPage() {
     [assignedEvaluatorIds, evaluatorsQuery.data],
   );
 
-  if (eligibleQuery.isLoading) return <DashboardSkeleton />;
+  if (eligibleQuery.isLoading || filterOptions.isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   if (eligibleQuery.isError) {
     return (
@@ -227,7 +193,6 @@ export default function CoordinatorEvaluationsPage() {
   }
 
   const rows = eligibleQuery.data ?? [];
-  const teams = teamsQuery.data?.teams ?? [];
 
   const openAssignDialog = (
     submissionId: string,
@@ -260,230 +225,180 @@ export default function CoordinatorEvaluationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Evaluations</h1>
-          <p className="text-sm text-muted-foreground">
-            Assign one or more evaluators per submission. {pendingCount} pending.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
-        <Select
-          value={templateFilter}
-          onValueChange={setTemplateFilter}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Deliverable" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_FILTER}>All deliverables</SelectItem>
-            {(templatesQuery.data ?? []).map((template) => (
-              <SelectItem key={template.id} value={template.id}>
-                {template.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={supervisorFilter}
-          onValueChange={setSupervisorFilter}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Supervisor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_FILTER}>All supervisors</SelectItem>
-            {supervisors.map((supervisor) => (
-              <SelectItem key={supervisor.id} value={supervisor.id}>
-                {supervisor.fullName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={teamFilter} onValueChange={setTeamFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Team" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_FILTER}>All teams</SelectItem>
-            {teams.map((team) => (
-              <SelectItem key={team.id} value={team.id}>
-                {team.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={statusFilter}
-          onValueChange={(value) =>
-            setStatusFilter(value as SubmissionEvaluationStatus | "all")
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {pendingCount > 0 ? (
+          <Badge variant="secondary">{pendingCount} pending</Badge>
+        ) : null}
+        <UnifiedFiltersDropdown
+          fields={[
+            "phase",
+            "deliverable",
+            "team",
+            "supervisor",
+            "evaluator",
+            "evaluationStatus",
+          ]}
+          values={filters}
+          options={{
+            phases: filterOptions.phases.map((phase) => ({
+              value: phase.id,
+              label: phase.name,
+            })),
+            deliverables: filterOptions.templates.map((template) => ({
+              value: template.id,
+              label: template.title,
+            })),
+            teams: filterOptions.teams.map((team) => ({
+              value: team.id,
+              label: team.name,
+            })),
+            supervisors: filterOptions.supervisors.map((supervisor) => ({
+              value: supervisor.id,
+              label: supervisor.fullName,
+            })),
+            evaluators: filterOptions.evaluators.map((evaluator) => ({
+              value: evaluator.id,
+              label: evaluator.fullName,
+            })),
+          }}
+          onChange={(values) =>
+            setFilters({ ...filters, ...values } as CoordinatorListFilters)
           }
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={evaluatorFilter}
-          onValueChange={setEvaluatorFilter}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Evaluator" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_FILTER}>All evaluators</SelectItem>
-            {(evaluatorsQuery.data ?? []).map((evaluator) => (
-              <SelectItem key={evaluator.id} value={evaluator.id}>
-                {evaluator.fullName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Eligible submissions</CardTitle>
           <CardDescription>
-            Finalized submissions can have multiple independent evaluators.
-            Results are averaged across submitted evaluations.
+            You can assign more than one evaluator per submission. Final marks
+            combine their scores.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
             <EmptyState
-              title="No eligible submissions"
-              description="No finalized submissions match the current filters."
+              title="No submissions found"
+              description="No submissions match the selected filters."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1200px] text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Deliverable</th>
-                    <th className="px-3 py-2 text-left font-medium">Phase</th>
-                    <th className="px-3 py-2 text-left font-medium">Team</th>
-                    <th className="px-3 py-2 text-left font-medium">Supervisor</th>
-                    <th className="px-3 py-2 text-left font-medium">Finalized</th>
-                    <th className="px-3 py-2 text-left font-medium">Status</th>
-                    <th className="px-3 py-2 text-left font-medium">Evaluators</th>
-                    <th className="px-3 py-2 text-left font-medium">Progress</th>
-                    <th className="px-3 py-2 text-left font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.submissionId} className="border-b last:border-b-0">
-                      <td className="px-3 py-3">{row.deliverableTitle}</td>
-                      <td className="px-3 py-3">{row.phase?.name ?? "—"}</td>
-                      <td className="px-3 py-3">{row.teamName}</td>
-                      <td className="px-3 py-3">{row.supervisor.fullName}</td>
-                      <td className="px-3 py-3">
-                        {row.finalizedAt
-                          ? formatDateTime(row.finalizedAt)
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-3">
-                        <Badge
-                          variant={
-                            row.evaluationStatus === "SUBMITTED"
-                              ? "secondary"
-                              : row.evaluationStatus === "UNASSIGNED"
-                                ? "destructive"
-                                : "outline"
+            <Table minWidth={1200}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Deliverable</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Supervisor</TableHead>
+                  <TableHead>Finalized</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Evaluators</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow
+                    key={row.submissionId}
+                    className="align-top"
+                  >
+                    <TableCell className="max-w-[14rem] truncate font-medium">
+                      {row.deliverableTitle}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {row.phase?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="max-w-[10rem] truncate">
+                      {row.teamName}
+                    </TableCell>
+                    <TableCell className="max-w-[10rem] truncate">
+                      {row.supervisor.fullName}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {row.finalizedAt
+                        ? formatDateTime(row.finalizedAt)
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={row.evaluationStatus} />
+                    </TableCell>
+                    <TableCell>
+                      {row.evaluations.length > 0 ? (
+                        <div className="space-y-1">
+                          {row.evaluations.map((assignment) => (
+                            <div
+                              key={assignment.evaluationId}
+                              className="flex flex-wrap items-center gap-1 text-xs"
+                            >
+                              <span className="max-w-[8rem] truncate">
+                                {assignment.evaluator?.fullName ?? "Evaluator"}
+                              </span>
+                              <StatusBadge status={assignment.status} />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground whitespace-nowrap">
+                      {row.submittedEvaluatorCount}/
+                      {row.assignedEvaluatorCount} submitted
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <a
+                            href={row.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            View file
+                          </a>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            openAssignDialog(
+                              row.submissionId,
+                              row.evaluations.map(
+                                (assignment) => assignment.evaluatorId,
+                              ),
+                            )
                           }
                         >
-                          {row.evaluationStatus}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-3">
-                        {row.evaluations.length > 0 ? (
-                          <div className="space-y-1">
-                            {row.evaluations.map((assignment) => (
-                              <div
-                                key={assignment.evaluationId}
-                                className="text-xs"
-                              >
-                                {assignment.evaluator?.fullName ?? "Evaluator"}{" "}
-                                <Badge variant="outline" className="ml-1">
-                                  {assignment.status}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        {row.submittedEvaluatorCount}/{row.assignedEvaluatorCount}{" "}
-                        submitted
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button asChild size="sm" variant="outline">
-                            <a
-                              href={row.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              View file
-                            </a>
-                          </Button>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Add evaluator
+                        </Button>
+                        {row.evaluations.some(
+                          (assignment) =>
+                            assignment.status === "ASSIGNED" ||
+                            assignment.status === "IN_PROGRESS",
+                        ) ? (
                           <Button
                             size="sm"
-                            onClick={() =>
-                              openAssignDialog(
-                                row.submissionId,
-                                row.evaluations.map(
-                                  (assignment) => assignment.evaluatorId,
-                                ),
-                              )
+                            variant="secondary"
+                            disabled={
+                              remindingSubmissionId === row.submissionId &&
+                              remindMutation.isPending
                             }
+                            onClick={() => openRemindDialog(row)}
                           >
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Add evaluator
+                            {remindingSubmissionId === row.submissionId &&
+                            remindMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Bell className="mr-2 h-4 w-4" />
+                            )}
+                            Remind
                           </Button>
-                          {row.evaluations.some(
-                            (assignment) =>
-                              assignment.status === "ASSIGNED" ||
-                              assignment.status === "IN_PROGRESS",
-                          ) ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={
-                                remindingSubmissionId === row.submissionId &&
-                                remindMutation.isPending
-                              }
-                              onClick={() => openRemindDialog(row)}
-                            >
-                              {remindingSubmissionId === row.submissionId &&
-                              remindMutation.isPending ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Bell className="mr-2 h-4 w-4" />
-                              )}
-                              Remind evaluators
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
@@ -493,9 +408,8 @@ export default function CoordinatorEvaluationsPage() {
           <DialogHeader>
             <DialogTitle>Assign evaluators</DialogTitle>
             <DialogDescription>
-              Select one or more evaluators. Each scores independently; final
-              results use averaged marks. Already assigned evaluators are
-              excluded.
+              Select one or more evaluators. Each marks separately; final marks
+              are combined. Already assigned evaluators aren&apos;t listed.
             </DialogDescription>
           </DialogHeader>
           <EvaluatorMultiSelect

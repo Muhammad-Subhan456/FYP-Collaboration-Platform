@@ -167,13 +167,7 @@ export default function CoordinatorPhasesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Academic Phases</h1>
-          <p className="text-sm text-muted-foreground">
-            Organize FYP work semester-wise within this workspace.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
           New phase
@@ -184,7 +178,7 @@ export default function CoordinatorPhasesPage() {
         <CardHeader>
           <CardTitle>Phases</CardTitle>
           <CardDescription>
-            Each deliverable template must belong to exactly one phase.
+            Each deliverable template belongs to one phase.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -357,17 +351,16 @@ export default function CoordinatorPhasesPage() {
           <DialogHeader>
             <DialogTitle>Publish phase configuration</DialogTitle>
             <DialogDescription>
-              Publishing locks deliverable weightages for{" "}
-              <strong>{publishingPhase?.name}</strong> and enables GPA
-              calculation once evaluations are complete. Weightages must total
-              exactly 100%.
+              Publishing locks deliverable weightings for{" "}
+              <strong>{publishingPhase?.name}</strong>. GPA becomes available
+              when evaluations are complete. Weightings must total 100%.
             </DialogDescription>
           </DialogHeader>
 
           {weightageQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Checking deliverable weightages...
+              Checking deliverable weightings...
             </div>
           ) : weightageQuery.isError ? (
             <p className="text-sm text-destructive">

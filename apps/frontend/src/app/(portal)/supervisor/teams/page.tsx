@@ -146,17 +146,10 @@ export default function SupervisorTeamsPage() {
         }}
       />
 
-      <div>
-        <h2 className="text-lg font-semibold">Supervised Teams</h2>
-        <p className="text-sm text-muted-foreground">
-          Teams you are currently supervising
-        </p>
-      </div>
-
       {proposals.length === 0 ? (
         <EmptyState
           title="No supervised teams"
-          description="Accept supervision requests or invitations to see teams here."
+          description="Accept a proposal to see teams here."
           action={
             <Button asChild variant="outline">
               <Link href="/supervisor/requests">View Requests</Link>

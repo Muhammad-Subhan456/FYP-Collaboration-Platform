@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { UnifiedFiltersDropdown } from "@/components/common/unified-filters-dropdown";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
+import { StatusBadge } from "@/components/common/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
@@ -168,14 +177,10 @@ export default function EvaluatorEvaluationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Evaluations</h1>
-          <p className="text-sm text-muted-foreground">
-            Assigned and completed evaluations in one place. {pendingCount}{" "}
-            pending.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {pendingCount > 0 ? (
+          <Badge variant="secondary">{pendingCount} pending</Badge>
+        ) : null}
         <UnifiedFiltersDropdown
           fields={[
             "phase",
@@ -205,77 +210,65 @@ export default function EvaluatorEvaluationsPage() {
           {evaluations.length === 0 ? (
             <EmptyState
               title="No evaluations found"
-              description="No evaluations match the current filters."
+              description="No evaluations match the selected filters."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1080px] text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Deliverable</th>
-                    <th className="px-3 py-2 text-left">Phase</th>
-                    <th className="px-3 py-2 text-left">Team</th>
-                    <th className="px-3 py-2 text-left">Supervisor</th>
-                    <th className="px-3 py-2 text-left">Submission</th>
-                    <th className="px-3 py-2 text-left">Evaluation</th>
-                    <th className="px-3 py-2 text-left">Awarded marks</th>
-                    <th className="px-3 py-2 text-left">Submitted</th>
-                    <th className="px-3 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {evaluations.map((evaluation) => (
-                    <tr key={evaluation.id} className="border-b align-top">
-                      <td className="px-3 py-2 font-medium">
-                        {evaluation.deliverable.title}
-                      </td>
-                      <td className="px-3 py-2">
-                        {evaluation.deliverable.phase?.name ?? "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        {evaluation.teamName ?? "Team"}
-                      </td>
-                      <td className="px-3 py-2">
-                        {evaluation.supervisor?.fullName ?? "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge variant="outline">
-                          {evaluation.submission.status}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge
-                          variant={
-                            evaluation.status === "SUBMITTED"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {evaluation.status}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2">
-                        {awardedMarksSummary(evaluation)}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {evaluation.submittedAt
-                          ? formatDateTime(evaluation.submittedAt)
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Button asChild size="sm">
-                          <Link href={`/evaluator/evaluations/${evaluation.id}`}>
-                            {evaluation.status === "SUBMITTED"
-                              ? "View results"
-                              : "Evaluate"}
-                          </Link>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table minWidth={1080}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Deliverable</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Supervisor</TableHead>
+                  <TableHead>Submission</TableHead>
+                  <TableHead>Evaluation</TableHead>
+                  <TableHead>Awarded marks</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {evaluations.map((evaluation) => (
+                  <TableRow key={evaluation.id} className="align-top">
+                    <TableCell className="max-w-[14rem] truncate font-medium">
+                      {evaluation.deliverable.title}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {evaluation.deliverable.phase?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="max-w-[10rem] truncate">
+                      {evaluation.teamName ?? "Team"}
+                    </TableCell>
+                    <TableCell className="max-w-[10rem] truncate">
+                      {evaluation.supervisor?.fullName ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={evaluation.submission.status} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={evaluation.status} />
+                    </TableCell>
+                    <TableCell className="tabular-nums whitespace-nowrap">
+                      {awardedMarksSummary(evaluation)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {evaluation.submittedAt
+                        ? formatDateTime(evaluation.submittedAt)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm">
+                        <Link href={`/evaluator/evaluations/${evaluation.id}`}>
+                          {evaluation.status === "SUBMITTED"
+                            ? "View results"
+                            : "Evaluate"}
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
