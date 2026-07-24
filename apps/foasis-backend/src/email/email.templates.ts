@@ -1,3 +1,5 @@
+import { escapeHtml } from '../common/helpers/html-escape';
+
 export type EmailMessage = {
   to: string;
   subject: string;
@@ -110,11 +112,11 @@ export function buildAnnouncementEmail(
     subject: `FOASIS Announcement: ${payload.title}`,
     text: `${payload.title}\n\n${payload.message}${actionLine}`,
     html: `
-      <p><strong>${payload.title}</strong></p>
-      <p>${payload.message.replace(/\n/g, '<br/>')}</p>
+      <p><strong>${escapeHtml(payload.title)}</strong></p>
+      <p>${escapeHtml(payload.message).replace(/\n/g, '<br/>')}</p>
       ${
         payload.actionUrl
-          ? `<p><a href="${payload.actionUrl}">View announcement in FOASIS</a></p>`
+          ? `<p><a href="${escapeHtml(payload.actionUrl)}">View announcement in FOASIS</a></p>`
           : ''
       }
     `,

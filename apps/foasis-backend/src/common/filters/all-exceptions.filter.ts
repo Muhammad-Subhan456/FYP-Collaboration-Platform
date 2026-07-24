@@ -28,6 +28,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'string') {
+        if (status === HttpStatus.TOO_MANY_REQUESTS) {
+          response.setHeader('Retry-After', '60');
+        }
         response.status(status).json({
           statusCode: status,
           message: exceptionResponse,
@@ -38,6 +41,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       const body = exceptionResponse as Record<string, unknown>;
       const message = body.message ?? exception.message;
+      const retryAfter =
+        typeof body.retryAfter === 'number'
+          ? body.retryAfter
+          : status === HttpStatus.TOO_MANY_REQUESTS
+            ? 60
+            : undefined;
+
+      if (retryAfter !== undefined) {
+        response.setHeader('Retry-After', String(retryAfter));
+      }
 
       response.status(status).json({
         statusCode: status,
@@ -46,6 +59,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           typeof body.error === 'string'
             ? body.error
             : (HttpStatus[status] ?? 'Error'),
+        ...(retryAfter !== undefined ? { retryAfter } : {}),
       });
       return;
     }

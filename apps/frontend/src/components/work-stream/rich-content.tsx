@@ -5,6 +5,15 @@ import { cn } from "@/lib/utils";
 const URL_PATTERN =
   /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
 
+/** Strip markup without regex catastrophic backtracking; prefer DOM when available. */
+function toPlainText(content: string): string {
+  if (typeof window !== "undefined" && typeof DOMParser !== "undefined") {
+    const doc = new DOMParser().parseFromString(content, "text/html");
+    return doc.body.textContent ?? "";
+  }
+  return content.replace(/<\/?[a-zA-Z][^>]{0,200}>/g, "");
+}
+
 function linkifyText(text: string) {
   const parts = text.split(URL_PATTERN);
   return parts.map((part, index) => {
@@ -32,24 +41,16 @@ interface RichContentProps {
   className?: string;
 }
 
+/**
+ * Renders user-generated content safely.
+ * HTML is converted to plain text (no dangerouslySetInnerHTML) to prevent stored XSS.
+ */
 export function RichContent({ content, className }: RichContentProps) {
-  const hasHtml = /<[a-z][\s\S]*>/i.test(content);
-
-  if (hasHtml) {
-    return (
-      <div
-        className={cn(
-          "prose prose-sm max-w-none text-foreground dark:prose-invert",
-          className,
-        )}
-        dangerouslySetInnerHTML={{ __html: content }}
-      />
-    );
-  }
+  const plain = toPlainText(content);
 
   return (
     <div className={cn("whitespace-pre-wrap text-sm leading-relaxed", className)}>
-      {linkifyText(content)}
+      {linkifyText(plain)}
     </div>
   );
 }

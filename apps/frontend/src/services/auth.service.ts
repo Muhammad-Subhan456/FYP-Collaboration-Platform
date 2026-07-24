@@ -72,7 +72,7 @@ export const authService = {
     currentPassword: string,
     newPassword: string,
   ) => {
-    const res = await api.post<{ message: string }>(
+    const res = await api.post<{ message: string; accessToken: string }>(
       "/auth/change-password",
       { currentPassword, newPassword },
     );

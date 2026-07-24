@@ -124,10 +124,36 @@ export class ProfilesService {
     return this.findOne(authUserId);
   }
 
-  async findManyByAuthUserIds(authUserIds: string[]) {
+  async findManyByAuthUserIds(
+    authUserIds: string[],
+    workspaceId?: string,
+  ) {
+    const uniqueIds = [...new Set(authUserIds.filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      return {};
+    }
+
+    let allowedIds = uniqueIds;
+    if (workspaceId) {
+      const members = await this.prisma.workspaceMembership.findMany({
+        where: {
+          workspaceId,
+          isActive: true,
+          userId: { in: uniqueIds },
+        },
+        select: { userId: true },
+      });
+      const memberSet = new Set(members.map((member) => member.userId));
+      allowedIds = uniqueIds.filter((id) => memberSet.has(id));
+    }
+
+    if (allowedIds.length === 0) {
+      return {};
+    }
+
     const profiles = await this.prisma.userProfile.findMany({
       where: {
-        authUserId: { in: authUserIds },
+        authUserId: { in: allowedIds },
       },
     });
 

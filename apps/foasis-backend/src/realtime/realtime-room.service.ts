@@ -6,8 +6,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Socket } from 'socket.io';
 
+import { AUTH_TOKEN_TYPES } from '../auth/auth.constants';
+import { PrismaService } from '../prisma/prisma.service';
 import { ProposalsService } from '../proposals/proposals.service';
 import { TeamsService } from '../teams/teams.service';
+import { securityConfig } from '../common/security.config';
 import { runWithWorkspaceContext } from '../workspace/workspace-als';
 
 export interface RealtimeUser {
@@ -24,6 +27,7 @@ export class RealtimeRoomService {
     private readonly configService: ConfigService,
     private readonly teamsService: TeamsService,
     private readonly proposalsService: ProposalsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   extractToken(client: Socket): string | null {
@@ -37,9 +41,11 @@ export class RealtimeRoomService {
       return header.slice(7);
     }
 
-    const queryToken = client.handshake.query?.token;
-    if (typeof queryToken === 'string' && queryToken.length > 0) {
-      return queryToken;
+    if (securityConfig.allowWsQueryToken) {
+      const queryToken = client.handshake.query?.token;
+      if (typeof queryToken === 'string' && queryToken.length > 0) {
+        return queryToken;
+      }
     }
 
     return null;
@@ -58,9 +64,30 @@ export class RealtimeRoomService {
         email: string;
         role: string;
         workspaceId?: string | null;
+        type?: string;
+        sv?: number;
       }>(token, {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
       });
+
+      if (payload.type !== AUTH_TOKEN_TYPES.ACCESS) {
+        throw new UnauthorizedException('Invalid token type');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { isActive: true, sessionVersion: true },
+      });
+
+      if (!user?.isActive) {
+        throw new UnauthorizedException('Account is not active');
+      }
+
+      const tokenSessionVersion =
+        typeof payload.sv === 'number' ? payload.sv : 0;
+      if (user.sessionVersion !== tokenSessionVersion) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
 
       return {
         userId: payload.sub,
@@ -68,7 +95,10 @@ export class RealtimeRoomService {
         role: payload.role,
         workspaceId: payload.workspaceId ?? undefined,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid WebSocket token');
     }
   }

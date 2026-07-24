@@ -45,15 +45,17 @@ enum SubscriptionPlan {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  fullName     String
-  passwordHash String?
-  googleId     String?  @unique
-  role         UserRole @default(STUDENT)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(uuid())
+  email          String   @unique
+  fullName       String
+  passwordHash   String?
+  googleId       String?  @unique
+  role           UserRole @default(STUDENT)
+  isActive       Boolean  @default(true)
+  /// Bumped on password change/reset so previously issued access JWTs are rejected.
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   memberships  WorkspaceMembership[]
   invitationsSent WorkspaceInvitation[] @relation("InvitedBy")
   passwordResetTokens PasswordResetToken[]

@@ -67,8 +67,14 @@ export class ProfilesController {
 
   @UseGuards(JwtAuthGuard)
   @Post('batch')
-  getBatchProfiles(@Body() dto: BatchProfilesDto) {
-    return this.profilesService.findManyByAuthUserIds(dto.authUserIds);
+  getBatchProfiles(
+    @Req() req: { workspaceId?: string },
+    @Body() dto: BatchProfilesDto,
+  ) {
+    return this.profilesService.findManyByAuthUserIds(
+      dto.authUserIds,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

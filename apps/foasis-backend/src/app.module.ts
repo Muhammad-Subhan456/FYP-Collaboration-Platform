@@ -24,6 +24,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { EmailModule } from './email/email.module';
 import { WorkspaceModule } from './workspace/workspace.module';
+import { securityConfig } from './common/security.config';
 
 /**
  * FOASIS modular monolith root module.
@@ -34,8 +35,8 @@ import { WorkspaceModule } from './workspace/workspace.module';
     ThrottlerModule.forRoot([
       {
         name: 'default',
-        ttl: 60_000,
-        limit: 120,
+        ttl: securityConfig.globalThrottleTtlMs,
+        limit: securityConfig.globalThrottleLimit,
       },
     ]),
     PrismaModule,

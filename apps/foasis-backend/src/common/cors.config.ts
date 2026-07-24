@@ -1,3 +1,5 @@
+import { isWeakSecret } from './security.config';
+
 /**
  * Resolve CORS origins for HTTP and WebSocket.
  * Production: require an explicit allowlist (CORS_ORIGIN and/or FRONTEND_URL).
@@ -35,9 +37,16 @@ export function assertProductionConfig(): void {
   }
 
   const jwtSecret = process.env.JWT_SECRET?.trim();
-  if (!jwtSecret || jwtSecret.length < 32 || jwtSecret === 'change-me-to-a-long-random-secret') {
+  if (!jwtSecret || jwtSecret.length < 32 || isWeakSecret(jwtSecret)) {
     throw new Error(
-      'Production requires JWT_SECRET to be a strong secret (min 32 characters).',
+      'Production requires JWT_SECRET to be a strong unique secret (min 32 characters; not an example/placeholder value).',
+    );
+  }
+
+  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD?.trim();
+  if (superAdminPassword && isWeakSecret(superAdminPassword)) {
+    throw new Error(
+      'Production refuses weak SUPER_ADMIN_PASSWORD values (example/placeholder passwords).',
     );
   }
 

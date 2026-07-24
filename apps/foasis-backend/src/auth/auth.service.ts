@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from '@prisma/client';
@@ -28,9 +28,12 @@ import {
   generateSecureToken,
   hashToken,
 } from '../common/helpers/secure-token';
+import { LoginAttemptService } from './login-attempt.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
   private readonly prisma: PrismaService,
   private readonly jwtService: JwtService,
@@ -40,6 +43,7 @@ export class AuthService {
   private readonly config: ConfigService,
   private readonly emailService: EmailService,
   private readonly appUrls: AppUrlsService,
+  private readonly loginAttempts: LoginAttemptService,
 ) {}
 
   private async notifyUser(
@@ -106,13 +110,18 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  this.loginAttempts.assertNotLocked(normalizedEmail);
+
   const user = await this.prisma.user.findUnique({
     where: {
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
     },
   });
 
   if (!user || !user.passwordHash) {
+    this.loginAttempts.recordFailure(normalizedEmail);
+    this.logger.warn('Failed login: unknown account or missing password');
     throw new BadRequestException(
       'Invalid credentials',
     );
@@ -124,16 +133,21 @@ export class AuthService {
   );
 
   if (!passwordMatches) {
+    this.loginAttempts.recordFailure(normalizedEmail);
+    this.logger.warn(`Failed login: invalid password userId=${user.id}`);
     throw new BadRequestException(
       'Invalid credentials',
     );
   }
 
   if (!user.isActive) {
+    this.logger.warn(`Failed login: disabled account userId=${user.id}`);
     throw new BadRequestException(
       'Your account has been disabled. Contact the coordinator.',
     );
   }
+
+  this.loginAttempts.recordSuccess(normalizedEmail);
 
   if (user.role === UserRole.SUPER_ADMIN) {
     return {
@@ -142,6 +156,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         workspaceId: null,
+        sessionVersion: user.sessionVersion,
       }),
     };
   }
@@ -163,6 +178,7 @@ export class AuthService {
       email: user.email,
       role: context.role as UserRole,
       workspaceId: context.workspaceId,
+      sessionVersion: user.sessionVersion,
     }),
   };
   }
@@ -222,6 +238,7 @@ async selectContext(
       email: user.email,
       role,
       workspaceId,
+      sessionVersion: user.sessionVersion,
     }),
   };
 }
@@ -260,6 +277,7 @@ async switchContext(
       email: user.email,
       role,
       workspaceId,
+      sessionVersion: user.sessionVersion,
     }),
   };
 }
@@ -321,13 +339,18 @@ async resetPassword(token: string, password: string) {
   await this.prisma.$transaction([
     this.prisma.user.update({
       where: { id: resetToken.userId },
-      data: { passwordHash },
+      data: {
+        passwordHash,
+        sessionVersion: { increment: 1 },
+      },
     }),
     this.prisma.passwordResetToken.update({
       where: { id: resetToken.id },
       data: { usedAt: new Date() },
     }),
   ]);
+
+  this.logger.log(`Password reset completed; sessions revoked userId=${resetToken.userId}`);
 
   return { message: 'Password updated successfully' };
 }
@@ -336,6 +359,11 @@ async changePassword(
   userId: string,
   currentPassword: string,
   newPassword: string,
+  session: {
+    email: string;
+    role: UserRole;
+    workspaceId: string | null;
+  },
 ) {
   const user = await this.prisma.user.findUnique({
     where: { id: userId },
@@ -356,12 +384,27 @@ async changePassword(
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
 
-  await this.prisma.user.update({
+  const updated = await this.prisma.user.update({
     where: { id: userId },
-    data: { passwordHash },
+    data: {
+      passwordHash,
+      sessionVersion: { increment: 1 },
+    },
+    select: { sessionVersion: true },
   });
 
-  return { message: 'Password changed successfully' };
+  this.logger.log(`Password changed; sessions revoked userId=${userId}`);
+
+  return {
+    message: 'Password changed successfully',
+    accessToken: await this.signAccessToken({
+      userId,
+      email: session.email,
+      role: session.role,
+      workspaceId: session.workspaceId,
+      sessionVersion: updated.sessionVersion,
+    }),
+  };
 }
 
 private async signAccessToken(input: {
@@ -369,6 +412,7 @@ private async signAccessToken(input: {
   email: string;
   role: UserRole;
   workspaceId: string | null;
+  sessionVersion: number;
 }) {
   return this.jwtService.signAsync({
     sub: input.userId,
@@ -376,6 +420,7 @@ private async signAccessToken(input: {
     role: input.role,
     workspaceId: input.workspaceId,
     type: AUTH_TOKEN_TYPES.ACCESS,
+    sv: input.sessionVersion,
   });
 }
 

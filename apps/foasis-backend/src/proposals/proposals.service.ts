@@ -1574,7 +1574,10 @@ async getSupervisorReviewQueue(supervisorId: string) {
   });
 }
 
-async getSupervisorOverview(supervisorId: string) {
+async getSupervisorOverview(
+  supervisorId: string,
+  requester?: { userId: string; role: string },
+) {
   const proposals = await this.prisma.proposal.findMany({
     where: { assignedSupervisorId: supervisorId },
     orderBy: { createdAt: 'desc' },
@@ -1588,8 +1591,25 @@ async getSupervisorOverview(supervisorId: string) {
     },
   });
 
+  const canSeeTitles =
+    !requester ||
+    requester.role === 'COORDINATOR' ||
+    requester.role === 'SUPER_ADMIN' ||
+    requester.userId === supervisorId;
+
+  const supervisedProposals = canSeeTitles
+    ? proposals
+    : proposals.map((proposal) => ({
+        id: proposal.id,
+        title: 'Confidential project',
+        domain: '—',
+        status: proposal.status,
+        teamId: proposal.teamId,
+        createdAt: proposal.createdAt,
+      }));
+
   return {
-    supervisedProposals: proposals,
+    supervisedProposals,
     activeCount: proposals.filter(
       (proposal) =>
         proposal.status === 'APPROVED' ||

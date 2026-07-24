@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/axios";
+import { setStoredToken } from "@/lib/auth";
 import { authService } from "@/services/auth.service";
 
 export function ChangePasswordCard() {
@@ -25,9 +26,18 @@ export function ChangePasswordCard() {
       return;
     }
 
+    if (newPassword.length > 72) {
+      toast.error("Password must be 72 characters or fewer");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await authService.changePassword(currentPassword, newPassword);
+      const result = await authService.changePassword(
+        currentPassword,
+        newPassword,
+      );
+      setStoredToken(result.accessToken);
       toast.success("Password changed");
       setCurrentPassword("");
       setNewPassword("");

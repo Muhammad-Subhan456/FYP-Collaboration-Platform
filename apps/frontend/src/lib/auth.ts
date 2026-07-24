@@ -17,7 +17,11 @@ export function setStoredToken(token: string): void {
   const maxAgeSeconds = payload?.exp
     ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000))
     : 0;
-  document.cookie = `${TOKEN_COOKIE}=${token}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  document.cookie = `${TOKEN_COOKIE}=${token}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax${secure}`;
 }
 
 export function clearStoredToken(): void {

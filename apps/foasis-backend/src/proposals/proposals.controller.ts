@@ -257,10 +257,12 @@ export class ProposalsController {
   @Roles('SUPERVISOR', 'STUDENT', 'COORDINATOR')
   @Get('supervisor/:supervisorId/overview')
   getSupervisorOverview(
+    @Req() req: { user: { userId: string; role: string } },
     @Param('supervisorId') supervisorId: string,
   ) {
     return this.proposalsService.getSupervisorOverview(
       supervisorId,
+      req.user,
     );
   }
 

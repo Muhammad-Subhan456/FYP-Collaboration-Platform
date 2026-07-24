@@ -9,6 +9,7 @@ import {
 import type { Server, Socket } from 'socket.io';
 
 import { resolveCorsOrigin } from '../common/cors.config';
+import { securityConfig } from '../common/security.config';
 import { gaTrace } from '../common/trace/ga-trace';
 import { DomainEvents } from '../domain-events/domain-event.constants';
 import type { DomainEvent } from '../domain-events/domain-event.types';
@@ -37,6 +38,9 @@ export class RealtimeGateway
   @WebSocketServer()
   server!: Server;
 
+  /** Tracks open socket IDs per user for connection caps. */
+  private readonly socketsByUser = new Map<string, Set<string>>();
+
   constructor(
     private readonly roomService: RealtimeRoomService,
   ) {}
@@ -48,6 +52,22 @@ export class RealtimeGateway
   async handleConnection(client: Socket) {
     try {
       const user = await this.roomService.authenticate(client);
+
+      const existing = this.socketsByUser.get(user.userId) ?? new Set<string>();
+      if (existing.size >= securityConfig.wsMaxConnectionsPerUser) {
+        this.logger.warn(
+          `WebSocket connection rejected: user ${user.userId} exceeded connection cap`,
+        );
+        client.emit('realtime.error', {
+          message: 'Too many concurrent connections',
+        });
+        client.disconnect(true);
+        return;
+      }
+
+      existing.add(client.id);
+      this.socketsByUser.set(user.userId, existing);
+
       const rooms = await this.roomService.resolveRooms(user);
 
       for (const room of rooms) {
@@ -85,6 +105,13 @@ export class RealtimeGateway
   handleDisconnect(client: Socket) {
     const user = client.data.user as RealtimeUser | undefined;
     if (user?.userId) {
+      const existing = this.socketsByUser.get(user.userId);
+      if (existing) {
+        existing.delete(client.id);
+        if (existing.size === 0) {
+          this.socketsByUser.delete(user.userId);
+        }
+      }
       this.logger.debug(`WebSocket disconnected: ${user.userId}`);
     }
   }

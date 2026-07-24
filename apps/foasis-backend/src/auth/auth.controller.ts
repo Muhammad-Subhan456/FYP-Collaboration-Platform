@@ -29,6 +29,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { InternalApiKeyGuard } from '../common/guards/internal-api-key.guard';
 import { SkipWorkspace } from '../common/decorators/skip-workspace.decorator';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
+import { securityConfig } from '../common/security.config';
 
 @Controller('auth')
 export class AuthController {
@@ -37,7 +38,12 @@ export class AuthController {
   ) {}
 
   @SkipWorkspace()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: securityConfig.authRegisterRateLimit,
+      ttl: securityConfig.authRegisterRateTtlMs,
+    },
+  })
   @Post('register')
   async register(
     @Body() registerDto: RegisterDto,
@@ -46,7 +52,12 @@ export class AuthController {
   }
 
   @SkipWorkspace()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: securityConfig.authLoginRateLimit,
+      ttl: securityConfig.authLoginRateTtlMs,
+    },
+  })
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
@@ -58,14 +69,24 @@ export class AuthController {
   }
 
   @SkipWorkspace()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: securityConfig.authPasswordResetRateLimit,
+      ttl: securityConfig.authPasswordResetRateTtlMs,
+    },
+  })
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
   @SkipWorkspace()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({
+    default: {
+      limit: securityConfig.authPasswordResetRateLimit,
+      ttl: securityConfig.authPasswordResetRateTtlMs,
+    },
+  })
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(
@@ -75,6 +96,12 @@ export class AuthController {
   }
 
   @SkipWorkspace()
+  @Throttle({
+    default: {
+      limit: securityConfig.authSelectContextRateLimit,
+      ttl: securityConfig.authSelectContextRateTtlMs,
+    },
+  })
   @Post('select-context')
   selectContext(@Body() dto: SelectContextDto) {
     return this.authService.selectContext(
@@ -109,13 +136,31 @@ export class AuthController {
   @Post('change-password')
   @SkipWorkspace()
   changePassword(
-    @Req() req: { user: { userId: string } },
+    @Req()
+    req: {
+      user: {
+        userId: string;
+        email: string;
+        role: string;
+        workspaceId?: string;
+      };
+    },
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(
       req.user.userId,
       dto.currentPassword,
       dto.newPassword,
+      {
+        email: req.user.email,
+        role: req.user.role as
+          | 'STUDENT'
+          | 'SUPERVISOR'
+          | 'COORDINATOR'
+          | 'EVALUATOR'
+          | 'SUPER_ADMIN',
+        workspaceId: req.user.workspaceId ?? null,
+      },
     );
   }
 

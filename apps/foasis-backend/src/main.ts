@@ -39,7 +39,17 @@ async function bootstrap() {
   );
 
   app.enableCors({
+    origin: resolveCorsOrigin(),
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Authorization',
+      'Content-Type',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-Internal-Api-Key',
+    ],
   });
 
   const uploadDir =
