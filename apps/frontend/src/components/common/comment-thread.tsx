@@ -12,6 +12,7 @@ export interface CommentThreadItem {
   authUserId: string;
   body: string;
   createdAt: string;
+  authorName?: string;
 }
 
 interface CommentThreadProps {
@@ -22,14 +23,20 @@ interface CommentThreadProps {
   resolveAuthorName?: (
     profiles: Record<string, UserProfile>,
     authUserId: string,
+    comment?: CommentThreadItem,
   ) => string;
 }
 
 function defaultAuthorName(
   profiles: Record<string, UserProfile>,
   authUserId: string,
+  comment?: CommentThreadItem,
 ) {
-  return profiles[authUserId]?.fullName ?? "User";
+  return (
+    comment?.authorName?.trim() ||
+    profiles[authUserId]?.fullName ||
+    "User"
+  );
 }
 
 export function CommentThread({
@@ -78,7 +85,7 @@ export function CommentThread({
           >
             <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">
-                {resolveAuthorName(profiles, comment.authUserId)}
+                {resolveAuthorName(profiles, comment.authUserId, comment)}
                 {isOwn ? " (you)" : ""}
               </span>
               <span>{formatDateTime(comment.createdAt)}</span>

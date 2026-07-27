@@ -3,6 +3,7 @@
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { CoordinatorProfileForm } from "@/components/profile/coordinator-profile-form";
+import { EvaluatorProfileForm } from "@/components/profile/evaluator-profile-form";
 import { StudentProfileForm } from "@/components/profile/student-profile-form";
 import { SupervisorProfileForm } from "@/components/profile/supervisor-profile-form";
 import { useAuth } from "@/providers/auth-provider";
@@ -23,7 +24,7 @@ export function ProfilePage() {
       case "COORDINATOR":
         return <CoordinatorProfileForm />;
       case "EVALUATOR":
-        return <StudentProfileForm title="Evaluator Profile" />;
+        return <EvaluatorProfileForm />;
       default:
         return null;
     }

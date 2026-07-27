@@ -212,17 +212,46 @@ export class SubmissionsService {
         ? existingSubmissions[0].version + 1
         : 1;
 
-    const submission =
-      await this.prisma.submission.create({
+    const attachmentInputs =
+      dto.attachments && dto.attachments.length > 0
+        ? dto.attachments
+        : [
+            {
+              fileUrl: dto.fileUrl,
+              fileName:
+                dto.fileUrl.split('/').pop()?.split('?')[0] ||
+                'submission-file',
+            },
+          ];
+
+    const primaryFileUrl = attachmentInputs[0]?.fileUrl ?? dto.fileUrl;
+
+    const submission = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.submission.create({
         data: {
           workspaceId: deliverable.workspaceId,
           deliverableId: dto.deliverableId,
           teamId: team.id,
           version: nextVersion,
-          fileUrl: dto.fileUrl,
+          fileUrl: primaryFileUrl,
           remarks: dto.remarks,
         },
       });
+
+      await tx.submissionAttachment.createMany({
+        data: attachmentInputs.map((attachment) => ({
+          workspaceId: deliverable.workspaceId,
+          submissionId: created.id,
+          fileUrl: attachment.fileUrl,
+          fileName: attachment.fileName,
+        })),
+      });
+
+      return tx.submission.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { attachments: { orderBy: { createdAt: 'asc' } } },
+      });
+    });
 
     await this.activityLogsService.logActivity(
       authUserId,
@@ -528,6 +557,23 @@ export class SubmissionsService {
       );
     }
 
+    const existingFinalized =
+      await this.prisma.submission.findFirst({
+        where: {
+          deliverableId: submission.deliverableId,
+          teamId: submission.teamId,
+          status: 'FINALIZED',
+          NOT: { id: submissionId },
+        },
+        select: { id: true },
+      });
+
+    if (existingFinalized) {
+      throw new BadRequestException(
+        'A submission is already finalized for this deliverable. Unfinalize it before finalizing another.',
+      );
+    }
+
     const finalizedAt = new Date();
     const updatedSubmission =
       await this.prisma.submission.update({
@@ -750,6 +796,9 @@ export class SubmissionsService {
 
     return this.prisma.submission.findMany({
       where: { deliverableId, teamId },
+      include: {
+        attachments: { orderBy: { createdAt: 'asc' } },
+      },
       orderBy: { version: 'desc' },
     });
   }
@@ -769,7 +818,10 @@ export class SubmissionsService {
 
     return this.prisma.submission.findMany({
       where: { teamId },
-      include: { deliverable: true },
+      include: {
+        deliverable: true,
+        attachments: { orderBy: { createdAt: 'asc' } },
+      },
       orderBy: { submittedAt: 'desc' },
     });
   }

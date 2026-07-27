@@ -701,7 +701,13 @@ export default function SupervisorWorkStreamPage() {
               </p>
             ) : (
               <div className="space-y-3">
-                {submissions.map((submission) => (
+                {(() => {
+                  const finalizedByTeam = new Set(
+                    submissions
+                      .filter((item) => item.status === "FINALIZED")
+                      .map((item) => item.teamId),
+                  );
+                  return submissions.map((submission) => (
                   <div
                     key={submission.id}
                     className="rounded-lg border px-3 py-2 text-sm"
@@ -718,15 +724,32 @@ export default function SupervisorWorkStreamPage() {
                       {formatDateTime(submission.submittedAt)}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <a
-                          href={submission.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      {(submission.attachments &&
+                      submission.attachments.length > 0
+                        ? submission.attachments
+                        : [
+                            {
+                              id: submission.id,
+                              fileUrl: submission.fileUrl,
+                              fileName: "View file",
+                            },
+                          ]
+                      ).map((attachment) => (
+                        <Button
+                          key={attachment.id}
+                          asChild
+                          size="sm"
+                          variant="outline"
                         >
-                          View file
-                        </a>
-                      </Button>
+                          <a
+                            href={attachment.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {attachment.fileName || "View file"}
+                          </a>
+                        </Button>
+                      ))}
                       {submission.status === "SUBMITTED" && (
                         <Button
                           size="sm"
@@ -735,7 +758,8 @@ export default function SupervisorWorkStreamPage() {
                           Review
                         </Button>
                       )}
-                      {submission.status === "APPROVED" && (
+                      {submission.status === "APPROVED" &&
+                        !finalizedByTeam.has(submission.teamId) && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -766,7 +790,8 @@ export default function SupervisorWorkStreamPage() {
                       grade={submission.grade}
                     />
                   </div>
-                ))}
+                  ));
+                })()}
               </div>
             )}
           </CardContent>

@@ -66,7 +66,7 @@ export function useSupervisorWorkStreamMutations(options?: {
   onReviewSuccess?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const invalidate = () => invalidateSupervisorWorkStream(queryClient);
 
@@ -241,7 +241,11 @@ export function useSupervisorWorkStreamMutations(options?: {
           entityType: variables.entityType,
           entityId: variables.entityId,
           teamId: comment.teamId,
-          comment,
+          comment: {
+            ...comment,
+            authorName:
+              comment.authorName ?? profile?.fullName ?? undefined,
+          },
         });
       }
       toast.success("Comment posted");

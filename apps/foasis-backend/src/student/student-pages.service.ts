@@ -300,6 +300,20 @@ export class StudentPagesService {
       .expirePendingSupervisorRequests()
       .catch(() => undefined);
 
+    // Ensure a DRAFT proposal exists once the team profile is complete so
+    // students can always view the full proposal before supervisor assignment.
+    let proposal = ctx.proposal;
+    if (
+      !proposal &&
+      isProfileComplete &&
+      !isWorkflowLocked &&
+      ctx.team.leaderId === authUserId
+    ) {
+      proposal = await this.proposalsService
+        .ensureProposalForTeam(ctx.teamId, authUserId)
+        .catch(() => null);
+    }
+
     const invitations = await this.proposalsService
       .getTeamInvitationsByUserId(authUserId)
       .catch(() => []);
@@ -307,13 +321,13 @@ export class StudentPagesService {
     const activeInterests = invitations;
 
     const hasPendingProposal =
-      ctx.proposal?.status === 'PENDING_SUPERVISOR';
+      proposal?.status === 'PENDING_SUPERVISOR';
 
     const canBrowseSupervisors =
       isProfileComplete &&
       !isWorkflowLocked &&
       !hasPendingProposal &&
-      !ctx.proposal?.assignedSupervisorId;
+      !proposal?.assignedSupervisorId;
 
     const supervisors = canBrowseSupervisors
       ? await this.authService
@@ -321,18 +335,18 @@ export class StudentPagesService {
           .catch(() => [])
       : [];
 
-    const requestHistory = ctx.proposal
+    const requestHistory = proposal
       ? await this.proposalsService
-          .getRequestHistoryForProposal(ctx.proposal.id)
+          .getRequestHistoryForProposal(proposal.id)
           .catch(() => [])
       : [];
 
     const pendingSupervisorId =
-      ctx.proposal?.pendingSupervisorId ?? null;
+      proposal?.pendingSupervisorId ?? null;
 
     const profileIds = [
-      ...(ctx.proposal?.assignedSupervisorId
-        ? [ctx.proposal.assignedSupervisorId]
+      ...(proposal?.assignedSupervisorId
+        ? [proposal.assignedSupervisorId]
         : []),
       ...(pendingSupervisorId ? [pendingSupervisorId] : []),
       ...activeInterests.map(
@@ -351,7 +365,7 @@ export class StudentPagesService {
 
     return {
       team: ctx.team,
-      proposal: ctx.proposal,
+      proposal,
       interests: activeInterests,
       invitations: activeInterests,
       supervisors,

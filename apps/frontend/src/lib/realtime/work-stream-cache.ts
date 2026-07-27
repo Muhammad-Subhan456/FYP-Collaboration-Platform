@@ -19,6 +19,7 @@ import {
   touchStudentDashboard,
   touchSupervisorDashboard,
 } from "./dashboard-cache";
+import { upsertAuthorProfile } from "./profile-stub";
 
 import type {
   RealtimeAnnouncementWire,
@@ -82,7 +83,12 @@ function toDeliverableItem(
       wire.latestSubmissionStatus ?? existing?.latestSubmissionStatus ?? null,
     submissionCount:
       wire.submissionCount ?? existing?.submissionCount ?? 0,
-    submissionOpen: wire.submissionOpen ?? existing?.submissionOpen ?? false,
+    submissionOpen:
+      wire.submissionOpen ??
+      existing?.submissionOpen ??
+      (wire.isActive &&
+        wire.submissionsOpen &&
+        (!wire.dueDate || new Date() <= new Date(wire.dueDate))),
     submissionClosedReason:
       wire.submissionClosedReason ?? existing?.submissionClosedReason ?? null,
   };
@@ -351,10 +357,20 @@ export function patchLocalWorkStreamComment(
       student: (data) => ({
         ...data,
         ...appendComment(data, entityType, entityId, comment),
+        profiles: upsertAuthorProfile(
+          data.profiles ?? {},
+          comment.authUserId,
+          comment.authorName,
+        ),
       }),
       supervisor: (data) => ({
         ...data,
         ...appendComment(data, entityType, entityId, comment),
+        profiles: upsertAuthorProfile(
+          data.profiles ?? {},
+          comment.authUserId,
+          comment.authorName,
+        ),
       }),
     },
     { skipDashboard: true },
@@ -382,10 +398,20 @@ export function applyWorkStreamCommentEvent(
       student: (data) => ({
         ...data,
         ...appendComment(data, entityType, entityId, comment),
+        profiles: upsertAuthorProfile(
+          data.profiles ?? {},
+          comment.authUserId,
+          comment.authorName,
+        ),
       }),
       supervisor: (data) => ({
         ...data,
         ...appendComment(data, entityType, entityId, comment),
+        profiles: upsertAuthorProfile(
+          data.profiles ?? {},
+          comment.authUserId,
+          comment.authorName,
+        ),
       }),
     },
     { skipDashboard: true },
@@ -490,8 +516,15 @@ export function applyDeliverableSnapshot(
   workspaceId: string | null,
   deliverable: RealtimeDeliverableWire,
 ) {
-  const incoming = toDeliverableItem(deliverable);
-  const dashboardDeliverable = toDashboardDeliverable(incoming);
+  const mergeWithExisting = (
+    items: WorkStreamDeliverableItem[],
+  ): WorkStreamDeliverableItem => {
+    const existing = items.find((item) => item.id === deliverable.id);
+    return toDeliverableItem(deliverable, existing);
+  };
+
+  let dashboardDeliverable: ReturnType<typeof toDashboardDeliverable> | null =
+    null;
 
   patchWorkStreamCaches(
     queryClient,
@@ -499,18 +532,32 @@ export function applyDeliverableSnapshot(
     userId,
     role,
     workspaceId,
-    incoming.teamId,
+    deliverable.teamId ?? null,
     {
-      student: (data) => ({
-        ...data,
-        deliverables: upsertDeliverable(data.deliverables, incoming),
-      }),
-      supervisor: (data) => ({
-        ...data,
-        deliverables: upsertDeliverable(data.deliverables, incoming),
-      }),
+      student: (data) => {
+        const incoming = mergeWithExisting(data.deliverables);
+        dashboardDeliverable = toDashboardDeliverable(incoming);
+        return {
+          ...data,
+          deliverables: upsertDeliverable(data.deliverables, incoming),
+        };
+      },
+      supervisor: (data) => {
+        const incoming = mergeWithExisting(data.deliverables);
+        dashboardDeliverable ??= toDashboardDeliverable(incoming);
+        return {
+          ...data,
+          deliverables: upsertDeliverable(data.deliverables, incoming),
+        };
+      },
     },
   );
+
+  if (!dashboardDeliverable) {
+    dashboardDeliverable = toDashboardDeliverable(
+      toDeliverableItem(deliverable),
+    );
+  }
 
   if (role === "STUDENT") {
     syncStudentDashboardDeliverable(
@@ -528,7 +575,7 @@ export function applyDeliverableSnapshot(
       (dashboard) => {
       const deliverables = upsertDashboardDeliverable(
         dashboard.deliverables,
-        dashboardDeliverable,
+        dashboardDeliverable!,
       ).slice(0, 3);
       return {
         ...dashboard,

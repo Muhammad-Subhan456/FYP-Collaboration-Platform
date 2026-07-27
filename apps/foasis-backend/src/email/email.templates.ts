@@ -21,6 +21,12 @@ export type InvitationEmailPayload = {
   expiresAt: Date;
 };
 
+export type RoleAssignedEmailPayload = {
+  to: string;
+  workspaceName: string;
+  role: string;
+};
+
 export type PasswordResetEmailPayload = {
   to: string;
   resetUrl: string;
@@ -61,6 +67,8 @@ export function buildInvitationEmail(
   payload: InvitationEmailPayload,
 ): EmailMessage {
   const expiresText = payload.expiresAt.toLocaleString();
+  const workspaceName = escapeHtml(payload.workspaceName);
+  const role = escapeHtml(payload.role);
 
   return {
     to: payload.to,
@@ -75,9 +83,37 @@ export function buildInvitationEmail(
       `This link expires on ${expiresText}.`,
     ].join('\n'),
     html: `
-      <p>You have been invited to join <strong>${payload.workspaceName}</strong> on FOASIS as <strong>${payload.role}</strong>.</p>
+      <p>You have been invited to join <strong>${workspaceName}</strong> on FOASIS as <strong>${role}</strong>.</p>
       <p><a href="${payload.invitationUrl}">Accept invitation and set your password</a></p>
       <p>This link expires on ${expiresText}.</p>
+    `,
+  };
+}
+
+/**
+ * Informational only — for users who already have a FOASIS account.
+ * No invitation URL, password setup, or reset links.
+ */
+export function buildRoleAssignedEmail(
+  payload: RoleAssignedEmailPayload,
+): EmailMessage {
+  const workspaceName = escapeHtml(payload.workspaceName);
+  const role = escapeHtml(payload.role);
+
+  return {
+    to: payload.to,
+    type: 'role_assigned',
+    subject: `You've been added to ${payload.workspaceName} on FOASIS`,
+    text: [
+      `You have been assigned the role of ${payload.role} in ${payload.workspaceName} on FOASIS.`,
+      '',
+      'Sign in with your existing FOASIS account to access this workspace.',
+      'No password reset or invitation acceptance is required.',
+    ].join('\n'),
+    html: `
+      <p>You have been assigned the role of <strong>${role}</strong> in <strong>${workspaceName}</strong> on FOASIS.</p>
+      <p>Sign in with your existing FOASIS account to access this workspace.</p>
+      <p>No password reset or invitation acceptance is required.</p>
     `,
   };
 }

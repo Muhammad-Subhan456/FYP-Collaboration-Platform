@@ -324,27 +324,54 @@ export class ProfilesService {
       throw new BadRequestException('Profile not found');
     }
 
-    if (existing.profileType !== role) {
+    // Evaluators commonly share a SUPERVISOR profile (dual membership).
+    const roleMatchesProfile =
+      existing.profileType === role ||
+      (role === 'EVALUATOR' && existing.profileType === 'SUPERVISOR');
+
+    if (!roleMatchesProfile) {
       throw new ForbiddenException(
         'Profile type does not match your role',
       );
     }
 
     const updateData =
-      role === 'STUDENT'
+      existing.profileType === 'STUDENT'
         ? await this.assertValidStudentUpdate(data)
         : data;
 
+    const { email: _ignoredEmail, ...safeUpdate } =
+      updateData as Record<string, unknown> & { email?: unknown };
+
     const profile = await this.prisma.userProfile.update({
       where: { authUserId },
-      data: updateData as object,
+      data: safeUpdate as object,
     });
 
-    await this.activityLogsService.logActivity(
-      authUserId,
-      'Profile Updated',
-      `${profile.fullName} updated their FOASIS profile.`,
-    );
+    if (
+      typeof safeUpdate.fullName === 'string' &&
+      safeUpdate.fullName.trim() &&
+      safeUpdate.fullName !== existing.fullName
+    ) {
+      await this.prisma.user.update({
+        where: { id: authUserId },
+        data: { fullName: safeUpdate.fullName.trim() },
+      });
+    }
+
+    try {
+      await this.activityLogsService.logActivity(
+        authUserId,
+        'Profile Updated',
+        `${profile.fullName} updated their FOASIS profile.`,
+      );
+    } catch (error) {
+      // Profile write already succeeded — never fail the request on logging.
+      console.warn(
+        'Failed to write profile-update activity log',
+        error instanceof Error ? error.message : error,
+      );
+    }
 
     return profile;
   }

@@ -65,6 +65,7 @@ export interface IssueCommentWire {
   authUserId: string;
   body: string;
   createdAt: string;
+  authorName?: string;
 }
 
 export interface IssueActivityWire {
@@ -93,6 +94,7 @@ export interface WorkstreamCommentWire {
   authUserId: string;
   body: string;
   createdAt: string;
+  authorName?: string;
 }
 
 export interface WorkstreamCommentCreatedPayload {
@@ -186,6 +188,12 @@ export interface SubmissionWire {
   grade?: number | null;
   submittedAt: string;
   finalizedAt?: string | null;
+  attachments?: Array<{
+    id: string;
+    fileUrl: string;
+    fileName: string;
+    createdAt: string;
+  }>;
 }
 
 export interface SubmissionSnapshotPayload {

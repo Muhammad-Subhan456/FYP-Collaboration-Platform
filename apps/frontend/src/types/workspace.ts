@@ -8,7 +8,6 @@ export interface Workspace {
   createdAt: string;
   updatedAt: string;
   _count?: {
-    memberships: number;
     teams: number;
   };
 }

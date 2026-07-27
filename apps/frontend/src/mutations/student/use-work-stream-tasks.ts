@@ -13,7 +13,7 @@ import { invalidateStudentWorkStream } from "./invalidate";
 
 export function useStudentWorkStreamMutations() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const commentMutation = useMutation({
     mutationFn: workStreamService.createComment,
@@ -23,7 +23,11 @@ export function useStudentWorkStreamMutations() {
           entityType: variables.entityType,
           entityId: variables.entityId,
           teamId: comment.teamId,
-          comment,
+          comment: {
+            ...comment,
+            authorName:
+              comment.authorName ?? profile?.fullName ?? undefined,
+          },
         });
       }
       toast.success("Comment posted");
@@ -34,17 +38,25 @@ export function useStudentWorkStreamMutations() {
   const submitMutation = useMutation({
     mutationFn: async ({
       deliverableId,
-      file,
+      files,
       remarks,
     }: {
       deliverableId: string;
-      file: File;
+      files: File[];
       remarks?: string;
     }) => {
-      const uploaded = await uploadService.uploadFile(file);
+      const attachments: Array<{ fileUrl: string; fileName: string }> = [];
+      for (const file of files) {
+        const uploaded = await uploadService.uploadFile(file);
+        attachments.push({
+          fileUrl: uploaded.fileUrl,
+          fileName: file.name,
+        });
+      }
       return progressService.createSubmission({
         deliverableId,
-        fileUrl: uploaded.fileUrl,
+        fileUrl: attachments[0]!.fileUrl,
+        attachments,
         remarks,
       });
     },

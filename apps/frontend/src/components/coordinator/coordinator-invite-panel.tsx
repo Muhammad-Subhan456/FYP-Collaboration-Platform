@@ -155,14 +155,21 @@ export function CoordinatorInvitePanel() {
         fullName: fullName || undefined,
         role,
       }),
-    onSuccess: () => {
-      toast.success("Invitation sent");
+    onSuccess: (result: {
+      assignedExistingUser?: boolean;
+    }) => {
+      toast.success(
+        result.assignedExistingUser
+          ? "User assigned — notification email sent"
+          : "Invitation sent",
+      );
       setInviteOpen(false);
       setEmail("");
       setFullName("");
       queryClient.invalidateQueries({
         queryKey: queryKeys.coordinator.invitations(user?.workspaceId),
       });
+      invalidateCoordinatorUsers(queryClient);
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });

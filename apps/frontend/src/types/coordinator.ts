@@ -128,4 +128,9 @@ export interface SystemHealthResponse {
   service: string;
   services: ServiceHealth[];
   timestamp: string;
+  registeredUsers?: number;
+  usersByRole?: Array<{
+    role: string;
+    count: number;
+  }>;
 }

@@ -103,7 +103,7 @@ export function useStudentCompleteTeamIssueMutation(options?: {
 
 export function useStudentTeamIssueCommentMutation() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   return useMutation({
     mutationFn: ({
@@ -120,7 +120,11 @@ export function useStudentTeamIssueCommentMutation() {
           user.userId,
           user.role,
           user.workspaceId,
-          comment,
+          {
+            ...comment,
+            authorName:
+              comment.authorName ?? profile?.fullName ?? undefined,
+          },
         );
       }
       toast.success("Comment posted");

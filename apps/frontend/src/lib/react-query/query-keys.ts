@@ -206,6 +206,7 @@ export const queryKeys = {
       ["evaluator", "evaluation", evaluationId, workspaceId ?? null] as const,
     results: (workspaceId?: string | null) =>
       ["evaluator", "results", workspaceId ?? null] as const,
+    profile: () => ["evaluator", "profile"] as const,
   },
 
   teams: {

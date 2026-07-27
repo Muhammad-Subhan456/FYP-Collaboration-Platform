@@ -16,6 +16,7 @@ import {
   syncStudentIssueStats,
   syncSupervisorIssueStats,
 } from "./dashboard-cache";
+import { upsertAuthorProfile } from "./profile-stub";
 import type { RealtimeIssueSnapshot } from "./types";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -79,7 +80,11 @@ function patchStudentMilestones(
   role: string,
   workspaceId: string | null,
   updateIssues: (issues: TeamIssue[]) => TeamIssue[],
-  options?: { skipDashboard?: boolean },
+  options?: {
+    skipDashboard?: boolean;
+    authorName?: string;
+    authorId?: string;
+  },
 ) {
   const queryKey = queryKeys.student.milestones(userId, workspaceId);
   const existing = queryClient.getQueryData<StudentMilestonesPageData>(queryKey);
@@ -107,10 +112,20 @@ function patchStudentMilestones(
 
     const issues = updateIssues(current.issues);
     summaries = buildSummaries(issues, userId);
+    const profiles =
+      options?.authorId && options.authorName
+        ? upsertAuthorProfile(
+            current.profiles ?? {},
+            options.authorId,
+            options.authorName,
+          )
+        : current.profiles;
+
     return {
       ...current,
       issues,
       summaries,
+      profiles,
     };
   });
 
@@ -125,7 +140,11 @@ function patchSupervisorMilestones(
   userId: string,
   role: string,
   updateIssues: (issues: TeamIssue[]) => TeamIssue[],
-  options?: { skipDashboard?: boolean },
+  options?: {
+    skipDashboard?: boolean;
+    authorName?: string;
+    authorId?: string;
+  },
 ) {
   let patched = false;
   let summaries: TeamIssueSummaries | null = null;
@@ -146,10 +165,20 @@ function patchSupervisorMilestones(
       patched = true;
       const issues = updateIssues(current.issues);
       summaries = buildSummaries(issues, userId);
+      const profiles =
+        options?.authorId && options.authorName
+          ? upsertAuthorProfile(
+              current.profiles ?? {},
+              options.authorId,
+              options.authorName,
+            )
+          : current.profiles;
+
       return {
         ...current,
         issues,
         summaries,
+        profiles,
       };
     },
   );
@@ -170,7 +199,11 @@ export function patchTeamIssueCaches(
   role: string,
   workspaceId: string | null,
   updateIssues: (issues: TeamIssue[]) => TeamIssue[],
-  options?: { skipDashboard?: boolean },
+  options?: {
+    skipDashboard?: boolean;
+    authorName?: string;
+    authorId?: string;
+  },
 ) {
   patchStudentMilestones(
     queryClient,
@@ -245,6 +278,10 @@ export function patchLocalIssueComment(
     role,
     workspaceId ?? null,
     (issues) => applyIssueComment(issues, comment.issueId, comment),
-    { skipDashboard: true },
+    {
+      skipDashboard: true,
+      authorId: comment.authUserId,
+      authorName: comment.authorName,
+    },
   );
 }

@@ -1,4 +1,7 @@
-export const SUPERVISOR_MAX_ACCEPTED_TEAMS = 3;
+export const SUPERVISOR_MAX_ACCEPTED_TEAMS = Number.POSITIVE_INFINITY;
+
+/** Capacity enforcement is disabled — supervisors may manage unlimited teams. */
+export const SUPERVISOR_CAPACITY_ENFORCED = false;
 
 export type TeamAvailability = 'AVAILABLE' | 'UNAVAILABLE';
 

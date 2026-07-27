@@ -499,6 +499,8 @@ export class WorkStreamService {
       throw new BadRequestException('Team not found');
     }
 
+    const authorName = await this.actorName(authUserId);
+
     const comment = await this.prisma.workStreamComment.create({
       data: {
         workspaceId: team.workspaceId,
@@ -523,26 +525,26 @@ export class WorkStreamService {
         entityType: dto.entityType,
         entityId: dto.entityId,
         teamId,
-        comment: serializeWorkstreamComment(comment),
+        comment: serializeWorkstreamComment(comment, { authorName }),
       },
     });
 
-    const [actorDisplayName, entityTitle] = await Promise.all([
-      this.actorName(authUserId),
-      this.getEntityTitle(dto.entityType, dto.entityId),
-    ]);
+    const entityTitle = await this.getEntityTitle(
+      dto.entityType,
+      dto.entityId,
+    );
 
     this.scheduleWorkStreamCommentNotifications(
       teamId,
       authUserId,
       dto.entityType,
       dto.entityId,
-      actorDisplayName,
+      authorName,
       entityTitle,
       role,
     );
 
-    return comment;
+    return { ...comment, authorName };
   }
 
   private async actorName(actorId: string) {
@@ -674,6 +676,9 @@ export class WorkStreamService {
         }),
         this.prisma.submission.findMany({
           where: { teamId: team.id },
+          include: {
+            attachments: { orderBy: { createdAt: 'asc' } },
+          },
           orderBy: [
             { deliverableId: 'asc' },
             { version: 'desc' },
@@ -837,6 +842,9 @@ export class WorkStreamService {
               ...(contentTeamIds.length > 0
                 ? { teamId: { in: contentTeamIds } }
                 : {}),
+            },
+            include: {
+              attachments: { orderBy: { createdAt: 'asc' } },
             },
             orderBy: [
               { deliverableId: 'asc' },

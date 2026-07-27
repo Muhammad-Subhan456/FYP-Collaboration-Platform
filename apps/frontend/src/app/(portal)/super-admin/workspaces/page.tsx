@@ -208,10 +208,6 @@ export default function SuperAdminWorkspacesPage() {
                     {workspace.coordinatorEmail}
                   </p>
                   <p>
-                    <span className="text-muted-foreground">Members:</span>{" "}
-                    {workspace._count?.memberships ?? 0}
-                  </p>
-                  <p>
                     <span className="text-muted-foreground">Teams:</span>{" "}
                     {workspace._count?.teams ?? 0}
                   </p>

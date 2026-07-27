@@ -12,6 +12,7 @@ import {
   ProfileAvatar,
   ProfileViewModal,
 } from "@/components/profile/profile-view-modal";
+import { ProposalDocumentDialog } from "@/components/proposal/proposal-document-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -104,6 +105,7 @@ export default function SupervisorTeamsPage() {
     focusTeamId,
   );
   const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
+  const [viewProposalId, setViewProposalId] = useState<string | null>(null);
 
   const pageQuery = useSupervisorTeamsQuery();
 
@@ -143,6 +145,13 @@ export default function SupervisorTeamsPage() {
         open={!!viewProfile}
         onOpenChange={(open) => {
           if (!open) setViewProfile(null);
+        }}
+      />
+      <ProposalDocumentDialog
+        proposalId={viewProposalId}
+        open={!!viewProposalId}
+        onOpenChange={(open) => {
+          if (!open) setViewProposalId(null);
         }}
       />
 
@@ -189,22 +198,32 @@ export default function SupervisorTeamsPage() {
                       Team leader: {memberLabel(profiles, leaderId)}
                     </p>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setExpandedTeamId(
-                        expanded ? null : proposal.teamId,
-                      )
-                    }
-                  >
-                    {expanded ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                    {expanded ? "Hide Members" : "View Members"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setViewProposalId(proposal.id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                      View Proposal
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setExpandedTeamId(
+                          expanded ? null : proposal.teamId,
+                        )
+                      }
+                    >
+                      {expanded ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                      {expanded ? "Hide Members" : "View Members"}
+                    </Button>
+                  </div>
                   {expanded && (
                     <TeamMembers
                       teamId={proposal.teamId}

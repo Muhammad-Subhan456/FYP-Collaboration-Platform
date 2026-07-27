@@ -98,7 +98,7 @@ export default function StudentWorkStreamPage() {
   const [deliverableTab, setDeliverableTab] =
     useState<DeliverableTab>("comments");
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [submitFile, setSubmitFile] = useState<File | null>(null);
+  const [submitFiles, setSubmitFiles] = useState<File[]>([]);
   const [submitRemarks, setSubmitRemarks] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("all");
 
@@ -355,14 +355,27 @@ export default function StudentWorkStreamPage() {
                       <p className="text-muted-foreground">
                         {formatDateTime(submission.submittedAt)}
                       </p>
-                      <a
-                        href={submission.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-block text-primary hover:underline"
-                      >
-                        View attachment
-                      </a>
+                      {(submission.attachments &&
+                      submission.attachments.length > 0
+                        ? submission.attachments
+                        : [
+                            {
+                              id: submission.id,
+                              fileUrl: submission.fileUrl,
+                              fileName: "View attachment",
+                            },
+                          ]
+                      ).map((attachment) => (
+                        <a
+                          key={attachment.id}
+                          href={attachment.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 mr-3 inline-block text-primary hover:underline"
+                        >
+                          {attachment.fileName || "View attachment"}
+                        </a>
+                      ))}
                       <SubmissionRemarks
                         remarks={submission.remarks}
                         feedback={submission.feedback}
@@ -381,18 +394,26 @@ export default function StudentWorkStreamPage() {
             <DialogHeader>
               <DialogTitle>Submit {selectedDeliverable.title}</DialogTitle>
               <DialogDescription>
-                Upload your file (PDF, DOC, PPT, ZIP — max 10MB)
+                Upload one or more files (PDF, DOC, PPT, ZIP — max 10MB each)
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>File</Label>
+                <Label>Files</Label>
                 <Input
                   type="file"
+                  multiple
                   onChange={(e) =>
-                    setSubmitFile(e.target.files?.[0] ?? null)
+                    setSubmitFiles(Array.from(e.target.files ?? []))
                   }
                 />
+                {submitFiles.length > 0 ? (
+                  <ul className="space-y-1 text-xs text-muted-foreground">
+                    {submitFiles.map((file) => (
+                      <li key={`${file.name}-${file.size}`}>{file.name}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Remarks (optional)</Label>
@@ -404,19 +425,19 @@ export default function StudentWorkStreamPage() {
               </div>
               <Button
                 className="w-full"
-                disabled={submitMutation.isPending || !submitFile}
+                disabled={submitMutation.isPending || submitFiles.length === 0}
                 onClick={() => {
-                  if (!submitFile || !selectedDeliverableId) return;
+                  if (submitFiles.length === 0 || !selectedDeliverableId) return;
                   submitMutation.mutate(
                     {
                       deliverableId: selectedDeliverableId,
-                      file: submitFile,
+                      files: submitFiles,
                       remarks: submitRemarks || undefined,
                     },
                     {
                       onSuccess: () => {
                         setSubmitOpen(false);
-                        setSubmitFile(null);
+                        setSubmitFiles([]);
                         setSubmitRemarks("");
                       },
                     },

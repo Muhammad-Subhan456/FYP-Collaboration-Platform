@@ -81,6 +81,7 @@ model Workspace {
   announcements    Announcement[]
   deliverables     Deliverable[]
   submissions      Submission[]
+  submissionAttachments SubmissionAttachment[]
   workStreamComments WorkStreamComment[]
   workStreamAttachments WorkStreamAttachment[]
   teamIssues       TeamIssue[]
@@ -596,10 +597,25 @@ model Submission {
   deliverable   Deliverable      @relation(fields: [deliverableId], references: [id])
   workspace     Workspace        @relation(fields: [workspaceId], references: [id])
   evaluations   SubmissionEvaluation[]
+  attachments   SubmissionAttachment[]
 
   @@index([workspaceId, submittedAt(sort: Desc)])
   @@index([teamId, status])
   @@index([teamId, deliverableId, version(sort: Desc)])
+}
+
+model SubmissionAttachment {
+  id           String     @id @default(uuid())
+  workspaceId  String
+  submissionId String
+  fileUrl      String
+  fileName     String
+  createdAt    DateTime   @default(now())
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([submissionId, createdAt])
 }
 
 enum WorkStreamEntityType {

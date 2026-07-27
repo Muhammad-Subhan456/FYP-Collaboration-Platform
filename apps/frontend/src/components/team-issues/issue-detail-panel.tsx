@@ -327,21 +327,27 @@ export function IssueDetailPanel({
             </Button>
             <Button
               onClick={async () => {
-                if (!onEdit) return;
-                const labels = editLabels
-                  .split(",")
-                  .map((l) => l.trim())
-                  .filter(Boolean);
-                await onEdit({
-                  title: editTitle.trim(),
-                  description: editDescription.trim(),
-                  priority: editPriority,
-                  labels,
-                });
-                setEditOpen(false);
+                if (!onEdit || acting) return;
+                setActing(true);
+                try {
+                  const labels = editLabels
+                    .split(",")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
+                  await onEdit({
+                    title: editTitle.trim(),
+                    description: editDescription.trim(),
+                    priority: editPriority,
+                    labels,
+                  });
+                  setEditOpen(false);
+                } finally {
+                  setActing(false);
+                }
               }}
               disabled={acting}
             >
+              {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Save
             </Button>
           </DialogFooter>

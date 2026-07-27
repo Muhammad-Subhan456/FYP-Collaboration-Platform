@@ -9,6 +9,7 @@ import { RubricCriteriaEditor } from "@/components/coordinator/rubric-criteria-e
 import { PhaseFilter } from "@/components/common/phase-filter";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
+import { TemplateDetailsDialog } from "@/components/supervisor/template-details-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,6 +83,17 @@ export default function CoordinatorDeliverableTemplatesPage() {
   ]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [viewTemplateId, setViewTemplateId] = useState<string | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+
+  const invalidateTemplates = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ["coordinator", "deliverable-templates"],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.deliverableTemplates.all,
+    });
+  };
 
   const phasesQuery = useQuery({
     queryKey: queryKeys.phases.list(user?.workspaceId),
@@ -183,13 +195,16 @@ export default function CoordinatorDeliverableTemplatesPage() {
         setUploading(false);
       }
     },
-    onSuccess: () => {
-      toast.success(editing ? "Template updated" : "Template created");
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.deliverableTemplates.all,
-      });
+    onSuccess: (template) => {
+      const wasEditing = !!editing;
+      toast.success(wasEditing ? "Template updated" : "Template created");
+      invalidateTemplates();
       setDialogOpen(false);
       resetForm();
+      if (!wasEditing && template?.id) {
+        setViewTemplateId(template.id);
+        setViewDialogOpen(true);
+      }
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -198,9 +213,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
     mutationFn: (id: string) => deliverableTemplateService.remove(id),
     onSuccess: () => {
       toast.success("Template deleted");
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.deliverableTemplates.all,
-      });
+      invalidateTemplates();
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -281,19 +294,31 @@ export default function CoordinatorDeliverableTemplatesPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openEdit(template)}
+                      onClick={() => {
+                        setViewTemplateId(template.id);
+                        setViewDialogOpen(true);
+                      }}
                     >
-                      {template.isLocked ? "View" : "Edit"}
+                      View
                     </Button>
                     {!template.isLocked ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => deleteMutation.mutate(template.id)}
-                      >
-                        Delete
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEdit(template)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => deleteMutation.mutate(template.id)}
+                        >
+                          Delete
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </div>
@@ -491,6 +516,17 @@ export default function CoordinatorDeliverableTemplatesPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <TemplateDetailsDialog
+        templateId={viewTemplateId}
+        open={viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) {
+            setViewTemplateId(null);
+          }
+        }}
+      />
     </div>
   );
 }

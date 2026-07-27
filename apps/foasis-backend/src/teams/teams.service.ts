@@ -1156,6 +1156,12 @@ async getStudentTeamOverview(
 
     await this.proposalsService.syncProposalFromTeam(team.id);
 
+    if (isTeamProfileComplete(updated)) {
+      await this.proposalsService
+        .ensureProposalForTeam(team.id, leaderId)
+        .catch(() => undefined);
+    }
+
     const payload = {
       workspaceId: updated.workspaceId,
       teamId: updated.id,

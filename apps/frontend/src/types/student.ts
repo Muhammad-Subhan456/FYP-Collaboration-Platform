@@ -136,6 +136,12 @@ export interface Submission {
   submittedAt: string;
   finalizedAt?: string | null;
   deliverable?: Deliverable;
+  attachments?: Array<{
+    id: string;
+    fileUrl: string;
+    fileName: string;
+    createdAt?: string;
+  }>;
 }
 
 export interface EvaluationAssignment {

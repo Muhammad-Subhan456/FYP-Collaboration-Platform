@@ -26,6 +26,7 @@ const TENANT_MODELS = new Set([
   'DeliverableTemplate',
   'Phase',
   'Submission',
+  'SubmissionAttachment',
   'WorkStreamComment',
   'WorkStreamAttachment',
   'TeamIssue',

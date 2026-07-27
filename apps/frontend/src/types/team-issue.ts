@@ -22,6 +22,7 @@ export interface TeamIssueComment {
   authUserId: string;
   body: string;
   createdAt: string;
+  authorName?: string;
 }
 
 export interface TeamIssueActivity {

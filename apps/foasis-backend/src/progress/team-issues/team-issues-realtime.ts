@@ -17,6 +17,7 @@ type IssueWithRelations = TeamIssue & {
 
 export function serializeComment(
   comment: TeamIssueComment,
+  extras?: { authorName?: string },
 ): IssueCommentWire {
   return {
     id: comment.id,
@@ -25,6 +26,7 @@ export function serializeComment(
     authUserId: comment.authUserId,
     body: comment.body,
     createdAt: comment.createdAt.toISOString(),
+    authorName: extras?.authorName,
   };
 }
 
@@ -60,7 +62,7 @@ export function serializeIssueSnapshot(
     createdAt: issue.createdAt.toISOString(),
     updatedAt: issue.updatedAt.toISOString(),
     completedAt: issue.completedAt?.toISOString() ?? null,
-    comments: issue.comments?.map(serializeComment) ?? [],
-    activities: issue.activities?.map(serializeActivity) ?? [],
+    comments: issue.comments?.map((comment) => serializeComment(comment)) ?? [],
+    activities: issue.activities?.map((activity) => serializeActivity(activity)) ?? [],
   };
 }

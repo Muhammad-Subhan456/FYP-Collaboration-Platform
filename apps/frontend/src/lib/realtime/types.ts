@@ -133,6 +133,7 @@ export interface RealtimeWorkstreamCommentPayload {
     authUserId: string;
     body: string;
     createdAt: string;
+    authorName?: string;
   };
 }
 

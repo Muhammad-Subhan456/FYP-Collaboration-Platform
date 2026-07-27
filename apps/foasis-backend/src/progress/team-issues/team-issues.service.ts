@@ -131,11 +131,12 @@ export class TeamIssuesService {
     teamId: string,
     comment: TeamIssueComment,
     activity: Awaited<ReturnType<TeamIssuesService['logActivity']>>,
+    authorName?: string,
   ) {
     const payload: IssueCommentCreatedPayload = {
       issueId,
       teamId,
-      comment: serializeComment(comment),
+      comment: serializeComment(comment, { authorName }),
       activity: serializeActivity(activity),
     };
 
@@ -469,13 +470,32 @@ export class TeamIssuesService {
       );
     }
 
+    const nextTitle = dto.title?.trim();
+    const nextDescription = dto.description?.trim();
+    const nextPriority = dto.priority;
+    const nextLabels = dto.labels;
+
+    const hasChanges =
+      (nextTitle !== undefined && nextTitle !== issue.title) ||
+      (nextDescription !== undefined &&
+        nextDescription !== issue.description) ||
+      (nextPriority !== undefined && nextPriority !== issue.priority) ||
+      (nextLabels !== undefined &&
+        JSON.stringify(nextLabels) !== JSON.stringify(issue.labels));
+
+    if (!hasChanges) {
+      return this.reloadIssue(issue.id);
+    }
+
     await this.prisma.teamIssue.update({
       where: { id: issueId },
       data: {
-        title: dto.title?.trim(),
-        description: dto.description?.trim(),
-        priority: dto.priority,
-        labels: dto.labels,
+        ...(nextTitle !== undefined ? { title: nextTitle } : {}),
+        ...(nextDescription !== undefined
+          ? { description: nextDescription }
+          : {}),
+        ...(nextPriority !== undefined ? { priority: nextPriority } : {}),
+        ...(nextLabels !== undefined ? { labels: nextLabels } : {}),
       },
     });
 
@@ -707,6 +727,7 @@ export class TeamIssuesService {
       issue.teamId,
       comment,
       activity,
+      name,
     );
 
     this.notifyTeamAndSupervisor(
@@ -720,7 +741,7 @@ export class TeamIssuesService {
       authUserId,
     );
 
-    return comment;
+    return { ...comment, authorName: name };
   }
 
   async getIssue(

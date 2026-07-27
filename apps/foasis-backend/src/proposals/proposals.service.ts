@@ -43,6 +43,7 @@ import {
 } from './proposals-realtime';
 import {
   InvitationBrowseTarget,
+  SUPERVISOR_CAPACITY_ENFORCED,
   SUPERVISOR_MAX_ACCEPTED_TEAMS,
   TeamAvailability,
 } from './supervisor-capacity.constants';
@@ -76,11 +77,18 @@ export class ProposalsService {
   }
 
   async isSupervisorAtCapacity(supervisorId: string) {
+    if (!SUPERVISOR_CAPACITY_ENFORCED) {
+      return false;
+    }
     const count = await this.getAcceptedTeamCount(supervisorId);
     return count >= SUPERVISOR_MAX_ACCEPTED_TEAMS;
   }
 
   async enforceSupervisorCapacity(supervisorId: string) {
+    if (!SUPERVISOR_CAPACITY_ENFORCED) {
+      return { enforced: false, rejectedRequests: 0, rejectedInvitations: 0 };
+    }
+
     const count = await this.getAcceptedTeamCount(supervisorId);
 
     if (count < SUPERVISOR_MAX_ACCEPTED_TEAMS) {
@@ -1007,7 +1015,7 @@ async expressInterest(
 ) {
   if (await this.isSupervisorAtCapacity(supervisorId)) {
     throw new BadRequestException(
-      'You have reached the maximum of 3 accepted teams',
+      'You have reached the maximum accepted team capacity',
     );
   }
 
@@ -1894,17 +1902,19 @@ async approveProposal(
   const now = new Date();
 
   const updated = await this.prisma.$transaction(async (tx) => {
-    const acceptedCount = await tx.proposal.count({
-      where: {
-        assignedSupervisorId: supervisorId,
-        status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
-      },
-    });
+    if (SUPERVISOR_CAPACITY_ENFORCED) {
+      const acceptedCount = await tx.proposal.count({
+        where: {
+          assignedSupervisorId: supervisorId,
+          status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
+        },
+      });
 
-    if (acceptedCount >= SUPERVISOR_MAX_ACCEPTED_TEAMS) {
-      throw new BadRequestException(
-        'You have reached the maximum of 3 accepted teams',
-      );
+      if (acceptedCount >= SUPERVISOR_MAX_ACCEPTED_TEAMS) {
+        throw new BadRequestException(
+          'You have reached the maximum accepted team capacity',
+        );
+      }
     }
 
     const result = await tx.proposal.updateMany({

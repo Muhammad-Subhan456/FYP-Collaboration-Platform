@@ -27,6 +27,7 @@ export const progressService = {
   createSubmission: async (data: {
     deliverableId: string;
     fileUrl: string;
+    attachments?: Array<{ fileUrl: string; fileName: string }>;
     remarks?: string;
   }) => {
     const res = await api.post<Submission>("/submissions", data);

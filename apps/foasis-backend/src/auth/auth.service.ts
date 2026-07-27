@@ -17,7 +17,6 @@ import type {
   UserStatusUpdatedPayload,
 } from '../domain-events/domain-event.types';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
-import { SUPERVISOR_MAX_ACCEPTED_TEAMS } from '../proposals/supervisor-capacity.constants';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
 import { WorkspaceContextService } from '../workspace/workspace-context.service';
 import { AUTH_TOKEN_TYPES } from './auth.constants';
@@ -553,8 +552,6 @@ async listSupervisorsForBrowsing(workspaceId: string) {
     ]),
   );
 
-  const maxTeams = SUPERVISOR_MAX_ACCEPTED_TEAMS;
-
   return supervisors.map((supervisor) => {
     const profile = profileByUserId.get(supervisor.id);
     const supervisedTeamCount =
@@ -571,7 +568,8 @@ async listSupervisorsForBrowsing(workspaceId: string) {
       biography: profile?.biography ?? null,
       officeHours: profile?.officeHours ?? null,
       supervisedTeamCount,
-      isAvailable: supervisedTeamCount < maxTeams,
+      // Capacity limit removed — supervisors remain available regardless of team count.
+      isAvailable: true,
     };
   });
 }

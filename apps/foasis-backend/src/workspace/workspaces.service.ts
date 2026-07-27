@@ -24,7 +24,7 @@ export class WorkspacesService {
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
-          select: { memberships: true, teams: true },
+          select: { teams: true },
         },
       },
     });
@@ -35,7 +35,7 @@ export class WorkspacesService {
       where: { id },
       include: {
         _count: {
-          select: { memberships: true, teams: true },
+          select: { teams: true },
         },
       },
     });
@@ -218,10 +218,30 @@ export class WorkspacesService {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
 
+      const roleCounts = await this.prisma.user.groupBy({
+        by: ['role'],
+        where: {
+          role: { not: UserRole.SUPER_ADMIN },
+        },
+        _count: { _all: true },
+      });
+
+      const usersByRole = roleCounts.map((row) => ({
+        role: row.role,
+        count: row._count._all,
+      }));
+
+      const registeredUsers = usersByRole.reduce(
+        (sum, row) => sum + row.count,
+        0,
+      );
+
       return {
         status: 'ok',
         service: 'foasis-backend',
         database: 'connected',
+        registeredUsers,
+        usersByRole,
         services: [
           {
             name: 'foasis-backend',
@@ -237,6 +257,8 @@ export class WorkspacesService {
         status: 'error',
         service: 'foasis-backend',
         database: 'disconnected',
+        registeredUsers: 0,
+        usersByRole: [],
         services: [
           {
             name: 'foasis-backend',

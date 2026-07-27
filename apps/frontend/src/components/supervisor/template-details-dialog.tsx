@@ -50,7 +50,7 @@ export function TemplateDetailsDialog({
         <DialogHeader>
           <DialogTitle>{template?.title ?? "Deliverable template"}</DialogTitle>
           <DialogDescription>
-            Read-only preview of the coordinator&apos;s deliverable template.
+            Read-only preview of the deliverable template.
           </DialogDescription>
         </DialogHeader>
 

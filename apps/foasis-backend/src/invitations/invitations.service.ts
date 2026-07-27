@@ -18,7 +18,10 @@ import {
   hashToken,
 } from '../common/helpers/secure-token';
 import { EmailService } from '../email/email.service';
-import { buildInvitationEmail } from '../email/email.templates';
+import {
+  buildInvitationEmail,
+  buildRoleAssignedEmail,
+} from '../email/email.templates';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Safe user-facing reason for CSV row skips — never raw Prisma/internal text. */
@@ -144,23 +147,16 @@ export class InvitationsService {
       select: { id: true },
     });
 
+    // Existing FOASIS users: assign membership immediately and send an
+    // informational email only (no invite / password-setup links).
     if (existingUser) {
-      const membership =
-        await this.prisma.workspaceMembership.findUnique({
-          where: {
-            workspaceId_userId_role: {
-              workspaceId,
-              userId: existingUser.id,
-              role,
-            },
-          },
-        });
-
-      if (membership?.isActive) {
-        throw new BadRequestException(
-          'User already has this role in the workspace',
-        );
-      }
+      return this.assignRoleToExistingUser({
+        workspaceId,
+        workspaceName: workspace.name,
+        userId: existingUser.id,
+        email,
+        role,
+      });
     }
 
     const pendingInvite =
@@ -239,6 +235,118 @@ export class InvitationsService {
       status: invitation.status,
       expiresAt: invitation.expiresAt,
       emailSent,
+      assignedExistingUser: false,
+    };
+  }
+
+  /**
+   * Directly grant workspace membership to a registered user and notify them.
+   */
+  private async assignRoleToExistingUser(params: {
+    workspaceId: string;
+    workspaceName: string;
+    userId: string;
+    email: string;
+    role: UserRole;
+  }) {
+    const { workspaceId, workspaceName, userId, email, role } = params;
+
+    const membership =
+      await this.prisma.workspaceMembership.findUnique({
+        where: {
+          workspaceId_userId_role: {
+            workspaceId,
+            userId,
+            role,
+          },
+        },
+      });
+
+    if (membership?.isActive) {
+      throw new BadRequestException(
+        'User already has this role in the workspace',
+      );
+    }
+
+    const assigned = await this.prisma.$transaction(async (tx) => {
+      const membershipRow = await tx.workspaceMembership.upsert({
+        where: {
+          workspaceId_userId_role: {
+            workspaceId,
+            userId,
+            role,
+          },
+        },
+        create: {
+          workspaceId,
+          userId,
+          role,
+          isActive: true,
+        },
+        update: {
+          isActive: true,
+        },
+      });
+
+      if (role === UserRole.SUPERVISOR) {
+        await tx.workspaceMembership.upsert({
+          where: {
+            workspaceId_userId_role: {
+              workspaceId,
+              userId,
+              role: UserRole.EVALUATOR,
+            },
+          },
+          create: {
+            workspaceId,
+            userId,
+            role: UserRole.EVALUATOR,
+            isActive: true,
+          },
+          update: {
+            isActive: true,
+          },
+        });
+      }
+
+      await tx.workspaceInvitation.updateMany({
+        where: {
+          workspaceId,
+          email,
+          role,
+          status: InvitationStatus.PENDING,
+        },
+        data: { status: InvitationStatus.REVOKED },
+      });
+
+      return membershipRow;
+    });
+
+    let emailSent = true;
+    try {
+      await this.emailService.send(
+        buildRoleAssignedEmail({
+          to: email,
+          workspaceName,
+          role,
+        }),
+      );
+    } catch (error) {
+      emailSent = false;
+      this.logger.error(
+        `Failed to send role-assignment email to ${email}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    return {
+      id: assigned.id,
+      email,
+      role,
+      status: InvitationStatus.ACCEPTED,
+      expiresAt: null as Date | null,
+      emailSent,
+      assignedExistingUser: true,
     };
   }
 

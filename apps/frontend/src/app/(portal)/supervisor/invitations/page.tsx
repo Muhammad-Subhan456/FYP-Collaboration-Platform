@@ -50,7 +50,6 @@ export default function SupervisorInvitationsPage() {
   const browseTargets = pageQuery.data?.browseTargets ?? [];
   const invitations = pageQuery.data?.invitations ?? [];
   const profiles = pageQuery.data?.profiles;
-  const atCapacity = pageQuery.data?.atCapacity ?? false;
 
   const filteredTargets = browseTargets.filter((target) => {
     const q = search.toLowerCase();
@@ -75,12 +74,6 @@ export default function SupervisorInvitationsPage() {
           Show interest in teams you would like to supervise. They can then send
           you a proposal to review.
         </p>
-        {atCapacity && (
-          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-            You are supervising the maximum of 3 teams and cannot send new
-            invitations.
-          </p>
-        )}
       </div>
 
       <Tabs defaultValue="browse">
@@ -112,7 +105,7 @@ export default function SupervisorInvitationsPage() {
                 const isSending = invitingKey === target.inviteKey;
                 const alreadySent = target.invitationSent;
                 const canSend =
-                  target.canInvite && !alreadySent && !atCapacity;
+                  target.canInvite && !alreadySent;
 
                 return (
                   <Card key={target.inviteKey}>

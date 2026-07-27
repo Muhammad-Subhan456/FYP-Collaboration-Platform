@@ -560,12 +560,45 @@ export class DeliverablesService {
     }
 
     const teamId = updated.teamId ?? supervisorId;
+
+    const latestSubmission =
+      await this.prisma.submission.findFirst({
+        where: { deliverableId },
+        orderBy: { version: 'desc' },
+        select: { status: true },
+      });
+
+    const now = new Date();
+    const submissionOpen =
+      updated.isActive &&
+      updated.submissionsOpen &&
+      now <= updated.dueDate &&
+      latestSubmission?.status !== 'APPROVED' &&
+      latestSubmission?.status !== 'FINALIZED';
+
+    const submissionClosedReason = submissionOpen
+      ? null
+      : !updated.isActive
+        ? 'INACTIVE'
+        : !updated.submissionsOpen
+          ? 'CLOSED'
+          : now > updated.dueDate
+            ? 'PAST_DUE'
+            : latestSubmission?.status === 'APPROVED' ||
+                latestSubmission?.status === 'FINALIZED'
+              ? latestSubmission.status
+              : 'CLOSED';
+
     this.publishDeliverableEvent(
       DomainEvents.DELIVERABLE_UPDATED,
       supervisorId,
       teamId,
       updated,
-      { attachmentCount: dto.attachments?.length },
+      {
+        attachmentCount: dto.attachments?.length,
+        submissionOpen,
+        submissionClosedReason,
+      },
     );
 
     return updated;

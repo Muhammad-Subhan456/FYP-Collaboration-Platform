@@ -64,6 +64,10 @@ export function handleIssueCommentCreated(
 
   patchTeamIssueCaches(queryClient, teamId, userId, role, workspaceId, (issues) =>
     applyIssueComment(issues, issueId, comment, activity),
-    { skipDashboard: true },
+    {
+      skipDashboard: true,
+      authorId: comment.authUserId,
+      authorName: comment.authorName,
+    },
   );
 }

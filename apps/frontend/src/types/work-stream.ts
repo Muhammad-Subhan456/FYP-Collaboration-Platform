@@ -18,6 +18,7 @@ export interface WorkStreamComment {
   teamId?: string;
   entityType?: WorkStreamEntityType;
   entityId?: string;
+  authorName?: string;
 }
 
 export interface WorkStreamAnnouncementItem {

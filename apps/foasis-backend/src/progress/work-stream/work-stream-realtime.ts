@@ -27,12 +27,14 @@ function previewText(text: string, max = 160) {
 
 export function serializeWorkstreamComment(
   comment: WorkStreamComment,
+  extras?: { authorName?: string },
 ): WorkstreamCommentWire {
   return {
     id: comment.id,
     authUserId: comment.authUserId,
     body: comment.body,
     createdAt: comment.createdAt.toISOString(),
+    authorName: extras?.authorName,
   };
 }
 
@@ -98,7 +100,14 @@ export function serializeDeliverable(
 }
 
 export function serializeSubmission(
-  submission: Submission,
+  submission: Submission & {
+    attachments?: Array<{
+      id: string;
+      fileUrl: string;
+      fileName: string;
+      createdAt: Date;
+    }>;
+  },
 ): SubmissionWire {
   return {
     id: submission.id,
@@ -114,5 +123,11 @@ export function serializeSubmission(
     finalizedAt: submission.finalizedAt
       ? submission.finalizedAt.toISOString()
       : null,
+    attachments: submission.attachments?.map((attachment) => ({
+      id: attachment.id,
+      fileUrl: attachment.fileUrl,
+      fileName: attachment.fileName,
+      createdAt: attachment.createdAt.toISOString(),
+    })),
   };
 }
