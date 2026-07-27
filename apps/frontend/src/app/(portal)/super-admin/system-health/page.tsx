@@ -31,6 +31,8 @@ const ROLE_COLORS: Record<string, string> = {
   EVALUATOR: "#7c3aed",
 };
 
+const DONUT_SIZE = 176;
+
 export default function SuperAdminSystemHealthPage() {
   const pageQuery = useSystemHealthQuery();
 
@@ -107,38 +109,52 @@ export default function SuperAdminSystemHealthPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="relative mx-auto h-44 w-44">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={
-                      chartData.length > 0
+            <div className="relative mx-auto w-[176px]">
+              <div className="h-[176px] w-[176px] min-w-0">
+                <ResponsiveContainer width={DONUT_SIZE} height={DONUT_SIZE}>
+                  <PieChart>
+                    <Pie
+                      data={
+                        chartData.length > 0
+                          ? chartData
+                          : [
+                              {
+                                name: "Users",
+                                value: registeredUsers || 1,
+                                color: "#0f766e",
+                              },
+                            ]
+                      }
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={52}
+                      outerRadius={72}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {(chartData.length > 0
                         ? chartData
-                        : [{ name: "Users", value: registeredUsers || 1, color: "#0f766e" }]
-                    }
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={52}
-                    outerRadius={72}
-                    paddingAngle={2}
-                    stroke="none"
-                  >
-                    {(chartData.length > 0
-                      ? chartData
-                      : [{ name: "Users", value: registeredUsers || 1, color: "#0f766e" }]
-                    ).map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => [`${value}`, "Users"]}
-                    contentStyle={{
-                      borderRadius: 8,
-                      border: "1px solid hsl(var(--border))",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                        : [
+                            {
+                              name: "Users",
+                              value: registeredUsers || 1,
+                              color: "#0f766e",
+                            },
+                          ]
+                      ).map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [`${value}`, "Users"]}
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: "1px solid hsl(var(--border))",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-3xl font-semibold tabular-nums">
                   {registeredUsers}
