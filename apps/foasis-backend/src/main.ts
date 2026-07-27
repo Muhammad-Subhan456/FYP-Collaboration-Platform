@@ -11,10 +11,12 @@ import {
   assertProductionConfig,
   resolveCorsOrigin,
 } from './common/cors.config';
+import { assertEmailConfig } from './email/email.config';
 import { PerformanceInterceptor } from './common/performance/performance.interceptor';
 
 async function bootstrap() {
   assertProductionConfig();
+  assertEmailConfig();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
@@ -38,19 +40,10 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors({
-    origin: resolveCorsOrigin(),
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Authorization',
-      'Content-Type',
-      'Accept',
-      'Origin',
-      'X-Requested-With',
-      'X-Internal-Api-Key',
-    ],
-  });
+app.enableCors({
+  origin: true,
+  credentials: true,
+});
 
   const uploadDir =
     process.env.UPLOAD_DIR ||

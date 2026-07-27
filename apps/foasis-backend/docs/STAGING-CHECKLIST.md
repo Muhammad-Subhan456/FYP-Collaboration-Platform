@@ -10,7 +10,8 @@ Use this before exposing FOASIS to a real cohort. Complete each section in order
 - [ ] `PUBLIC_URL` points at the public API base (used in upload/email links)
 - [ ] Frontend build has `NEXT_PUBLIC_API_URL` matching the API
 - [ ] `DATABASE_URL` points at the staging/production Postgres (pooler if Supabase)
-- [ ] SMTP vars configured; send a test invitation email
+- [ ] `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` set, `EMAIL_FROM=FOASIS <no-reply@foasis.app>`
+- [ ] Send a test invitation email via Resend (check Resend dashboard Logs)
 - [ ] Super-admin credentials rotated from defaults
 
 ## 2. Network & TLS

@@ -5,20 +5,26 @@ import {
 } from '@nestjs/common';
 
 import { SkipWorkspace } from '../common/decorators/skip-workspace.decorator';
+import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @SkipWorkspace()
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Readiness probe — returns 503 when the database is unreachable
    * so orchestrators (Docker/K8s) do not route traffic to a broken instance.
+   * Email status is informational (no outbound send).
    */
   @Get()
   async check() {
     const timestamp = new Date().toISOString();
+    const email = this.emailService.getHealth();
 
     try {
       await this.prisma.$queryRaw`SELECT 1`;
@@ -29,12 +35,24 @@ export class HealthController {
           database: 'connected',
           timestamp,
         },
+        {
+          name: 'email',
+          status: email.providerHealth.ready ? 'ok' : 'degraded',
+          provider: email.provider,
+          configured: email.providerHealth.configured,
+          timestamp,
+        },
       ];
 
       return {
         status: 'ok',
         service: 'foasis-backend',
         database: 'connected',
+        email: {
+          provider: email.provider,
+          configured: email.providerHealth.configured,
+          ready: email.providerHealth.ready,
+        },
         services,
         timestamp,
       };

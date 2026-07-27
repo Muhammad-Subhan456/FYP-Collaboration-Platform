@@ -124,9 +124,9 @@ export class StatsService {
         where: { workspaceId, isActive: true },
       }),
 
-      this.prisma.evaluationResult.findMany({
+      this.prisma.evaluationResult.count({
         where: { evaluation: { workspaceId } },
-      }).then((rows) => rows.length),
+      }),
     ]);
 
     return {

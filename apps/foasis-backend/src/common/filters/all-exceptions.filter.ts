@@ -111,6 +111,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    // Supabase session pooler: max clients reached (EMAXCONNSESSION)
+    if (
+      /EMAXCONNSESSION|max clients reached|too many clients/i.test(
+        message,
+      )
+    ) {
+      this.logger.warn(`Database pool exhausted: ${message}`);
+      response.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        message:
+          'The database is busy. Please try again in a moment.',
+        error: 'Service Unavailable',
+      });
+      return;
+    }
+
     this.logger.error(
       'Unhandled exception',
       exception instanceof Error ? exception.stack : message,

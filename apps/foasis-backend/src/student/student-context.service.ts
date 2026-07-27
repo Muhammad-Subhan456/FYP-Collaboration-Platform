@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Proposal, Team } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 export type StudentContext = {
   team: Team | null;
@@ -21,10 +22,21 @@ const EMPTY_CONTEXT: StudentContext = {
 export class StudentContextService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async load(authUserId: string): Promise<StudentContext> {
+  async load(
+    authUserId: string,
+    workspaceId?: string,
+  ): Promise<StudentContext> {
+    const scopedWorkspaceId =
+      workspaceId ?? getWorkspaceIdFromContext();
+
     const membership =
       await this.prisma.teamMember.findFirst({
-        where: { authUserId },
+        where: {
+          authUserId,
+          ...(scopedWorkspaceId
+            ? { team: { workspaceId: scopedWorkspaceId } }
+            : {}),
+        },
         include: {
           team: {
             include: {

@@ -18,8 +18,13 @@ export class MeController {
 
   @UseGuards(JwtAuthGuard)
   @Get('team')
-  getMyTeam(@Req() req: { user: { userId: string } }) {
-    return this.teamsService.getMyTeam(req.user.userId);
+  getMyTeam(
+    @Req() req: { user: { userId: string }; workspaceId?: string },
+  ) {
+    return this.teamsService.getMyTeam(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

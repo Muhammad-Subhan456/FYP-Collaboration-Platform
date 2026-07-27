@@ -61,4 +61,14 @@ export function assertProductionConfig(): void {
       'Production requires CORS_ORIGIN and/or FRONTEND_URL for the browser allowlist.',
     );
   }
+
+  // Email: require a real provider in production (not log-only).
+  const emailProvider = (process.env.EMAIL_PROVIDER ?? 'resend')
+    .trim()
+    .toLowerCase();
+  if (emailProvider === 'log') {
+    throw new Error(
+      'Production refuses EMAIL_PROVIDER=log. Use resend (or smtp for temporary rollback).',
+    );
+  }
 }

@@ -13,6 +13,7 @@ import { CreateCoordinatorProfileDto } from './dto/create-coordinator-profile.dt
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
+import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 type UserRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR' | 'EVALUATOR';
 
@@ -58,21 +59,19 @@ export class ProfilesService {
     supervisorId: string,
     studentAuthUserId: string,
   ) {
-    const membership = await this.prisma.teamMember.findFirst({
-      where: { authUserId: studentAuthUserId },
-      select: { teamId: true },
-    });
-
-    if (!membership) {
-      return false;
-    }
+    const scopedWorkspaceId = getWorkspaceIdFromContext();
 
     const supervised = await this.prisma.proposal.findFirst({
       where: {
-        teamId: membership.teamId,
         assignedSupervisorId: supervisorId,
         status: {
           in: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
+        },
+        team: {
+          members: { some: { authUserId: studentAuthUserId } },
+          ...(scopedWorkspaceId
+            ? { workspaceId: scopedWorkspaceId }
+            : {}),
         },
       },
       select: { id: true },

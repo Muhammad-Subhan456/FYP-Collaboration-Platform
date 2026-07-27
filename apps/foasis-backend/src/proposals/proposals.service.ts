@@ -1328,37 +1328,30 @@ async getProposalStats(workspaceId?: string) {
     ? { workspaceId }
     : {};
 
-  const [
-    total,
-    pending,
-    approved,
-    rejected,
-    pendingSupervisor,
-    supervisorAssigned,
-  ] = await Promise.all([
-    this.prisma.proposal.count({ where: workspaceFilter }),
-    this.prisma.proposal.count({
-      where: { ...workspaceFilter, status: 'SUPERVISOR_ASSIGNED' },
-    }),
-    this.prisma.proposal.count({
-      where: { ...workspaceFilter, status: 'APPROVED' },
-    }),
-    this.prisma.proposal.count({
-      where: { ...workspaceFilter, status: 'REJECTED' },
-    }),
-    this.prisma.proposal.count({
-      where: { ...workspaceFilter, status: 'PENDING_SUPERVISOR' },
-    }),
-    this.prisma.proposal.count({
-      where: { ...workspaceFilter, status: 'SUPERVISOR_ASSIGNED' },
-    }),
-  ]);
+  // Single groupBy instead of 6 parallel counts — avoids exhausting
+  // Supabase session pool (often capped at ~15 clients).
+  const byStatus = await this.prisma.proposal.groupBy({
+    by: ['status'],
+    where: workspaceFilter,
+    _count: { _all: true },
+  });
+
+  const counts = Object.fromEntries(
+    byStatus.map((row) => [row.status, row._count._all]),
+  ) as Record<string, number>;
+
+  const total = byStatus.reduce(
+    (sum, row) => sum + row._count._all,
+    0,
+  );
+  const supervisorAssigned = counts.SUPERVISOR_ASSIGNED ?? 0;
+  const pendingSupervisor = counts.PENDING_SUPERVISOR ?? 0;
 
   return {
     total,
-    pending,
-    approved,
-    rejected,
+    pending: supervisorAssigned,
+    approved: counts.APPROVED ?? 0,
+    rejected: counts.REJECTED ?? 0,
     totalProposals: total,
     pendingProposals: pendingSupervisor,
     assignedProposals: supervisorAssigned,

@@ -5,6 +5,12 @@ export type EmailMessage = {
   subject: string;
   text: string;
   html?: string;
+  /** Overrides EMAIL_REPLY_TO when set. */
+  replyTo?: string;
+  /** Stable key so provider retries do not create duplicate messages. */
+  idempotencyKey?: string;
+  /** Structured log label (e.g. invitation, password_reset). */
+  type?: string;
 };
 
 export type InvitationEmailPayload = {
@@ -58,6 +64,7 @@ export function buildInvitationEmail(
 
   return {
     to: payload.to,
+    type: 'invitation',
     subject: `You're invited to ${payload.workspaceName} on FOASIS`,
     text: [
       `You have been invited to join ${payload.workspaceName} on FOASIS as ${payload.role}.`,
@@ -82,6 +89,7 @@ export function buildPasswordResetEmail(
 
   return {
     to: payload.to,
+    type: 'password_reset',
     subject: 'Reset your FOASIS password',
     text: [
       'We received a request to reset your FOASIS password.',
@@ -109,6 +117,7 @@ export function buildAnnouncementEmail(
 
   return {
     to: payload.to,
+    type: 'announcement',
     subject: `FOASIS Announcement: ${payload.title}`,
     text: `${payload.title}\n\n${payload.message}${actionLine}`,
     html: `
@@ -132,6 +141,7 @@ export function buildSubmissionReminderEmail(
 
   return {
     to: payload.to,
+    type: 'submission_reminder',
     subject: `Reminder: ${payload.pendingCount} pending submission(s) for ${payload.deliverableTitle}`,
     text: [
       `You have ${payload.pendingCount} of ${payload.assignedCount} team(s) still pending finalized submission for "${payload.deliverableTitle}" (${payload.phaseName}).`,
@@ -162,6 +172,7 @@ export function buildProposalAcceptedEmail(
 
   return {
     to: payload.to,
+    type: 'proposal_accepted',
     subject: `FOASIS: Proposal accepted — ${payload.proposalTitle}`,
     text: [
       `Good news! Your FOASIS proposal "${payload.proposalTitle}"${teamLine} has been accepted by your supervisor.`,
@@ -194,6 +205,7 @@ export function buildDeliverablePublishedEmail(
 
   return {
     to: payload.to,
+    type: 'deliverable_published',
     subject: `FOASIS: New deliverable — ${payload.deliverableTitle}`,
     text: [
       `A new deliverable "${payload.deliverableTitle}" has been assigned to your team.`,
@@ -268,6 +280,7 @@ export function buildProposalRequestEmail(
 
   return {
     to: payload.to,
+    type: 'proposal_request',
     subject: `FOASIS: Proposal request — ${payload.projectTitle}`,
     text: [
       `A team has submitted a proposal request for your review on FOASIS.`,
@@ -311,6 +324,7 @@ export function buildSubmissionReceivedEmail(
 
   return {
     to: payload.to,
+    type: 'submission_received',
     subject: `FOASIS: Submission received — ${payload.deliverableTitle}`,
     text: [
       `A team has submitted work for "${payload.deliverableTitle}".`,
@@ -352,6 +366,7 @@ export function buildEvaluationAssignmentEmail(
 
   return {
     to: payload.to,
+    type: 'evaluation_assignment',
     subject: `FOASIS: Evaluation assignment — ${payload.deliverableTitle}`,
     text: [
       `You have been assigned an evaluation on FOASIS.`,
@@ -399,6 +414,7 @@ export function buildEvaluationReminderEmail(
 
   return {
     to: payload.to,
+    type: 'evaluation_reminder',
     subject: `FOASIS: Evaluation reminder — ${payload.deliverableTitle}`,
     text: [
       `This is a reminder to complete your pending evaluation on FOASIS.`,
@@ -446,6 +462,7 @@ export function buildDeliverableTemplateAvailableEmail(
 
   return {
     to: payload.to,
+    type: 'deliverable_template_available',
     subject: `FOASIS: New deliverable template — ${payload.deliverableTitle}`,
     text: [
       `A new deliverable template is available for you to publish to your teams.`,

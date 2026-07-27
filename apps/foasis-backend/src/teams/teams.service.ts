@@ -13,7 +13,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
-import { runWithWorkspaceContext } from '../workspace/workspace-als';
+import {
+  getWorkspaceIdFromContext,
+  runWithWorkspaceContext,
+} from '../workspace/workspace-als';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 import { ProposalsService } from '../proposals/proposals.service';
@@ -45,6 +48,29 @@ export class TeamsService {
     private readonly domainEventService: DomainEventService,
   ) {}
 
+  /** Prefer explicit workspaceId; fall back to ALS so HTTP requests stay tenant-scoped. */
+  private resolveWorkspaceId(workspaceId?: string): string | undefined {
+    return workspaceId ?? getWorkspaceIdFromContext();
+  }
+
+  private membershipWhere(authUserId: string, workspaceId?: string) {
+    const scopedWorkspaceId = this.resolveWorkspaceId(workspaceId);
+    return {
+      authUserId,
+      ...(scopedWorkspaceId
+        ? { team: { workspaceId: scopedWorkspaceId } }
+        : {}),
+    };
+  }
+
+  private leaderTeamWhere(leaderId: string, workspaceId?: string) {
+    const scopedWorkspaceId = this.resolveWorkspaceId(workspaceId);
+    return {
+      leaderId,
+      ...(scopedWorkspaceId ? { workspaceId: scopedWorkspaceId } : {}),
+    };
+  }
+
   async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
     const proposal = await this.prisma.proposal.findUnique({
       where: { teamId },
@@ -68,11 +94,13 @@ export class TeamsService {
   private async rejectPendingJoinRequestsForUser(
     authUserId: string,
     actorId: string,
+    workspaceId: string,
   ) {
     const staleRequests = await this.prisma.joinRequest.findMany({
       where: {
         authUserId,
         status: 'PENDING',
+        team: { workspaceId },
       },
     });
 
@@ -84,6 +112,7 @@ export class TeamsService {
       where: {
         authUserId,
         status: 'PENDING',
+        team: { workspaceId },
       },
       data: { status: 'REJECTED' },
     });
@@ -369,11 +398,10 @@ async getBrowseTeamDetails(teamId: string, workspaceId: string) {
 
 async getMyTeamRequests(
   leaderId: string,
+  workspaceId?: string,
 ) {
   const team = await this.prisma.team.findFirst({
-    where: {
-      leaderId,
-    },
+    where: this.leaderTeamWhere(leaderId, workspaceId),
   });
 
   if (!team) {
@@ -432,6 +460,7 @@ async approveRequest(
     await this.rejectPendingJoinRequestsForUser(
       request.authUserId,
       leaderId,
+      team.workspaceId,
     );
 
     throw new BadRequestException(
@@ -462,6 +491,7 @@ async approveRequest(
     await this.rejectPendingJoinRequestsForUser(
       freshRequest.authUserId,
       leaderId,
+      team.workspaceId,
     );
 
     throw new BadRequestException(
@@ -493,6 +523,7 @@ async approveRequest(
       await this.rejectPendingJoinRequestsForUser(
         freshRequest.authUserId,
         leaderId,
+        team.workspaceId,
       );
 
       throw new BadRequestException(
@@ -531,6 +562,7 @@ async approveRequest(
       authUserId: freshRequest.authUserId,
       status: 'PENDING',
       id: { not: requestId },
+      team: { workspaceId: team.workspaceId },
     },
   });
 
@@ -540,6 +572,7 @@ async approveRequest(
         authUserId: freshRequest.authUserId,
         status: 'PENDING',
         id: { not: requestId },
+        team: { workspaceId: team.workspaceId },
       },
       data: { status: 'REJECTED' },
     });
@@ -731,12 +764,10 @@ return {
 };
 }
 
-async getMyTeam(authUserId: string) {
+async getMyTeam(authUserId: string, workspaceId?: string) {
   const membership =
     await this.prisma.teamMember.findFirst({
-      where: {
-        authUserId,
-      },
+      where: this.membershipWhere(authUserId, workspaceId),
       include: {
         team: true,
       },
@@ -831,12 +862,13 @@ async getTeamMembersForRequester(
 async getMyTeamMembers(
   authUserId: string,
   teamId?: string,
+  workspaceId?: string,
 ) {
   const resolvedTeamId =
     teamId ??
     (
       await this.prisma.teamMember.findFirst({
-        where: { authUserId },
+        where: this.membershipWhere(authUserId, workspaceId),
         select: { teamId: true },
       })
     )?.teamId;
@@ -869,10 +901,13 @@ async getAllTeamsForCoordinator(workspaceId: string) {
   });
 }
 
-async getTeamContextForMember(authUserId: string) {
+async getTeamContextForMember(
+  authUserId: string,
+  workspaceId?: string,
+) {
   const membership =
     await this.prisma.teamMember.findFirst({
-      where: { authUserId },
+      where: this.membershipWhere(authUserId, workspaceId),
       include: { team: true },
     });
 
@@ -898,9 +933,10 @@ async updateMemberRole(
   leaderId: string,
   memberId: string,
   teamRole?: string,
+  workspaceId?: string,
 ) {
   const team = await this.prisma.team.findFirst({
-    where: { leaderId },
+    where: this.leaderTeamWhere(leaderId, workspaceId),
   });
 
   if (!team) {
@@ -985,7 +1021,7 @@ async getStudentTeamOverview(
   authUserId: string,
   workspaceId: string,
 ) {
-  const team = await this.getMyTeam(authUserId);
+  const team = await this.getMyTeam(authUserId, workspaceId);
 
   if (!team) {
     const [browseTeams, pendingRequests] = await Promise.all([
@@ -995,6 +1031,7 @@ async getStudentTeamOverview(
           where: {
             authUserId,
             status: 'PENDING',
+            team: { workspaceId },
           },
           select: { teamId: true },
         })
@@ -1019,7 +1056,7 @@ async getStudentTeamOverview(
   const [members, joinRequests] = await Promise.all([
     this.getTeamMembers(team.id).catch(() => []),
     isLeader
-      ? this.getMyTeamRequests(authUserId).catch(() => [])
+      ? this.getMyTeamRequests(authUserId, workspaceId).catch(() => [])
       : Promise.resolve([]),
   ]);
 
@@ -1054,9 +1091,10 @@ async getStudentTeamOverview(
   async updateTeam(
     leaderId: string,
     updateTeamDto: UpdateTeamDto,
+    workspaceId?: string,
   ) {
     const team = await this.prisma.team.findFirst({
-      where: { leaderId },
+      where: this.leaderTeamWhere(leaderId, workspaceId),
     });
 
     if (!team) {
@@ -1158,9 +1196,9 @@ async getStudentTeamOverview(
     return updated;
   }
 
-  async deleteTeam(leaderId: string) {
+  async deleteTeam(leaderId: string, workspaceId?: string) {
   const team = await this.prisma.team.findFirst({
-    where: { leaderId },
+    where: this.leaderTeamWhere(leaderId, workspaceId),
   });
 
   if (!team) {
@@ -1238,9 +1276,9 @@ async getStudentTeamOverview(
   return { message: 'Team deleted successfully' };
 }
 
-async leaveTeam(authUserId: string) {
+async leaveTeam(authUserId: string, workspaceId?: string) {
   const membership = await this.prisma.teamMember.findFirst({
-    where: { authUserId },
+    where: this.membershipWhere(authUserId, workspaceId),
     include: { team: true },
   });
 

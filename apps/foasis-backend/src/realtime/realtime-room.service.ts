@@ -139,7 +139,7 @@ export class RealtimeRoomService {
 
       if (user.role === 'STUDENT') {
         const team = await this.teamsService
-          .getMyTeam(user.userId)
+          .getMyTeam(user.userId, user.workspaceId)
           .catch(() => null);
 
         if (team?.id) {

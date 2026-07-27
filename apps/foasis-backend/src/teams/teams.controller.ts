@@ -63,15 +63,26 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get('my-team')
-  getMyTeam(@Req() req: any) {
-    return this.teamsService.getMyTeam(req.user.userId);
+  getMyTeam(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
+    return this.teamsService.getMyTeam(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get('my-team/members')
-  getMyTeamMembers(@Req() req: any) {
-    return this.teamsService.getMyTeamMembers(req.user.userId);
+  getMyTeamMembers(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
+    return this.teamsService.getMyTeamMembers(
+      req.user.userId,
+      undefined,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -115,8 +126,13 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Get('my-team/requests')
-  getMyTeamRequests(@Req() req: any) {
-    return this.teamsService.getMyTeamRequests(req.user.userId);
+  getMyTeamRequests(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
+    return this.teamsService.getMyTeamRequests(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -149,34 +165,45 @@ export class TeamsController {
   @Roles('STUDENT')
   @Patch('my-team')
   updateTeam(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Body() updateTeamDto: UpdateTeamDto,
   ) {
     return this.teamsService.updateTeam(
       req.user.userId,
       updateTeamDto,
+      req.workspaceId,
     );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Post('my-team/leave')
-  leaveTeam(@Req() req: any) {
-    return this.teamsService.leaveTeam(req.user.userId);
+  leaveTeam(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
+    return this.teamsService.leaveTeam(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Post('my-team/delete')
-  deleteTeam(@Req() req: any) {
-    return this.teamsService.deleteTeam(req.user.userId);
+  deleteTeam(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+  ) {
+    return this.teamsService.deleteTeam(
+      req.user.userId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   @Patch('my-team/members/:memberId/role')
   updateMemberRole(
-    @Req() req: any,
+    @Req() req: { user: { userId: string }; workspaceId: string },
     @Param('memberId') memberId: string,
     @Body() dto: UpdateMemberRoleDto,
   ) {
@@ -184,14 +211,21 @@ export class TeamsController {
       req.user.userId,
       memberId,
       dto.teamRole,
+      req.workspaceId,
     );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('member/:authUserId/team')
-  getTeamForMember(@Param('authUserId') authUserId: string) {
-    return this.teamsService.getTeamContextForMember(authUserId);
+  getTeamForMember(
+    @Param('authUserId') authUserId: string,
+    @Req() req: { workspaceId: string },
+  ) {
+    return this.teamsService.getTeamContextForMember(
+      authUserId,
+      req.workspaceId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -7,6 +7,7 @@ import { AuthContextService } from '../../common/auth-context.service';
 import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { ProposalsService } from '../../proposals/proposals.service';
 import { TeamsService } from '../../teams/teams.service';
+import { getWorkspaceIdFromContext } from '../../workspace/workspace-als';
 
 import {
   NotificationPayload,
@@ -33,14 +34,23 @@ export class TeamAccessService {
           authorization,
         );
 
-      return this.teamsService.getMyTeam(authUserId);
+      return this.teamsService.getMyTeam(
+        authUserId,
+        getWorkspaceIdFromContext(),
+      );
     } catch {
       return null;
     }
   }
 
-  async getMyTeamByUserId(authUserId: string) {
-    return this.teamsService.getMyTeam(authUserId);
+  async getMyTeamByUserId(
+    authUserId: string,
+    workspaceId?: string,
+  ) {
+    return this.teamsService.getMyTeam(
+      authUserId,
+      workspaceId ?? getWorkspaceIdFromContext(),
+    );
   }
 
   async getTeamMembers(teamId: string) {

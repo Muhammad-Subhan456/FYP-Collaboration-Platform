@@ -82,6 +82,22 @@ function modelDelegateName(model: string) {
   return model.charAt(0).toLowerCase() + model.slice(1);
 }
 
+/**
+ * Cap Prisma's client pool so Nest does not open more sessions than
+ * Supabase Session mode allows (often pool_size ≈ 15).
+ * Override with DB_CONNECTION_LIMIT (default 5).
+ */
+function withPrismaPoolParams(databaseUrl: string): string {
+  if (/[?&]connection_limit=/i.test(databaseUrl)) {
+    return databaseUrl;
+  }
+
+  const limit = process.env.DB_CONNECTION_LIMIT?.trim() || '5';
+  const timeout = process.env.DB_POOL_TIMEOUT?.trim() || '20';
+  const separator = databaseUrl.includes('?') ? '&' : '?';
+  return `${databaseUrl}${separator}connection_limit=${limit}&pool_timeout=${timeout}`;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function flattenUniqueWhere(where: any): any {
   if (!where || typeof where !== 'object') {
@@ -361,13 +377,24 @@ export class PrismaService
       process.env.PERF_LOG === 'true' ||
       process.env.npm_lifecycle_event === 'benchmark';
 
-    super(
-      enableQueryPerf
+    const databaseUrl = process.env.DATABASE_URL
+      ? withPrismaPoolParams(process.env.DATABASE_URL)
+      : undefined;
+
+    super({
+      ...(databaseUrl
         ? {
-            log: [{ emit: 'event', level: 'query' }],
+            datasources: {
+              db: { url: databaseUrl },
+            },
           }
-        : undefined,
-    );
+        : {}),
+      ...(enableQueryPerf
+        ? {
+            log: [{ emit: 'event' as const, level: 'query' as const }],
+          }
+        : {}),
+    });
 
     // Prisma 6 removed $use middleware — tenant isolation uses $extends.
     // eslint-disable-next-line @typescript-eslint/no-this-alias
