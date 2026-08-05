@@ -128,7 +128,7 @@ export function EvaluatorProfileForm() {
         message={
           error
             ? getErrorMessage(error)
-            : "Profile not found. Complete supervisor onboarding first if you also hold a supervisor role."
+            : "Profile not found. Complete evaluator onboarding first."
         }
         onRetry={() => refetch()}
       />

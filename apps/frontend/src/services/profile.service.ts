@@ -78,6 +78,11 @@ export const profileService = {
     return res.data;
   },
 
+  createEvaluatorProfile: async (data: SupervisorProfileInput) => {
+    const res = await api.post<UserProfile>("/profiles/me/evaluator", data);
+    return res.data;
+  },
+
   createCoordinatorProfile: async (data: CoordinatorProfileInput) => {
     const res = await api.post<UserProfile>("/profiles/me/coordinator", data);
     return res.data;

@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
@@ -97,33 +98,6 @@ function withPrismaPoolParams(databaseUrl: string): string {
   const timeout = process.env.DB_POOL_TIMEOUT?.trim() || '20';
   const separator = databaseUrl.includes('?') ? '&' : '?';
   return `${databaseUrl}${separator}connection_limit=${limit}&pool_timeout=${timeout}`;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function flattenUniqueWhere(where: any): any {
-  if (!where || typeof where !== 'object') {
-    return where ?? {};
-  }
-
-  if (where.id !== undefined && Object.keys(where).length === 1) {
-    return where;
-  }
-
-  const keys = Object.keys(where);
-  if (keys.length === 1) {
-    const key = keys[0];
-    const value = where[key];
-    if (
-      key !== 'id' &&
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    ) {
-      return value;
-    }
-  }
-
-  return where;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -230,12 +204,38 @@ async function assertOwnedForMutation(
 ): Promise<boolean> {
   const delegate = modelDelegateName(model);
   const relationScope = relationScopeForModel(model, workspaceId);
-  const where = relationScope
-    ? { id, ...relationScope }
-    : { id, workspaceId };
+  // Match findUnique scoping: filter by id and let the extension attach
+  // workspace (or relation) scope.
+  const where = relationScope ? { id, ...relationScope } : { id };
 
   const existing = await getClient()[delegate].findFirst({ where });
   return !!existing;
+}
+
+/** Post-filter a findUnique row for the active workspace (transaction-safe). */
+async function rowVisibleInWorkspace(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getClient: () => any,
+  model: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row: any,
+  workspaceId: string,
+): Promise<boolean> {
+  if (!row || typeof row !== 'object') {
+    return false;
+  }
+
+  // Direct tenant models carry workspaceId on the row.
+  if (TENANT_MODELS.has(model) && !relationScopeForModel(model, workspaceId)) {
+    return row.workspaceId === workspaceId;
+  }
+
+  // Relation-scoped models: verify via a scoped findFirst by id.
+  if (typeof row.id === 'string') {
+    return assertOwnedForMutation(getClient, model, row.id, workspaceId);
+  }
+
+  return false;
 }
 
 function createWorkspaceIsolationExtension(
@@ -246,7 +246,9 @@ function createWorkspaceIsolationExtension(
     query: {
       $allModels: {
         // findUnique on tenant models would allow cross-tenant access by id.
-        // Redirect to findFirst with workspace filter.
+        // Use the same query/transaction client, then post-filter by workspace.
+        // (Calling getClient().findFirst escapes interactive transactions and
+        // causes P2025 on create-then-reload flows.)
         async findUnique({
           model,
           args,
@@ -263,17 +265,18 @@ function createWorkspaceIsolationExtension(
             return query(args);
           }
 
-          const scopedArgs = applyWorkspaceScoping(
+          const result = await query(args);
+          if (!result) {
+            return null;
+          }
+
+          const owned = await rowVisibleInWorkspace(
+            getClient,
             model,
-            'findUnique',
-            {
-              ...args,
-              where: flattenUniqueWhere(args.where),
-            },
+            result,
             workspaceId!,
           );
-          const delegate = modelDelegateName(model);
-          return getClient()[delegate].findFirst(scopedArgs);
+          return owned ? result : null;
         },
 
         async findUniqueOrThrow({
@@ -292,17 +295,17 @@ function createWorkspaceIsolationExtension(
             return query(args);
           }
 
-          const scopedArgs = applyWorkspaceScoping(
+          const result = await query(args);
+          const owned = await rowVisibleInWorkspace(
+            getClient,
             model,
-            'findUniqueOrThrow',
-            {
-              ...args,
-              where: flattenUniqueWhere(args.where),
-            },
+            result,
             workspaceId!,
           );
-          const delegate = modelDelegateName(model);
-          return getClient()[delegate].findFirstOrThrow(scopedArgs);
+          if (!owned) {
+            throw new NotFoundException('Resource not found');
+          }
+          return result;
         },
 
         async $allOperations({
@@ -345,11 +348,10 @@ function createWorkspaceIsolationExtension(
               workspaceId,
             );
 
+            // Do not probe a fake UUID (that surfaces as Prisma P2025).
+            // Missing / cross-tenant rows are a clean 404.
             if (!owned) {
-              return query({
-                ...args,
-                where: { id: '00000000-0000-0000-0000-000000000000' },
-              });
+              throw new NotFoundException('Resource not found');
             }
 
             return query({ ...args, where: { id: args.where.id } });

@@ -3,8 +3,9 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from '../../auth/auth.service';
@@ -65,6 +66,17 @@ export class SubmissionsService {
       teamId,
       context,
     );
+  }
+
+  private rethrowMissingSubmission(error: unknown): never {
+    if (
+      error instanceof NotFoundException ||
+      (error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025')
+    ) {
+      throw new NotFoundException('Submission not found');
+    }
+    throw error;
   }
 
   private async emailSupervisorSubmissionReceived(input: {
@@ -226,31 +238,28 @@ export class SubmissionsService {
 
     const primaryFileUrl = attachmentInputs[0]?.fileUrl ?? dto.fileUrl;
 
-    const submission = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.submission.create({
-        data: {
-          workspaceId: deliverable.workspaceId,
-          deliverableId: dto.deliverableId,
-          teamId: team.id,
-          version: nextVersion,
-          fileUrl: primaryFileUrl,
-          remarks: dto.remarks,
+    // Nested create — avoid $transaction + findUniqueOrThrow.
+    // The Prisma workspace extension rewrites findUniqueOrThrow onto the
+    // outer client, which cannot see the uncommitted transaction row (P2025).
+    const submission = await this.prisma.submission.create({
+      data: {
+        workspaceId: deliverable.workspaceId,
+        deliverableId: dto.deliverableId,
+        teamId: team.id,
+        version: nextVersion,
+        fileUrl: primaryFileUrl,
+        remarks: dto.remarks,
+        attachments: {
+          create: attachmentInputs.map((attachment) => ({
+            workspaceId: deliverable.workspaceId,
+            fileUrl: attachment.fileUrl,
+            fileName: attachment.fileName,
+          })),
         },
-      });
-
-      await tx.submissionAttachment.createMany({
-        data: attachmentInputs.map((attachment) => ({
-          workspaceId: deliverable.workspaceId,
-          submissionId: created.id,
-          fileUrl: attachment.fileUrl,
-          fileName: attachment.fileName,
-        })),
-      });
-
-      return tx.submission.findUniqueOrThrow({
-        where: { id: created.id },
-        include: { attachments: { orderBy: { createdAt: 'asc' } } },
-      });
+      },
+      include: {
+        attachments: { orderBy: { createdAt: 'asc' } },
+      },
     });
 
     await this.activityLogsService.logActivity(
@@ -486,8 +495,9 @@ export class SubmissionsService {
       );
     }
 
-    const updatedSubmission =
-      await this.prisma.submission.update({
+    let updatedSubmission;
+    try {
+      updatedSubmission = await this.prisma.submission.update({
         where: { id: submissionId },
         data: {
           status: dto.status as any,
@@ -495,6 +505,9 @@ export class SubmissionsService {
           grade: dto.grade,
         },
       });
+    } catch (error) {
+      this.rethrowMissingSubmission(error);
+    }
 
     await this.activityLogsService.logActivity(
       supervisorId,
@@ -575,14 +588,21 @@ export class SubmissionsService {
     }
 
     const finalizedAt = new Date();
-    const updatedSubmission =
-      await this.prisma.submission.update({
+    let updatedSubmission;
+    try {
+      updatedSubmission = await this.prisma.submission.update({
         where: { id: submissionId },
         data: {
           status: 'FINALIZED',
           finalizedAt,
         },
+        include: {
+          attachments: { orderBy: { createdAt: 'asc' } },
+        },
       });
+    } catch (error) {
+      this.rethrowMissingSubmission(error);
+    }
 
     await this.activityLogsService.logActivity(
       supervisorId,
@@ -668,14 +688,18 @@ export class SubmissionsService {
       );
     }
 
-    const updatedSubmission =
-      await this.prisma.submission.update({
+    let updatedSubmission;
+    try {
+      updatedSubmission = await this.prisma.submission.update({
         where: { id: submissionId },
         data: {
           status: 'APPROVED',
           finalizedAt: null,
         },
       });
+    } catch (error) {
+      this.rethrowMissingSubmission(error);
+    }
 
     await this.activityLogsService.logActivity(
       supervisorId,

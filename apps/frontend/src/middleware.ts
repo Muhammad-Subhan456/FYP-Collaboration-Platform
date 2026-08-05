@@ -19,6 +19,14 @@ function getRoleFromToken(token: string): UserRole | null {
   }
 }
 
+/** Default landing path per role (Super Admin has no /dashboard page). */
+function getRoleHomePath(role: UserRole): string {
+  if (role === "SUPER_ADMIN") {
+    return `${ROLE_ROUTES[role]}/workspaces`;
+  }
+  return `${ROLE_ROUTES[role]}/dashboard`;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = getToken(request);
@@ -27,7 +35,7 @@ export function middleware(request: NextRequest) {
 
   if (AUTH_ROUTES.includes(pathname) && isAuthenticated && role) {
     return NextResponse.redirect(
-      new URL(`${ROLE_ROUTES[role]}/dashboard`, request.url),
+      new URL(getRoleHomePath(role), request.url),
     );
   }
 
@@ -51,7 +59,7 @@ export function middleware(request: NextRequest) {
     const expectedPrefix = ROLE_ROUTES[role];
     if (!pathname.startsWith(expectedPrefix)) {
       return NextResponse.redirect(
-        new URL(`${expectedPrefix}/dashboard`, request.url),
+        new URL(getRoleHomePath(role), request.url),
       );
     }
   }

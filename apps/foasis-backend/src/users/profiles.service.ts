@@ -89,7 +89,8 @@ export class ProfilesService {
       const target = await this.findOne(authUserId);
 
       if (
-        target?.profileType === 'SUPERVISOR' &&
+        (target?.profileType === 'SUPERVISOR' ||
+          target?.profileType === 'EVALUATOR') &&
         (requesterRole === 'STUDENT' || requesterRole === 'SUPERVISOR')
       ) {
         return target;
@@ -278,6 +279,56 @@ export class ProfilesService {
       message: 'Your FOASIS supervisor profile has been saved successfully.',
       type: 'PROFILE_COMPLETED',
       route: '/supervisor/dashboard',
+    });
+
+    return profile;
+  }
+
+  async createEvaluatorProfile(
+    authUserId: string,
+    role: UserRole,
+    dto: CreateSupervisorProfileDto,
+  ) {
+    if (role !== 'EVALUATOR') {
+      throw new ForbiddenException(
+        'Only evaluators can create an evaluator profile',
+      );
+    }
+
+    await this.assertNoProfile(authUserId);
+
+    const profile = await this.prisma.userProfile.create({
+      data: {
+        authUserId,
+        profileType: 'EVALUATOR',
+        fullName: dto.fullName,
+        email: dto.email,
+        profilePicture: dto.profilePicture,
+        facultyId: dto.facultyId,
+        department: dto.department,
+        designation: dto.designation,
+        researchAreas: dto.researchAreas ?? [],
+        publications: dto.publications ?? [],
+        officeLocation: dto.officeLocation,
+        officeHours: dto.officeHours,
+        linkedIn: dto.linkedIn,
+        googleScholar: dto.googleScholar,
+        biography: dto.biography,
+      },
+    });
+
+    await this.activityLogsService.logActivity(
+      authUserId,
+      'Evaluator Profile Completed',
+      `${dto.fullName} completed their FOASIS evaluator profile.`,
+    );
+
+    await this.notificationDispatch.send({
+      authUserId,
+      title: 'Profile Complete',
+      message: 'Your FOASIS evaluator profile has been saved successfully.',
+      type: 'PROFILE_COMPLETED',
+      route: '/evaluator/dashboard',
     });
 
     return profile;

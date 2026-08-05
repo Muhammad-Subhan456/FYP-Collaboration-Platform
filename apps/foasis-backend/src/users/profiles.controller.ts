@@ -47,6 +47,19 @@ export class ProfilesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('me/evaluator')
+  createEvaluatorProfile(
+    @Req() req: any,
+    @Body() dto: CreateSupervisorProfileDto,
+  ) {
+    return this.profilesService.createEvaluatorProfile(
+      req.user.userId,
+      req.user.role,
+      dto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('me/coordinator')
   createCoordinatorProfile(
     @Req() req: any,
