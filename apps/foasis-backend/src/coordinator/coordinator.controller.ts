@@ -1,14 +1,17 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { NotificationsQueryDto } from '../notifications/dto/notifications-query.dto';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 
 import { CoordinatorSubmissionsService } from './coordinator-submissions.service';
 import { CoordinatorPagesService } from './coordinator-pages.service';
 import { GetFinalizedSubmissionsQueryDto } from './dto/get-finalized-submissions-query.dto';
 import { SendSubmissionReminderDto } from './dto/send-submission-reminder.dto';
+import { SendProposalSupervisorReminderDto } from './dto/send-proposal-supervisor-reminder.dto';
+import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto';
 
 type CoordinatorRequest = {
   user: { userId: string };
@@ -22,7 +25,21 @@ export class CoordinatorController {
   constructor(
     private readonly coordinatorPagesService: CoordinatorPagesService,
     private readonly coordinatorSubmissionsService: CoordinatorSubmissionsService,
+    private readonly workspaceSettingsService: WorkspaceSettingsService,
   ) {}
+
+  @Get('settings')
+  getSettings(@Req() req: CoordinatorRequest) {
+    return this.workspaceSettingsService.getSettings(req.workspaceId);
+  }
+
+  @Patch('settings')
+  updateSettings(
+    @Req() req: CoordinatorRequest,
+    @Body() dto: UpdateWorkspaceSettingsDto,
+  ) {
+    return this.workspaceSettingsService.updateSettings(req.workspaceId, dto);
+  }
 
   @Get('dashboard')
   getDashboard(@Req() req: CoordinatorRequest) {
@@ -54,8 +71,20 @@ export class CoordinatorController {
   }
 
   @Get('proposals')
-  getProposals() {
-    return this.coordinatorPagesService.getProposals();
+  getProposals(@Req() req: CoordinatorRequest) {
+    return this.coordinatorPagesService.getProposals(req.workspaceId);
+  }
+
+  @Post('proposals/remind')
+  sendProposalSupervisorReminder(
+    @Req() req: CoordinatorRequest,
+    @Body() dto: SendProposalSupervisorReminderDto,
+  ) {
+    return this.coordinatorPagesService.sendProposalSupervisorReminder(
+      req.workspaceId,
+      req.user.userId,
+      dto,
+    );
   }
 
   @Get('evaluations')

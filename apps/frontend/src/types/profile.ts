@@ -31,6 +31,7 @@ export interface UserProfile {
   googleScholar?: string | null;
   coordinatorRole?: string | null;
   contactInformation?: string | null;
+  institutionManaged?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,4 +45,6 @@ export interface AuthUserRecord {
   isActive: boolean;
   userIsActive?: boolean;
   createdAt: string;
+  supervisedTeamCount?: number;
+  hasTeam?: boolean;
 }

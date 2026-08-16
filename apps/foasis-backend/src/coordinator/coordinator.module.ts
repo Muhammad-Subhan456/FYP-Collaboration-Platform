@@ -12,7 +12,7 @@ import { GlobalAnnouncementsModule } from '../progress/global-announcements/glob
 import { ProposalsModule } from '../proposals/proposals.module';
 import { TeamsModule } from '../teams/teams.module';
 import { UsersModule } from '../users/users.module';
-
+import { WorkspaceModule } from '../workspace/workspace.module';
 import { InvitationsModule } from '../invitations/invitations.module';
 
 import { CoordinatorController } from './coordinator.controller';
@@ -34,6 +34,7 @@ import { CoordinatorUsersController } from './coordinator-users.controller';
     UsersModule,
     EmailModule,
     ActivityLogsModule,
+    WorkspaceModule,
   ],
   controllers: [CoordinatorController, CoordinatorUsersController],
   providers: [

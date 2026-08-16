@@ -1,11 +1,15 @@
 import api from "@/lib/axios";
-import type { UserRole } from "@/types";
+import type { Department, UserRole } from "@/types";
 
 export interface WorkspaceInvitation {
   id: string;
   email: string;
   fullName: string | null;
   role: UserRole;
+  registrationNumber?: string | null;
+  batch?: string | null;
+  department?: Department | null;
+  degreeProgram?: string | null;
   status: string;
   expiresAt: string;
   acceptedAt: string | null;
@@ -26,15 +30,23 @@ export interface CsvImportSummary {
   }>;
 }
 
+export type InvitationVerifyResult = {
+  email: string;
+  fullName: string | null;
+  role: UserRole;
+  workspaceName: string;
+  expiresAt: string;
+  registrationNumber?: string | null;
+  batch?: string | null;
+  department?: Department | null;
+  degreeProgram?: string | null;
+};
+
 export const invitationService = {
   verify: async (token: string) => {
-    const res = await api.get<{
-      email: string;
-      fullName: string | null;
-      role: UserRole;
-      workspaceName: string;
-      expiresAt: string;
-    }>("/invitations/verify", { params: { token } });
+    const res = await api.get<InvitationVerifyResult>("/invitations/verify", {
+      params: { token },
+    });
     return res.data;
   },
 
@@ -48,6 +60,10 @@ export const invitationService = {
       email: string;
       workspaceId: string;
       role: UserRole;
+      registrationNumber?: string | null;
+      batch?: string | null;
+      department?: Department | null;
+      degreeProgram?: string | null;
     }>("/invitations/accept", data);
     return res.data;
   },
@@ -65,6 +81,10 @@ export const coordinatorUsersService = {
     email: string;
     fullName?: string;
     role: UserRole;
+    registrationNumber?: string;
+    batch?: string;
+    department?: Department;
+    degreeProgram?: string;
   }) => {
     const res = await api.post("/coordinator/users/invite", data);
     return res.data;

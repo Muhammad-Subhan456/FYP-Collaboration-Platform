@@ -168,7 +168,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
           title: title.trim(),
           description: description.trim(),
           type,
-          dueDate: dueDate || undefined,
+          dueDate,
           totalMarks,
           weightagePercent,
           rubricCriteria: criteria,
@@ -186,6 +186,10 @@ export default function CoordinatorDeliverableTemplatesPage() {
               })),
         };
 
+        if (!payload.dueDate) {
+          throw new Error("Due date is required");
+        }
+
         if (editing) {
           return deliverableTemplateService.update(editing.id, payload);
         }
@@ -197,8 +201,18 @@ export default function CoordinatorDeliverableTemplatesPage() {
     },
     onSuccess: (template) => {
       const wasEditing = !!editing;
-      toast.success(wasEditing ? "Template updated" : "Template created");
+      toast.success(
+        wasEditing
+          ? "Deliverable updated for all assigned teams"
+          : "Deliverable created and published to supervised teams",
+      );
       invalidateTemplates();
+      void queryClient.invalidateQueries({
+        queryKey: ["student", "work-stream"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["supervisor", "work-stream"],
+      });
       setDialogOpen(false);
       resetForm();
       if (!wasEditing && template?.id) {
@@ -245,7 +259,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
         <PhaseFilter value={phaseFilter} onChange={setPhaseFilter} />
         <Button onClick={openCreate} disabled={phases.length === 0}>
           <Plus className="mr-2 h-4 w-4" />
-          New template
+          New deliverable
         </Button>
       </div>
 
@@ -257,9 +271,11 @@ export default function CoordinatorDeliverableTemplatesPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Templates</CardTitle>
+            <CardTitle>Deliverables</CardTitle>
             <CardDescription>
-              Templates can&apos;t be edited after a supervisor publishes them.
+              Creating a deliverable publishes it immediately to all teams with
+              an assigned supervisor. You can edit published deliverables; changes
+              cascade to students and supervisors.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -301,24 +317,23 @@ export default function CoordinatorDeliverableTemplatesPage() {
                     >
                       View
                     </Button>
-                    {!template.isLocked ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEdit(template)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => deleteMutation.mutate(template.id)}
-                        >
-                          Delete
-                        </Button>
-                      </>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEdit(template)}
+                    >
+                      Edit
+                    </Button>
+                    {!template.isLocked &&
+                    (template._count?.deliverables ?? 0) === 0 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => deleteMutation.mutate(template.id)}
+                      >
+                        Delete
+                      </Button>
                     ) : null}
                   </div>
                 </div>
@@ -332,16 +347,27 @@ export default function CoordinatorDeliverableTemplatesPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editing ? (editing.isLocked ? "View template" : "Edit template") : "Create template"}
+              {editing ? "Edit deliverable" : "Create deliverable"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {editing?.isLocked ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+                This deliverable is published. Saving updates title, deadline,
+                and other details for all assigned teams without affecting
+                existing submissions or comments.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                On create, this will be published immediately to every team that
+                currently has an assigned supervisor.
+              </p>
+            )}
             <div className="space-y-2">
               <Label>Phase</Label>
               <Select
                 value={phaseId}
                 onValueChange={setPhaseId}
-                disabled={!!editing?.isLocked}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select phase" />
@@ -359,7 +385,6 @@ export default function CoordinatorDeliverableTemplatesPage() {
               <Label>Title</Label>
               <Input
                 value={title}
-                disabled={!!editing?.isLocked}
                 onChange={(event) => setTitle(event.target.value)}
               />
             </div>
@@ -367,7 +392,6 @@ export default function CoordinatorDeliverableTemplatesPage() {
               <Label>Description</Label>
               <Textarea
                 value={description}
-                disabled={!!editing?.isLocked}
                 rows={4}
                 onChange={(event) => setDescription(event.target.value)}
               />
@@ -378,7 +402,6 @@ export default function CoordinatorDeliverableTemplatesPage() {
                 <Select
                   value={type}
                   onValueChange={(value) => setType(value as DeliverableType)}
-                  disabled={!!editing?.isLocked}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -398,7 +421,6 @@ export default function CoordinatorDeliverableTemplatesPage() {
                   type="number"
                   min={1}
                   value={totalMarks}
-                  disabled={!!editing?.isLocked}
                   onChange={(event) =>
                     setTotalMarks(Number(event.target.value) || 0)
                   }
@@ -412,7 +434,6 @@ export default function CoordinatorDeliverableTemplatesPage() {
                   max={100}
                   step={0.01}
                   value={weightagePercent}
-                  disabled={!!editing?.isLocked}
                   onChange={(event) =>
                     setWeightagePercent(Number(event.target.value) || 0)
                   }
@@ -420,11 +441,11 @@ export default function CoordinatorDeliverableTemplatesPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Default due date (optional)</Label>
+              <Label>Due date *</Label>
               <Input
                 type="datetime-local"
                 value={dueDate}
-                disabled={!!editing?.isLocked}
+                required
                 onChange={(event) => setDueDate(event.target.value)}
               />
             </div>
@@ -432,53 +453,50 @@ export default function CoordinatorDeliverableTemplatesPage() {
               criteria={criteria}
               totalMarks={totalMarks}
               onChange={setCriteria}
-              disabled={!!editing?.isLocked}
             />
-            {!editing?.isLocked ? (
-              <div className="space-y-2">
-                <Label>Attachments</Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    setPendingFiles((current) => [...current, ...files]);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
+            <div className="space-y-2">
+              <Label>Attachments</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  setPendingFiles((current) => [...current, ...files]);
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="mr-2 h-4 w-4" />
+                Add files
+              </Button>
+              {pendingFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className="flex items-center justify-between rounded border px-3 py-2 text-sm"
                 >
-                  <Paperclip className="mr-2 h-4 w-4" />
-                  Add files
-                </Button>
-                {pendingFiles.map((file, index) => (
-                  <div
-                    key={`${file.name}-${index}`}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                  <span>{file.name}</span>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() =>
+                      setPendingFiles((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
                   >
-                    <span>{file.name}</span>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() =>
-                        setPendingFiles((current) =>
-                          current.filter((_, itemIndex) => itemIndex !== index),
-                        )
-                      }
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
             {editing?.attachments?.length ? (
               <div className="space-y-1 text-sm text-muted-foreground">
                 {editing.attachments.map((attachment) => (
@@ -495,25 +513,30 @@ export default function CoordinatorDeliverableTemplatesPage() {
               </div>
             ) : null}
           </div>
-          {!editing?.isLocked ? (
-            <DialogFooter>
-              <Button
-                onClick={() => saveMutation.mutate()}
-                disabled={
-                  !title.trim() ||
-                  !phaseId ||
-                  !description.trim() ||
-                  saveMutation.isPending ||
-                  uploading
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (!dueDate) {
+                  toast.error("Due date is required");
+                  return;
                 }
-              >
-                {(saveMutation.isPending || uploading) && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Save template
-              </Button>
-            </DialogFooter>
-          ) : null}
+                saveMutation.mutate();
+              }}
+              disabled={
+                !title.trim() ||
+                !phaseId ||
+                !description.trim() ||
+                !dueDate ||
+                saveMutation.isPending ||
+                uploading
+              }
+            >
+              {(saveMutation.isPending || uploading) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {editing ? "Save changes" : "Create & publish"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -82,6 +82,28 @@ function AcceptInvitationContent() {
         password: data.password,
       });
 
+      if (
+        accepted.role === "STUDENT" &&
+        accepted.registrationNumber &&
+        accepted.batch &&
+        accepted.department &&
+        accepted.degreeProgram
+      ) {
+        try {
+          sessionStorage.setItem(
+            "foasis.institutionPrefill",
+            JSON.stringify({
+              registrationNumber: accepted.registrationNumber,
+              batch: accepted.batch,
+              department: accepted.department,
+              degreeProgram: accepted.degreeProgram,
+            }),
+          );
+        } catch {
+          // sessionStorage may be unavailable; wizard uses API prefill.
+        }
+      }
+
       const loginResponse = await authService.login({
         email: accepted.email,
         password: data.password,

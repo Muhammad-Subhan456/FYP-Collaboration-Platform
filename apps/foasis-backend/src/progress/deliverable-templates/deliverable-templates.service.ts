@@ -1,20 +1,17 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
-  Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 
-import { AuthService } from '../../auth/auth.service';
-import { AppUrlsService } from '../../common/app-urls.service';
 import { DomainEvents } from '../../domain-events/domain-event.constants';
 import { DomainEventService } from '../../domain-events/domain-event.service';
-import { EmailService } from '../../email/email.service';
-import { buildDeliverableTemplateAvailableEmail } from '../../email/email.templates';
-import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { DeliverablesService } from '../deliverables/deliverables.service';
 import { GpaCalculationService } from '../gpa/gpa-calculation.service';
 
 import { CreateDeliverableTemplateDto } from './dto/create-deliverable-template.dto';
@@ -30,17 +27,13 @@ const templateInclude = {
 
 @Injectable()
 export class DeliverableTemplatesService {
-  private readonly logger = new Logger(DeliverableTemplatesService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly authService: AuthService,
-    private readonly notificationDispatch: NotificationDispatchService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly domainEventService: DomainEventService,
     private readonly gpaCalculationService: GpaCalculationService,
-    private readonly emailService: EmailService,
-    private readonly appUrls: AppUrlsService,
+    @Inject(forwardRef(() => DeliverablesService))
+    private readonly deliverablesService: DeliverablesService,
   ) {}
 
   listTemplates(workspaceId: string, phaseId?: string) {
@@ -80,14 +73,6 @@ export class DeliverableTemplatesService {
     return parsed;
   }
 
-  private assertEditable(template: { isLocked: boolean }) {
-    if (template.isLocked) {
-      throw new BadRequestException(
-        'This template is locked because it has been published by supervisors',
-      );
-    }
-  }
-
   async createTemplate(
     workspaceId: string,
     coordinatorId: string,
@@ -109,6 +94,11 @@ export class DeliverableTemplatesService {
       throw new BadRequestException('Phase not found in this workspace');
     }
 
+    const dueDate = this.parseDueDate(dto.dueDate);
+    if (!dueDate) {
+      throw new BadRequestException('Due date is required');
+    }
+
     const template = await this.prisma.deliverableTemplate.create({
       data: {
         workspaceId,
@@ -117,7 +107,7 @@ export class DeliverableTemplatesService {
         title: dto.title.trim(),
         description: dto.description.trim(),
         type: dto.type,
-        dueDate: this.parseDueDate(dto.dueDate),
+        dueDate,
         totalMarks: dto.totalMarks,
         weightagePercent: dto.weightagePercent ?? 0,
         rubricCriteria: {
@@ -142,7 +132,13 @@ export class DeliverableTemplatesService {
       include: templateInclude,
     });
 
-    await this.notifySupervisorsOfTemplate(workspaceId, template);
+    await this.deliverablesService.publishTemplateToSupervisedTeams(
+      workspaceId,
+      template.id,
+      coordinatorId,
+    );
+
+    await this.lockTemplate(template.id);
 
     await this.activityLogsService.logActivity(
       coordinatorId,
@@ -167,15 +163,15 @@ export class DeliverableTemplatesService {
       },
     });
 
-    return template;
+    return this.getTemplate(template.id);
   }
 
   async updateTemplate(
     templateId: string,
+    coordinatorId: string,
     dto: UpdateDeliverableTemplateDto,
   ) {
     const template = await this.getTemplate(templateId);
-    this.assertEditable(template);
 
     const totalMarks = dto.totalMarks ?? template.totalMarks;
     const criteria =
@@ -265,6 +261,34 @@ export class DeliverableTemplatesService {
     });
 
     const updatedTemplate = await this.getTemplate(templateId);
+
+    const metadataChanged =
+      dto.title !== undefined ||
+      dto.description !== undefined ||
+      dto.type !== undefined ||
+      dto.dueDate !== undefined ||
+      dto.totalMarks !== undefined;
+
+    if (template.isLocked && metadataChanged) {
+      await this.deliverablesService.cascadeTemplateToDeliverables(
+        templateId,
+        {
+          ...(dto.title !== undefined && { title: dto.title.trim() }),
+          ...(dto.description !== undefined && {
+            description: dto.description.trim(),
+          }),
+          ...(dto.type !== undefined && { type: dto.type }),
+          ...(dto.dueDate !== undefined && {
+            dueDate: this.parseDueDate(dto.dueDate),
+          }),
+          ...(dto.totalMarks !== undefined && {
+            totalMarks: dto.totalMarks,
+          }),
+        },
+        coordinatorId,
+      );
+    }
+
     if (
       dto.weightagePercent !== undefined &&
       updatedTemplate.phase.isConfigurationPublished
@@ -293,6 +317,7 @@ export class DeliverableTemplatesService {
     this.domainEventService.emitSafe({
       name: DomainEvents.DELIVERABLE_TEMPLATE_UPDATED,
       timestamp: new Date().toISOString(),
+      actorId: coordinatorId,
       scope: {
         type: 'workspace',
         id: updatedTemplate.workspaceId,
@@ -314,7 +339,6 @@ export class DeliverableTemplatesService {
 
   async deleteTemplate(templateId: string) {
     const template = await this.getTemplate(templateId);
-    this.assertEditable(template);
 
     if (template._count.deliverables > 0) {
       throw new BadRequestException(
@@ -354,61 +378,5 @@ export class DeliverableTemplatesService {
     if (result.count === 0) {
       throw new NotFoundException('Deliverable template not found');
     }
-  }
-
-  private async notifySupervisorsOfTemplate(
-    workspaceId: string,
-    template: {
-      id: string;
-      title: string;
-      description: string;
-      dueDate: Date | null;
-      phase: { name: string };
-    },
-  ) {
-    const supervisors =
-      await this.authService.listSupervisors(workspaceId);
-
-    if (!supervisors.length) {
-      return;
-    }
-
-    const actionPath = '/supervisor/work-stream?tab=templates';
-    const actionUrl = this.appUrls.portalUrl(actionPath);
-
-    await this.notificationDispatch.sendBulk(
-      supervisors.map((supervisor) => ({
-        authUserId: supervisor.id,
-        title: 'New Deliverable Template',
-        message: `${template.title} (${template.phase.name}) is available to publish.`,
-        type: 'DELIVERABLE_TEMPLATE_CREATED',
-        entityType: 'DELIVERABLE_TEMPLATE',
-        entityId: template.id,
-        route: actionPath,
-      })),
-    );
-
-    void Promise.all(
-      supervisors
-        .filter((supervisor) => Boolean(supervisor.email))
-        .map((supervisor) =>
-          this.emailService.send(
-            buildDeliverableTemplateAvailableEmail({
-              to: supervisor.email,
-              deliverableTitle: template.title,
-              phaseName: template.phase.name,
-              dueDate: template.dueDate,
-              description: template.description,
-              actionUrl,
-            }),
-          ),
-        ),
-    ).catch((error) => {
-      this.logger.warn(
-        `Failed to send deliverable-template emails for ${template.id}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    });
   }
 }

@@ -29,6 +29,7 @@ import {
 import { uploadService } from "@/services/progress.service";
 import { profileService } from "@/services/profile.service";
 import { useAuth } from "@/providers/auth-provider";
+import type { Department } from "@/types";
 
 type FormData = StudentProfileFormValues;
 
@@ -50,12 +51,41 @@ const STEP_FIELDS: Array<Array<keyof FormData>> = [
   [],
 ];
 
+const INSTITUTION_PREFILL_KEY = "foasis.institutionPrefill";
+
+type InstitutionPrefill = {
+  registrationNumber: string;
+  batch: string;
+  department: Department;
+  degreeProgram: string;
+};
+
+function readSessionPrefill(): InstitutionPrefill | null {
+  try {
+    const raw = sessionStorage.getItem(INSTITUTION_PREFILL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<InstitutionPrefill>;
+    if (
+      parsed.registrationNumber &&
+      parsed.batch &&
+      parsed.department &&
+      parsed.degreeProgram
+    ) {
+      return parsed as InstitutionPrefill;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function StudentOnboardingWizard() {
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [picture, setPicture] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [institutionLocked, setInstitutionLocked] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(studentOnboardingSchema),
@@ -94,6 +124,48 @@ export function StudentOnboardingWizard() {
       }
     }
   }, [user?.email, form, setValue]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyPrefill = (prefill: InstitutionPrefill) => {
+      setValue("registrationNumber", prefill.registrationNumber);
+      setValue("batch", prefill.batch);
+      setValue("department", prefill.department);
+      setValue("degreeProgram", prefill.degreeProgram);
+      setInstitutionLocked(true);
+    };
+
+    const loadPrefill = async () => {
+      const sessionPrefill = readSessionPrefill();
+      if (sessionPrefill) {
+        applyPrefill(sessionPrefill);
+      }
+
+      try {
+        const apiPrefill = await profileService.getInstitutionPrefill();
+        if (cancelled || !apiPrefill) return;
+        applyPrefill({
+          registrationNumber: apiPrefill.registrationNumber,
+          batch: apiPrefill.batch,
+          department: apiPrefill.department,
+          degreeProgram: apiPrefill.degreeProgram,
+        });
+        try {
+          sessionStorage.removeItem(INSTITUTION_PREFILL_KEY);
+        } catch {
+          // ignore
+        }
+      } catch {
+        // Prefill is optional when invite had no academic fields.
+      }
+    };
+
+    void loadPrefill();
+    return () => {
+      cancelled = true;
+    };
+  }, [setValue]);
 
   const goToStepWithError = (field: keyof FormData) => {
     const stepIndex = STEP_FIELDS.findIndex((fields) =>
@@ -154,6 +226,12 @@ export function StudentOnboardingWizard() {
         bio: data.bio?.trim() || undefined,
       });
 
+      try {
+        sessionStorage.removeItem(INSTITUTION_PREFILL_KEY);
+      } catch {
+        // ignore
+      }
+
       await refreshProfile();
       toast.success("Profile complete! Welcome aboard.");
       router.replace(getDashboardPath(user.role));
@@ -179,6 +257,8 @@ export function StudentOnboardingWizard() {
     }
     toast.error("Please complete all required fields before finishing.");
   };
+
+  const lockedFieldClass = institutionLocked ? "bg-muted" : undefined;
 
   return (
     <Card className="w-full max-w-lg border-border/60 shadow-lg">
@@ -239,7 +319,12 @@ export function StudentOnboardingWizard() {
             <>
               <div className="space-y-2">
                 <Label>Registration Number *</Label>
-                <Input {...register("registrationNumber")} placeholder="FA21-BCS-001" />
+                <Input
+                  {...register("registrationNumber")}
+                  placeholder="FA21-BCS-001"
+                  readOnly={institutionLocked}
+                  className={lockedFieldClass}
+                />
                 {errors.registrationNumber && (
                   <p className="text-sm text-destructive">
                     {errors.registrationNumber.message}
@@ -256,8 +341,11 @@ export function StudentOnboardingWizard() {
                         shouldValidate: true,
                       })
                     }
+                    disabled={institutionLocked}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={lockedFieldClass}>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {["CS", "SE", "IT", "AI", "DS"].map((d) => (
                         <SelectItem key={d} value={d}>{d}</SelectItem>
@@ -280,20 +368,36 @@ export function StudentOnboardingWizard() {
               </div>
               <div className="space-y-2">
                 <Label>Batch *</Label>
-                <Input {...register("batch")} placeholder="2021-2025" />
+                <Input
+                  {...register("batch")}
+                  placeholder="2021-2025"
+                  readOnly={institutionLocked}
+                  className={lockedFieldClass}
+                />
                 {errors.batch && (
                   <p className="text-sm text-destructive">{errors.batch.message}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label>Degree Program *</Label>
-                <Input {...register("degreeProgram")} placeholder="BS Computer Science" />
+                <Input
+                  {...register("degreeProgram")}
+                  placeholder="BS Computer Science"
+                  readOnly={institutionLocked}
+                  className={lockedFieldClass}
+                />
                 {errors.degreeProgram && (
                   <p className="text-sm text-destructive">
                     {errors.degreeProgram.message}
                   </p>
                 )}
               </div>
+              {institutionLocked ? (
+                <p className="text-xs text-muted-foreground">
+                  Academic details were provided by your institution and cannot
+                  be edited.
+                </p>
+              ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>CGPA (optional)</Label>

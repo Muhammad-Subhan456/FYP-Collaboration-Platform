@@ -946,12 +946,6 @@ export default function SupervisorWorkStreamPage() {
                         >
                           View details
                         </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => setPublishTemplate(template)}
-                        >
-                          Publish to teams
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>

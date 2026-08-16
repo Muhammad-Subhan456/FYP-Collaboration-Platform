@@ -1,10 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 
-import { AuthModule } from '../../auth/auth.module';
-import { AppUrlsService } from '../../common/app-urls.service';
 import { DomainEventsModule } from '../../domain-events/domain-events.module';
-import { NotificationsModule } from '../../notifications/notifications.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
+import { DeliverablesModule } from '../deliverables/deliverables.module';
 
 import { GpaCalculationService } from '../gpa/gpa-calculation.service';
 
@@ -13,17 +11,12 @@ import { DeliverableTemplatesService } from './deliverable-templates.service';
 
 @Module({
   imports: [
-    AuthModule,
-    NotificationsModule,
     ActivityLogsModule,
     DomainEventsModule,
+    forwardRef(() => DeliverablesModule),
   ],
   controllers: [DeliverableTemplatesController],
-  providers: [
-    DeliverableTemplatesService,
-    GpaCalculationService,
-    AppUrlsService,
-  ],
+  providers: [DeliverableTemplatesService, GpaCalculationService],
   exports: [DeliverableTemplatesService],
 })
 export class DeliverableTemplatesModule {}

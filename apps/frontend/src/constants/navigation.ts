@@ -46,6 +46,7 @@ export const COORDINATOR_NAV: NavItemConfig[] = [
   { title: "Results", href: "/coordinator/results", icon: "Award" },
   { title: "Analytics", href: "/coordinator/analytics", icon: "BarChart3" },
   { title: "Notifications", href: "/coordinator/notifications", icon: "Bell" },
+  { title: "Settings", href: "/coordinator/settings", icon: "Settings" },
   { title: "Profile", href: "/coordinator/profile", icon: "User" },
 ];
 

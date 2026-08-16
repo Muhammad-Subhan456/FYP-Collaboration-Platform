@@ -11,6 +11,17 @@ export function useStudentTeamQuery() {
   return useStudentAuthQuery("team", studentService.getTeam);
 }
 
+export function useStudentWorkspaceSettingsQuery() {
+  const { user } = useAuth();
+
+  return useQuery({
+    ...studentPageQueryOptions,
+    queryKey: queryKeys.student.workspaceSettings(user?.workspaceId),
+    queryFn: studentService.getWorkspaceSettings,
+    enabled: !!user?.userId,
+  });
+}
+
 export function useBrowseTeamsQuery(search: string, enabled: boolean) {
   const { user } = useAuth();
 

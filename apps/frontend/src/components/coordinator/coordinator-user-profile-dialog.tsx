@@ -102,8 +102,24 @@ export function CoordinatorUserProfileDialog({
                   <StudentProfileSections profile={profile} />
                 )}
                 {profile.profileType === "SUPERVISOR" && (
-                  <SupervisorProfileSections profile={profile} />
+                  <SupervisorProfileSections
+                    profile={profile}
+                    supervisedTeamCount={detail.supervisedTeamCount}
+                  />
                 )}
+                {user.role === "SUPERVISOR" &&
+                  profile.profileType !== "SUPERVISOR" && (
+                    <Section title="Supervision">
+                      <Row
+                        label="Teams currently managed"
+                        value={
+                          detail.supervisedTeamCount != null
+                            ? String(detail.supervisedTeamCount)
+                            : "—"
+                        }
+                      />
+                    </Section>
+                  )}
                 {profile.profileType === "COORDINATOR" && (
                   <CoordinatorProfileSections profile={profile} />
                 )}
@@ -223,7 +239,13 @@ function StudentProfileSections({ profile }: { profile: UserProfile }) {
   );
 }
 
-function SupervisorProfileSections({ profile }: { profile: UserProfile }) {
+function SupervisorProfileSections({
+  profile,
+  supervisedTeamCount,
+}: {
+  profile: UserProfile;
+  supervisedTeamCount?: number | null;
+}) {
   return (
     <Section title="Supervisor profile">
       <Row label="Full name" value={profile.fullName} />
@@ -231,6 +253,12 @@ function SupervisorProfileSections({ profile }: { profile: UserProfile }) {
       <Row label="Faculty ID" value={profile.facultyId} />
       <Row label="Department" value={profile.department} />
       <Row label="Designation" value={profile.designation} />
+      <Row
+        label="Teams currently managed"
+        value={
+          supervisedTeamCount != null ? String(supervisedTeamCount) : "—"
+        }
+      />
       <Row label="Office location" value={profile.officeLocation} />
       <Row label="Office hours" value={profile.officeHours} />
       <Row label="Biography" value={profile.biography} />

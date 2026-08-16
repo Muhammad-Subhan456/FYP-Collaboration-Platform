@@ -9,6 +9,9 @@ export function invalidateStudentTeam(queryClient: QueryClient) {
   void queryClient.invalidateQueries({
     queryKey: ["team"],
   });
+  void queryClient.invalidateQueries({
+    queryKey: ["coordinator", "users"],
+  });
   void invalidateDashboard(queryClient, "STUDENT");
 }
 

@@ -64,38 +64,44 @@ model User {
 }
 
 model Workspace {
-  id               String   @id @default(uuid())
-  name             String
-  slug             String   @unique
-  description      String?
-  coordinatorEmail String
-  isArchived       Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  memberships      WorkspaceMembership[]
-  teams            Team[]
-  proposals        Proposal[]
-  supervisorRequests SupervisorRequest[]
-  supervisorInvitations SupervisorInvitation[]
-  notifications    Notification[]
-  announcements    Announcement[]
-  deliverables     Deliverable[]
-  submissions      Submission[]
-  submissionAttachments SubmissionAttachment[]
-  workStreamComments WorkStreamComment[]
-  workStreamAttachments WorkStreamAttachment[]
-  teamIssues       TeamIssue[]
-  teamIssueComments TeamIssueComment[]
-  teamIssueActivities TeamIssueActivity[]
-  activityLogs     ActivityLog[]
-  evaluations      Evaluation[]
-  globalAnnouncements GlobalAnnouncement[]
-  scheduledReminders ScheduledReminder[]
-  invitations      WorkspaceInvitation[]
-  phases           Phase[]
-  deliverableTemplates DeliverableTemplate[]
-  submissionEvaluations SubmissionEvaluation[]
-  studentPhaseResults StudentPhaseResult[]
+  id                             String   @id @default(uuid())
+  name                           String
+  slug                           String   @unique
+  description                    String?
+  coordinatorEmail               String
+  isArchived                     Boolean  @default(false)
+  /// Max members allowed in a team (future joins). Existing larger teams are kept.
+  teamMaxMembers                 Int      @default(4)
+  /// Max teams a supervisor may manage (APPROVED / SUPERVISOR_ASSIGNED).
+  supervisorMaxTeams             Int      @default(4)
+  /// Hours a supervisor has to accept/reject a pending team request.
+  supervisorRequestExpiryHours   Int      @default(24)
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+  memberships                    WorkspaceMembership[]
+  teams                          Team[]
+  proposals                      Proposal[]
+  supervisorRequests             SupervisorRequest[]
+  supervisorInvitations          SupervisorInvitation[]
+  notifications                  Notification[]
+  announcements                  Announcement[]
+  deliverables                   Deliverable[]
+  submissions                    Submission[]
+  submissionAttachments          SubmissionAttachment[]
+  workStreamComments             WorkStreamComment[]
+  workStreamAttachments          WorkStreamAttachment[]
+  teamIssues                     TeamIssue[]
+  teamIssueComments              TeamIssueComment[]
+  teamIssueActivities            TeamIssueActivity[]
+  activityLogs                   ActivityLog[]
+  evaluations                    Evaluation[]
+  globalAnnouncements            GlobalAnnouncement[]
+  scheduledReminders             ScheduledReminder[]
+  invitations                    WorkspaceInvitation[]
+  phases                         Phase[]
+  deliverableTemplates           DeliverableTemplate[]
+  submissionEvaluations          SubmissionEvaluation[]
+  studentPhaseResults            StudentPhaseResult[]
 
   @@index([isArchived, createdAt(sort: Desc)])
 }
@@ -117,24 +123,30 @@ model WorkspaceMembership {
 }
 
 model WorkspaceInvitation {
-  id          String           @id @default(uuid())
-  workspaceId String
-  email       String
-  fullName    String?
-  role        UserRole
-  tokenHash   String           @unique
-  invitedById String
-  status      InvitationStatus @default(PENDING)
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  invitedBy   User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  id                 String           @id @default(uuid())
+  workspaceId        String
+  email              String
+  fullName           String?
+  role               UserRole
+  /// Institution-managed student fields (CSV invite prefill).
+  registrationNumber String?
+  batch              String?
+  department         Department?
+  degreeProgram      String?
+  tokenHash          String           @unique
+  invitedById        String
+  status             InvitationStatus @default(PENDING)
+  expiresAt          DateTime
+  acceptedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy          User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, status])
   @@index([email, status])
   @@index([workspaceId, email, role, status])
+  @@index([workspaceId, registrationNumber])
 }
 
 model PasswordResetToken {
@@ -207,6 +219,8 @@ model UserProfile {
   googleScholar      String?
   coordinatorRole    String?
   contactInformation String?
+  /// When true, registrationNumber/batch/department/degreeProgram are institution-managed (CSV).
+  institutionManaged Boolean     @default(false)
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 }

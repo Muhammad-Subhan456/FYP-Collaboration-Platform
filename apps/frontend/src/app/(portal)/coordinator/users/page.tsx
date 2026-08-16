@@ -121,6 +121,9 @@ export default function CoordinatorUsersPage() {
   const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
+  const [studentTeamFilter, setStudentTeamFilter] = useState<
+    "all-students" | "with-team" | "without-team"
+  >("all-students");
   const [confirmAction, setConfirmAction] = useState<{
     user: AuthUserRecord;
     type: MembershipAction;
@@ -130,15 +133,37 @@ export default function CoordinatorUsersPage() {
   const usersQuery = useCoordinatorUsersQuery();
   const { roleMutation, statusMutation } = useCoordinatorUserMutations();
 
+  const showStudentTeamFilter =
+    roleFilter === "STUDENT" || roleFilter === "ALL";
+
   const users = useMemo(() => {
     return (usersQuery.data ?? []).filter((u) => {
       const matchesSearch =
         u.fullName.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase());
       const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
-      return matchesSearch && matchesRole;
+
+      if (!matchesSearch || !matchesRole) return false;
+
+      if (!showStudentTeamFilter || u.role !== "STUDENT") {
+        return true;
+      }
+
+      if (studentTeamFilter === "with-team") {
+        return u.hasTeam === true;
+      }
+      if (studentTeamFilter === "without-team") {
+        return u.hasTeam === false;
+      }
+      return true;
     });
-  }, [usersQuery.data, search, roleFilter]);
+  }, [
+    usersQuery.data,
+    search,
+    roleFilter,
+    studentTeamFilter,
+    showStudentTeamFilter,
+  ]);
 
   if (isCoordinatorQueryInitialLoading(usersQuery)) return <DashboardSkeleton />;
   if (usersQuery.isError) {
@@ -202,6 +227,25 @@ export default function CoordinatorUsersPage() {
             <SelectItem value="EVALUATOR">Evaluators</SelectItem>
           </SelectContent>
         </Select>
+        {showStudentTeamFilter ? (
+          <Select
+            value={studentTeamFilter}
+            onValueChange={(value) =>
+              setStudentTeamFilter(
+                value as "all-students" | "with-team" | "without-team",
+              )
+            }
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Student team status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all-students">All students</SelectItem>
+              <SelectItem value="with-team">With team</SelectItem>
+              <SelectItem value="without-team">Without team</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
 
       <Card>
@@ -229,6 +273,11 @@ export default function CoordinatorUsersPage() {
                     <p className="text-xs text-muted-foreground">
                       Membership created {formatDate(user.createdAt)}
                     </p>
+                    {user.role === "SUPERVISOR" ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Teams Managed: {user.supervisedTeamCount ?? 0}
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <StatusBadge status={user.role} />
                       <StatusBadge

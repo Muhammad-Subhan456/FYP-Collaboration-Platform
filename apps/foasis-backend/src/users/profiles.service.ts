@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { InvitationStatus, UserRole as PrismaUserRole } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
@@ -16,6 +17,14 @@ import { ActivityLogsService } from '../progress/activity-logs/activity-logs.ser
 import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 type UserRole = 'STUDENT' | 'SUPERVISOR' | 'COORDINATOR' | 'EVALUATOR';
+
+export type InstitutionPrefill = {
+  registrationNumber: string;
+  batch: string;
+  department: string;
+  degreeProgram: string;
+  workspaceId: string;
+} | null;
 
 @Injectable()
 export class ProfilesService {
@@ -124,6 +133,72 @@ export class ProfilesService {
     return this.findOne(authUserId);
   }
 
+  /**
+   * Institution fields from the student's most recent ACCEPTED invitation
+   * that includes a registration number (CSV / managed invite).
+   */
+  async getInstitutionPrefill(
+    authUserId: string,
+  ): Promise<InstitutionPrefill> {
+    const account = await this.prisma.user.findUnique({
+      where: { id: authUserId },
+      select: { email: true },
+    });
+
+    if (!account?.email) {
+      return null;
+    }
+
+    const memberships = await this.prisma.workspaceMembership.findMany({
+      where: {
+        userId: authUserId,
+        role: PrismaUserRole.STUDENT,
+        isActive: true,
+      },
+      select: { workspaceId: true },
+    });
+
+    if (memberships.length === 0) {
+      return null;
+    }
+
+    const workspaceIds = memberships.map((m) => m.workspaceId);
+    const invitation = await this.prisma.workspaceInvitation.findFirst({
+      where: {
+        email: account.email.toLowerCase(),
+        workspaceId: { in: workspaceIds },
+        role: PrismaUserRole.STUDENT,
+        status: InvitationStatus.ACCEPTED,
+        registrationNumber: { not: null },
+      },
+      orderBy: [{ acceptedAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        registrationNumber: true,
+        batch: true,
+        department: true,
+        degreeProgram: true,
+        workspaceId: true,
+      },
+    });
+
+    if (
+      !invitation?.registrationNumber ||
+      !invitation.batch ||
+      !invitation.department ||
+      !invitation.degreeProgram
+    ) {
+      return null;
+    }
+
+    return {
+      registrationNumber: invitation.registrationNumber,
+      batch: invitation.batch,
+      department: invitation.department,
+      degreeProgram: invitation.degreeProgram,
+      workspaceId: invitation.workspaceId,
+    };
+  }
+
   async findManyByAuthUserIds(
     authUserIds: string[],
     workspaceId?: string,
@@ -195,6 +270,33 @@ export class ProfilesService {
       throw new BadRequestException('Authenticated account email is required');
     }
 
+    const prefill = await this.getInstitutionPrefill(authUserId);
+    const institutionManaged = Boolean(prefill);
+
+    const registrationNumber = prefill
+      ? prefill.registrationNumber
+      : dto.registrationNumber;
+    const batch = prefill ? prefill.batch : dto.batch;
+    const department = prefill
+      ? (prefill.department as CreateStudentProfileDto['department'])
+      : dto.department;
+    const degreeProgram = prefill
+      ? prefill.degreeProgram
+      : dto.degreeProgram;
+
+    if (
+      prefill &&
+      (dto.registrationNumber.trim().toLowerCase() !==
+        prefill.registrationNumber.toLowerCase() ||
+        dto.batch.trim() !== prefill.batch ||
+        dto.department !== prefill.department ||
+        dto.degreeProgram.trim() !== prefill.degreeProgram)
+    ) {
+      throw new BadRequestException(
+        'Institution-managed academic fields cannot be changed',
+      );
+    }
+
     const profile = await this.prisma.userProfile.create({
       data: {
         authUserId,
@@ -202,10 +304,10 @@ export class ProfilesService {
         fullName: dto.fullName,
         email: account.email,
         profilePicture: dto.profilePicture,
-        registrationNumber: dto.registrationNumber,
-        department: dto.department,
-        batch: dto.batch,
-        degreeProgram: dto.degreeProgram,
+        registrationNumber,
+        department,
+        batch,
+        degreeProgram,
         semester: dto.semester,
         cgpa: dto.cgpa ?? null,
         phone: dto.phone || null,
@@ -214,6 +316,7 @@ export class ProfilesService {
         linkedIn: dto.linkedIn || null,
         github: dto.github || null,
         bio: dto.bio,
+        institutionManaged,
       },
     });
 
@@ -393,6 +496,17 @@ export class ProfilesService {
 
     const { email: _ignoredEmail, ...safeUpdate } =
       updateData as Record<string, unknown> & { email?: unknown };
+
+    if (
+      existing.profileType === 'STUDENT' &&
+      existing.institutionManaged
+    ) {
+      delete safeUpdate.registrationNumber;
+      delete safeUpdate.batch;
+      delete safeUpdate.department;
+      delete safeUpdate.degreeProgram;
+      delete safeUpdate.institutionManaged;
+    }
 
     const profile = await this.prisma.userProfile.update({
       where: { authUserId },

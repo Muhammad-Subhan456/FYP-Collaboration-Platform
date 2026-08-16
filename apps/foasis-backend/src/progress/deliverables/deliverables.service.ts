@@ -1,18 +1,24 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
-import { WorkStreamEntityType } from '@prisma/client';
+import { DeliverableType, WorkStreamEntityType } from '@prisma/client';
 import type { Deliverable } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppUrlsService } from '../../common/app-urls.service';
 import { EmailService } from '../../email/email.service';
-import { buildDeliverablePublishedEmail } from '../../email/email.templates';
+import {
+  buildDeliverablePublishedEmail,
+  buildDeliverablePublishedForSupervisorEmail,
+} from '../../email/email.templates';
+import { NotificationDispatchService } from '../../notifications/notification-dispatch.service';
 
 import { CreateDeliverableDto } from './dto/create-deliverable.dto';
 import { ExtendDeadlineDto } from './dto/extend-deadline.dto';
@@ -28,6 +34,25 @@ import type { NotificationContext } from '../common/team-access.service';
 import { WorkStreamService } from '../work-stream/work-stream.service';
 import { serializeDeliverable } from '../work-stream/work-stream-realtime';
 
+type MaterializeTeamTarget = {
+  teamId: string;
+  supervisorId: string;
+  dueDate?: Date;
+};
+
+type MaterializeOptions = {
+  notifySupervisor?: boolean;
+  onExisting?: 'skip' | 'throw';
+};
+
+type CascadeTemplatePatch = {
+  title?: string;
+  description?: string;
+  type?: DeliverableType;
+  dueDate?: Date | null;
+  totalMarks?: number;
+};
+
 @Injectable()
 export class DeliverablesService {
   private readonly logger = new Logger(DeliverablesService.name);
@@ -36,11 +61,14 @@ export class DeliverablesService {
     private readonly prisma: PrismaService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly teamAccessService: TeamAccessService,
+    @Inject(forwardRef(() => WorkStreamService))
     private readonly workStreamService: WorkStreamService,
     private readonly domainEventService: DomainEventService,
+    @Inject(forwardRef(() => DeliverableTemplatesService))
     private readonly templatesService: DeliverableTemplatesService,
     private readonly emailService: EmailService,
     private readonly appUrls: AppUrlsService,
+    private readonly notificationDispatch: NotificationDispatchService,
   ) {}
 
   private async resolveDefaultPhaseId(workspaceId: string) {
@@ -148,6 +176,330 @@ export class DeliverablesService {
         }`,
       );
     });
+  }
+
+  private formatDateLabel(value: Date) {
+    return value.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  private async notifySupervisorsOfPublishedDeliverable(
+    supervisorTeamCounts: Map<string, number>,
+    deliverable: Pick<Deliverable, 'id' | 'title' | 'dueDate'>,
+  ) {
+    if (supervisorTeamCounts.size === 0) {
+      return;
+    }
+
+    const supervisors = await this.prisma.user.findMany({
+      where: { id: { in: [...supervisorTeamCounts.keys()] } },
+      select: { id: true, email: true },
+    });
+
+    const actionPath = '/supervisor/work-stream?tab=deliverables';
+    const actionUrl = this.appUrls.portalUrl(actionPath);
+
+    await this.notificationDispatch.sendBulk(
+      supervisors.map((supervisor) => {
+        const teamCount = supervisorTeamCounts.get(supervisor.id) ?? 0;
+        const teamLabel =
+          teamCount === 1 ? '1 of your teams' : `${teamCount} of your teams`;
+
+        return {
+          authUserId: supervisor.id,
+          title: 'Deliverable Published',
+          message: `"${deliverable.title}" has been published to ${teamLabel} (due ${this.formatDateLabel(deliverable.dueDate)}).`,
+          type: 'DELIVERABLE_CREATED',
+          entityType: 'DELIVERABLE',
+          entityId: deliverable.id,
+          route: actionPath,
+        };
+      }),
+    );
+
+    void Promise.all(
+      supervisors
+        .filter((supervisor) => Boolean(supervisor.email))
+        .map((supervisor) =>
+          this.emailService.send(
+            buildDeliverablePublishedForSupervisorEmail({
+              to: supervisor.email,
+              deliverableTitle: deliverable.title,
+              dueDate: deliverable.dueDate,
+              teamCount: supervisorTeamCounts.get(supervisor.id) ?? 0,
+              actionUrl,
+            }),
+          ),
+        ),
+    ).catch((error) => {
+      this.logger.warn(
+        `Failed to send supervisor deliverable-published emails for ${deliverable.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
+
+  async materializeTemplateForTeamTargets(
+    templateId: string,
+    targets: MaterializeTeamTarget[],
+    actorId: string,
+    options?: MaterializeOptions,
+  ): Promise<Deliverable[]> {
+    if (targets.length === 0) {
+      return [];
+    }
+
+    const template = await this.templatesService.getTemplate(templateId);
+    const notifySupervisor = options?.notifySupervisor ?? true;
+    const onExisting = options?.onExisting ?? 'skip';
+    const created: Deliverable[] = [];
+    const supervisorTeamCounts = new Map<string, number>();
+
+    for (const target of targets) {
+      const existing = await this.prisma.deliverable.findFirst({
+        where: { templateId: template.id, teamId: target.teamId },
+      });
+
+      if (existing) {
+        if (onExisting === 'throw') {
+          throw new BadRequestException(
+            `Template already published to team ${target.teamId}`,
+          );
+        }
+        continue;
+      }
+
+      const team = await this.prisma.team.findFirst({
+        where: { id: target.teamId },
+        select: { workspaceId: true },
+      });
+
+      if (!team || team.workspaceId !== template.workspaceId) {
+        throw new BadRequestException('Team not found in workspace');
+      }
+
+      const dueDate = target.dueDate ?? template.dueDate;
+      if (!dueDate || Number.isNaN(dueDate.getTime())) {
+        throw new BadRequestException(
+          `Due date is required for team ${target.teamId}`,
+        );
+      }
+
+      const deliverable = await this.prisma.deliverable.create({
+        data: {
+          workspaceId: team.workspaceId,
+          supervisorId: target.supervisorId,
+          teamId: target.teamId,
+          phaseId: template.phaseId,
+          templateId: template.id,
+          title: template.title,
+          description: template.description,
+          type: template.type,
+          dueDate,
+          totalMarks: template.totalMarks,
+          publishedAt: new Date(),
+        },
+      });
+
+      if (template.attachments.length > 0) {
+        await this.prisma.workStreamAttachment.createMany({
+          data: template.attachments.map((attachment) => ({
+            id: randomUUID(),
+            workspaceId: team.workspaceId,
+            entityType: WorkStreamEntityType.DELIVERABLE,
+            entityId: deliverable.id,
+            teamId: target.teamId,
+            fileUrl: attachment.fileUrl,
+            fileName: attachment.fileName,
+          })),
+        });
+      }
+
+      void this.notifyTeam(target.teamId, {
+        title: 'New Deliverable Assigned',
+        message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
+        type: 'DELIVERABLE_CREATED',
+        entityType: 'DELIVERABLE',
+        entityId: deliverable.id,
+        route: '/student/work-stream',
+      }).catch(() => undefined);
+
+      this.queueDeliverablePublishedEmail(target.teamId, deliverable);
+
+      this.publishDeliverableEvent(
+        DomainEvents.DELIVERABLE_CREATED,
+        actorId,
+        target.teamId,
+        deliverable,
+        { attachmentCount: template.attachments.length },
+      );
+
+      created.push(deliverable);
+      supervisorTeamCounts.set(
+        target.supervisorId,
+        (supervisorTeamCounts.get(target.supervisorId) ?? 0) + 1,
+      );
+    }
+
+    if (notifySupervisor && created.length > 0) {
+      await this.notifySupervisorsOfPublishedDeliverable(
+        supervisorTeamCounts,
+        created[0],
+      );
+    }
+
+    return created;
+  }
+
+  async publishTemplateToSupervisedTeams(
+    workspaceId: string,
+    templateId: string,
+    actorId: string,
+  ): Promise<{ created: number }> {
+    const proposals = await this.prisma.proposal.findMany({
+      where: {
+        workspaceId,
+        assignedSupervisorId: { not: null },
+        status: { in: ['APPROVED', 'SUPERVISOR_ASSIGNED'] },
+      },
+      select: { teamId: true, assignedSupervisorId: true },
+    });
+
+    const targets = proposals
+      .filter(
+        (
+          proposal,
+        ): proposal is {
+          teamId: string;
+          assignedSupervisorId: string;
+        } => Boolean(proposal.assignedSupervisorId),
+      )
+      .map((proposal) => ({
+        teamId: proposal.teamId,
+        supervisorId: proposal.assignedSupervisorId,
+      }));
+
+    const created = await this.materializeTemplateForTeamTargets(
+      templateId,
+      targets,
+      actorId,
+      { notifySupervisor: true, onExisting: 'skip' },
+    );
+
+    return { created: created.length };
+  }
+
+  async cascadeTemplateToDeliverables(
+    templateId: string,
+    patch: CascadeTemplatePatch,
+    actorId: string,
+  ): Promise<number> {
+    const data: {
+      title?: string;
+      description?: string;
+      type?: DeliverableType;
+      dueDate?: Date;
+      totalMarks?: number;
+    } = {};
+
+    if (patch.title !== undefined) {
+      data.title = patch.title;
+    }
+    if (patch.description !== undefined) {
+      data.description = patch.description;
+    }
+    if (patch.type !== undefined) {
+      data.type = patch.type;
+    }
+    if (patch.dueDate !== undefined && patch.dueDate !== null) {
+      data.dueDate = patch.dueDate;
+    }
+    if (patch.totalMarks !== undefined) {
+      data.totalMarks = patch.totalMarks;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return 0;
+    }
+
+    const deliverables = await this.prisma.deliverable.findMany({
+      where: { templateId },
+    });
+
+    if (deliverables.length === 0) {
+      return 0;
+    }
+
+    let updatedCount = 0;
+
+    for (const deliverable of deliverables) {
+      const dueDateChanged =
+        data.dueDate !== undefined &&
+        data.dueDate.getTime() !== deliverable.dueDate.getTime();
+
+      const updated = await this.prisma.deliverable.update({
+        where: { id: deliverable.id },
+        data,
+      });
+
+      updatedCount += 1;
+
+      const teamId = updated.teamId ?? updated.supervisorId;
+
+      this.publishDeliverableEvent(
+        DomainEvents.DELIVERABLE_UPDATED,
+        actorId,
+        teamId,
+        updated,
+      );
+
+      if (dueDateChanged && updated.teamId) {
+        void this.notifyTeam(updated.teamId, {
+          title: 'Deliverable Deadline Extended',
+          message: `The deadline for "${updated.title}" has been extended to ${this.formatDateLabel(updated.dueDate)}.`,
+          type: 'DELIVERABLE_DEADLINE_EXTENDED',
+          entityType: 'DELIVERABLE',
+          entityId: updated.id,
+          route: '/student/work-stream',
+        }).catch(() => undefined);
+
+        this.publishDeliverableEvent(
+          DomainEvents.DELIVERABLE_DEADLINE_EXTENDED,
+          actorId,
+          updated.teamId,
+          updated,
+        );
+      }
+    }
+
+    return updatedCount;
+  }
+
+  async ensurePublishedTemplatesForTeam(
+    workspaceId: string,
+    teamId: string,
+    supervisorId: string,
+  ): Promise<void> {
+    const templates = await this.prisma.deliverableTemplate.findMany({
+      where: {
+        workspaceId,
+        isLocked: true,
+      },
+      select: { id: true },
+    });
+
+    for (const template of templates) {
+      await this.materializeTemplateForTeamTargets(
+        template.id,
+        [{ teamId, supervisorId }],
+        supervisorId,
+        { notifySupervisor: true, onExisting: 'skip' },
+      );
+    }
   }
 
   async createDeliverable(
@@ -416,30 +768,8 @@ export class DeliverablesService {
       );
     }
 
-    const created: Deliverable[] = [];
-
-    for (const teamId of teamIds) {
-      const existing = await this.prisma.deliverable.findFirst({
-        where: { templateId: template.id, teamId },
-      });
-
-      if (existing) {
-        throw new BadRequestException(
-          `Template already published to team ${teamId}`,
-        );
-      }
-
-      const team = await this.prisma.team.findFirst({
-        where: { id: teamId },
-        select: { workspaceId: true },
-      });
-
-      if (!team || team.workspaceId !== template.workspaceId) {
-        throw new BadRequestException('Team not found in workspace');
-      }
-
-      const dueDate =
-        dueDateByTeam.get(teamId) ?? defaultDueDate;
+    const targets: MaterializeTeamTarget[] = teamIds.map((teamId) => {
+      const dueDate = dueDateByTeam.get(teamId) ?? defaultDueDate;
 
       if (!dueDate || Number.isNaN(dueDate.getTime())) {
         throw new BadRequestException(
@@ -447,57 +777,19 @@ export class DeliverablesService {
         );
       }
 
-      const deliverable = await this.prisma.deliverable.create({
-        data: {
-          workspaceId: team.workspaceId,
-          supervisorId,
-          teamId,
-          phaseId: template.phaseId,
-          templateId: template.id,
-          title: template.title,
-          description: template.description,
-          type: template.type,
-          dueDate,
-          totalMarks: template.totalMarks,
-          publishedAt: new Date(),
-        },
-      });
-
-      if (template.attachments.length > 0) {
-        await this.prisma.workStreamAttachment.createMany({
-          data: template.attachments.map((attachment) => ({
-            id: randomUUID(),
-            workspaceId: team.workspaceId,
-            entityType: WorkStreamEntityType.DELIVERABLE,
-            entityId: deliverable.id,
-            teamId,
-            fileUrl: attachment.fileUrl,
-            fileName: attachment.fileName,
-          })),
-        });
-      }
-
-      void this.notifyTeam(teamId, {
-        title: 'New Deliverable Assigned',
-        message: `${deliverable.title} is due on ${deliverable.dueDate.toDateString()}.`,
-        type: 'DELIVERABLE_CREATED',
-        entityType: 'DELIVERABLE',
-        entityId: deliverable.id,
-        route: '/student/work-stream',
-      }).catch(() => undefined);
-
-      this.queueDeliverablePublishedEmail(teamId, deliverable);
-
-      this.publishDeliverableEvent(
-        DomainEvents.DELIVERABLE_CREATED,
-        supervisorId,
+      return {
         teamId,
-        deliverable,
-        { attachmentCount: template.attachments.length },
-      );
+        supervisorId,
+        dueDate,
+      };
+    });
 
-      created.push(deliverable);
-    }
+    const created = await this.materializeTemplateForTeamTargets(
+      template.id,
+      targets,
+      supervisorId,
+      { notifySupervisor: false, onExisting: 'throw' },
+    );
 
     await this.templatesService.lockTemplate(template.id);
 

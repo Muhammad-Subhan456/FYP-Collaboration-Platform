@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useStudentProposalMutations } from "@/mutations/student";
-import { useStudentProposalQuery, isStudentQueryPending } from "@/queries/student";
+import {
+  useStudentProposalQuery,
+  useStudentWorkspaceSettingsQuery,
+  isStudentQueryPending,
+} from "@/queries/student";
 import {
   AlertCircle,
   ExternalLink,
@@ -10,11 +14,12 @@ import {
   History,
   Loader2,
   Mail,
+  Search,
   Send,
   User,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
@@ -30,6 +35,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
@@ -50,8 +56,10 @@ export default function StudentProposalPage() {
   const [sendingSupervisorId, setSendingSupervisorId] = useState<string | null>(
     null,
   );
+  const [supervisorSearch, setSupervisorSearch] = useState("");
 
   const pageQuery = useStudentProposalQuery();
+  const settingsQuery = useStudentWorkspaceSettingsQuery();
   const { requestMutation, ignoreInterestMutation } =
     useStudentProposalMutations();
 
@@ -66,6 +74,8 @@ export default function StudentProposalPage() {
   const isWorkflowLocked = pageData?.isWorkflowLocked ?? false;
   const isProfileComplete = pageData?.isProfileComplete ?? false;
   const profiles = pageData?.profiles;
+  const expiryHours =
+    settingsQuery.data?.supervisorRequestExpiryHours;
 
   const supervisorId = proposal?.assignedSupervisorId;
   const supervisorName = supervisorId
@@ -81,6 +91,20 @@ export default function StudentProposalPage() {
     !isWorkflowLocked &&
     !proposal?.assignedSupervisorId &&
     !hasPendingProposal;
+
+  const filteredSupervisors = useMemo(() => {
+    const query = supervisorSearch.trim().toLowerCase();
+    if (!query) {
+      return supervisors;
+    }
+    return supervisors.filter((supervisor) => {
+      const name = (supervisor.fullName ?? "").toLowerCase();
+      const profileName = (
+        profiles?.[supervisor.id]?.fullName ?? ""
+      ).toLowerCase();
+      return name.includes(query) || profileName.includes(query);
+    });
+  }, [supervisors, supervisorSearch, profiles]);
 
   const handleSendProposal = (targetSupervisorId: string) => {
     setSendingSupervisorId(targetSupervisorId);
@@ -384,28 +408,48 @@ export default function StudentProposalPage() {
             </CardTitle>
             <CardDescription>
               Review supervisors and send your proposal. Unreviewed requests
-              expire after 5 minutes.
+              {expiryHours
+                ? ` expire after ${expiryHours} hour${expiryHours === 1 ? "" : "s"}.`
+                : " expire before the request window closes."}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {supervisors.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No supervisors available right now.
               </p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {supervisors.map((supervisor) => (
-                  <SupervisorBrowseCard
-                    key={supervisor.id}
-                    supervisor={supervisor}
-                    profile={profiles?.[supervisor.id]}
-                    isSending={sendingSupervisorId === supervisor.id}
-                    disabled={requestMutation.isPending}
-                    onViewProfile={() => setViewProfileId(supervisor.id)}
-                    onSendRequest={() => handleSendProposal(supervisor.id)}
+              <>
+                <div className="relative max-w-md">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={supervisorSearch}
+                    onChange={(e) => setSupervisorSearch(e.target.value)}
+                    placeholder="Search supervisors by name…"
+                    className="pl-9"
+                    aria-label="Search supervisors by name"
                   />
-                ))}
-              </div>
+                </div>
+                {filteredSupervisors.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No supervisors match &ldquo;{supervisorSearch.trim()}&rdquo;.
+                  </p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {filteredSupervisors.map((supervisor) => (
+                      <SupervisorBrowseCard
+                        key={supervisor.id}
+                        supervisor={supervisor}
+                        profile={profiles?.[supervisor.id]}
+                        isSending={sendingSupervisorId === supervisor.id}
+                        disabled={requestMutation.isPending}
+                        onViewProfile={() => setViewProfileId(supervisor.id)}
+                        onSendRequest={() => handleSendProposal(supervisor.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

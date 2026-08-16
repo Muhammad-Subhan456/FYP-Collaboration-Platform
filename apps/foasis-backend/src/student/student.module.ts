@@ -14,6 +14,7 @@ import { WorkStreamModule } from '../progress/work-stream/work-stream.module';
 import { ProposalsModule } from '../proposals/proposals.module';
 import { TeamsModule } from '../teams/teams.module';
 import { UsersModule } from '../users/users.module';
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 import { StudentController } from './student.controller';
 import { StudentPagesService } from './student-pages.service';
@@ -36,6 +37,7 @@ import { StudentContextModule } from './student-context.module';
     SubmissionEvaluationsModule,
     NotificationsModule,
     WorkStreamModule,
+    WorkspaceModule,
   ],
   controllers: [StudentController],
   providers: [StudentPagesService],

@@ -96,6 +96,15 @@ export function useStudentTeamMutations() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberId: string) => teamService.removeMember(memberId),
+    onSuccess: () => {
+      toast.success("Member removed from the team");
+      invalidateTeam();
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   const deleteTeamMutation = useMutation({
     mutationFn: teamService.deleteTeam,
     onSuccess: () => {
@@ -143,6 +152,7 @@ export function useStudentTeamMutations() {
     approveMutation,
     rejectMutation,
     roleMutation,
+    removeMemberMutation,
     deleteTeamMutation,
     leaveTeamMutation,
     invalidateTeam,
@@ -159,8 +169,18 @@ export function useStudentProposalMutations() {
     mutationFn: (supervisorId: string) =>
       proposalService.requestSupervisor(supervisorId),
     onSuccess: () => {
+      const settings = queryClient
+        .getQueriesData<{ supervisorRequestExpiryHours?: number }>({
+          queryKey: ["student", "workspace-settings"],
+        })
+        .map(([, data]) => data)
+        .find((data) => data?.supervisorRequestExpiryHours != null);
+      const hours = settings?.supervisorRequestExpiryHours;
+
       toast.success(
-        "Proposal submitted! The supervisor has 5 minutes to respond.",
+        hours
+          ? `Proposal submitted! The supervisor has ${hours} hour${hours === 1 ? "" : "s"} to respond.`
+          : "Proposal submitted! The supervisor must respond before the request expires.",
       );
       invalidateProposal();
     },

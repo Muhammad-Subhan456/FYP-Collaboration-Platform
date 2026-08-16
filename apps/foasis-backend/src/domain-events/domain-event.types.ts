@@ -281,6 +281,8 @@ export interface TeamMemberWire {
 export interface TeamJoinRequestReceivedPayload {
   teamId: string;
   joinRequest: JoinRequestWire;
+  /** Requester profile for immediate leader UI (same workspace). */
+  requesterProfile?: Record<string, unknown> | null;
 }
 
 export interface TeamJoinRequestResolvedPayload {

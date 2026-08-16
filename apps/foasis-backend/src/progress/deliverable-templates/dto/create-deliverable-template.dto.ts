@@ -55,9 +55,8 @@ export class CreateDeliverableTemplateDto {
   @IsEnum(DeliverableType)
   type!: DeliverableType;
 
-  @IsOptional()
   @IsString()
-  dueDate?: string;
+  dueDate!: string;
 
   @IsInt()
   @Min(1)

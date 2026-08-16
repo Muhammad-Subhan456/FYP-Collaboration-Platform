@@ -78,6 +78,8 @@ export function StudentProfileForm({
 
   const department = watch("department");
   const accountEmail = user?.email ?? data?.email ?? "";
+  const institutionLocked = Boolean(data?.institutionManaged);
+  const lockedFieldClass = institutionLocked ? "bg-muted" : undefined;
 
   useEffect(() => {
     if (data) {
@@ -120,10 +122,14 @@ export function StudentProfileForm({
     mutation.mutate({
       fullName: form.fullName,
       profilePicture,
-      registrationNumber: form.registrationNumber,
-      department: form.department,
-      batch: form.batch,
-      degreeProgram: form.degreeProgram,
+      ...(institutionLocked
+        ? {}
+        : {
+            registrationNumber: form.registrationNumber,
+            department: form.department,
+            batch: form.batch,
+            degreeProgram: form.degreeProgram,
+          }),
       semester: form.semester,
       cgpa: typeof form.cgpa === "number" ? form.cgpa : undefined,
       phone: form.phone?.trim() || undefined,
@@ -180,7 +186,12 @@ export function StudentProfileForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="registrationNumber">Registration number</Label>
-            <Input id="registrationNumber" {...register("registrationNumber")} />
+            <Input
+              id="registrationNumber"
+              {...register("registrationNumber")}
+              readOnly={institutionLocked}
+              className={lockedFieldClass}
+            />
             {errors.registrationNumber && (
               <p className="text-sm text-destructive">
                 {errors.registrationNumber.message}
@@ -198,8 +209,9 @@ export function StudentProfileForm({
                     shouldValidate: true,
                   })
                 }
+                disabled={institutionLocked}
               >
-                <SelectTrigger>
+                <SelectTrigger className={lockedFieldClass}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -213,7 +225,13 @@ export function StudentProfileForm({
             </div>
             <div className="space-y-2">
               <Label htmlFor="batch">Batch</Label>
-              <Input id="batch" placeholder="2022-2026" {...register("batch")} />
+              <Input
+                id="batch"
+                placeholder="2022-2026"
+                {...register("batch")}
+                readOnly={institutionLocked}
+                className={lockedFieldClass}
+              />
               {errors.batch && (
                 <p className="text-sm text-destructive">{errors.batch.message}</p>
               )}
@@ -222,7 +240,12 @@ export function StudentProfileForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="degreeProgram">Degree program</Label>
-              <Input id="degreeProgram" {...register("degreeProgram")} />
+              <Input
+                id="degreeProgram"
+                {...register("degreeProgram")}
+                readOnly={institutionLocked}
+                className={lockedFieldClass}
+              />
               {errors.degreeProgram && (
                 <p className="text-sm text-destructive">
                   {errors.degreeProgram.message}
@@ -243,6 +266,12 @@ export function StudentProfileForm({
               )}
             </div>
           </div>
+          {institutionLocked ? (
+            <p className="text-xs text-muted-foreground">
+              Registration number, batch, department, and degree are managed by
+              your institution.
+            </p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="cgpa">CGPA</Label>

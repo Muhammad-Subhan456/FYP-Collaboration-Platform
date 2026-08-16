@@ -49,6 +49,14 @@ export type SubmissionReminderEmailPayload = {
   actionUrl?: string;
 };
 
+export type ProposalSupervisorReminderEmailPayload = {
+  to: string;
+  proposalTitle: string;
+  deadline: Date;
+  teamName?: string;
+  actionUrl?: string;
+};
+
 export type ProposalAcceptedEmailPayload = {
   to: string;
   proposalTitle: string;
@@ -60,6 +68,14 @@ export type DeliverablePublishedEmailPayload = {
   to: string;
   deliverableTitle: string;
   dueDate: Date;
+  actionUrl?: string;
+};
+
+export type DeliverablePublishedForSupervisorEmailPayload = {
+  to: string;
+  deliverableTitle: string;
+  dueDate: Date;
+  teamCount: number;
   actionUrl?: string;
 };
 
@@ -196,6 +212,47 @@ export function buildSubmissionReminderEmail(
   };
 }
 
+export function buildProposalSupervisorReminderEmail(
+  payload: ProposalSupervisorReminderEmailPayload,
+): EmailMessage {
+  const deadlineText = payload.deadline.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const title = escapeHtml(payload.proposalTitle);
+  const teamName = payload.teamName ? escapeHtml(payload.teamName) : '';
+  const actionLine = payload.actionUrl
+    ? `\n\nSelect a supervisor in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    type: 'proposal_supervisor_reminder',
+    subject: `Reminder: Select a supervisor for "${payload.proposalTitle}"`,
+    text: [
+      `This is a reminder that your FOASIS proposal "${payload.proposalTitle}"${
+        payload.teamName ? ` (team "${payload.teamName}")` : ''
+      } still has no supervisor selected or assigned.`,
+      `Please complete supervisor selection before ${deadlineText}.`,
+      'Acting promptly helps keep your project on schedule.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>This is a reminder that your FOASIS proposal <strong>${title}</strong>${
+        teamName ? ` (team <strong>${teamName}</strong>)` : ''
+      } still has <strong>no supervisor selected or assigned</strong>.</p>
+      <p>Please complete supervisor selection before <strong>${deadlineText}</strong>.</p>
+      <p>Acting promptly helps keep your project on schedule.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Select a supervisor in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
 export function buildProposalAcceptedEmail(
   payload: ProposalAcceptedEmailPayload,
 ): EmailMessage {
@@ -253,6 +310,39 @@ export function buildDeliverablePublishedEmail(
       <p>A new deliverable <strong>${payload.deliverableTitle}</strong> has been assigned to your team.</p>
       <p><strong>Due date:</strong> ${dueText}</p>
       <p>Please review the requirements and submit before the deadline.</p>
+      ${
+        payload.actionUrl
+          ? `<p><a href="${payload.actionUrl}">Open work stream in FOASIS</a></p>`
+          : ''
+      }
+    `,
+  };
+}
+
+export function buildDeliverablePublishedForSupervisorEmail(
+  payload: DeliverablePublishedForSupervisorEmailPayload,
+): EmailMessage {
+  const dueText = payload.dueDate.toLocaleDateString();
+  const teamLabel =
+    payload.teamCount === 1 ? '1 of your teams' : `${payload.teamCount} of your teams`;
+  const actionLine = payload.actionUrl
+    ? `\n\nOpen in FOASIS: ${payload.actionUrl}`
+    : '';
+
+  return {
+    to: payload.to,
+    type: 'deliverable_published_supervisor',
+    subject: `FOASIS: Deliverable published — ${payload.deliverableTitle}`,
+    text: [
+      `A deliverable "${payload.deliverableTitle}" has been published to ${teamLabel}.`,
+      `Due date: ${dueText}`,
+      'Students on those teams have been notified and can begin submitting.',
+      actionLine,
+    ].join('\n'),
+    html: `
+      <p>A deliverable <strong>${payload.deliverableTitle}</strong> has been published to <strong>${teamLabel}</strong>.</p>
+      <p><strong>Due date:</strong> ${dueText}</p>
+      <p>Students on those teams have been notified and can begin submitting.</p>
       ${
         payload.actionUrl
           ? `<p><a href="${payload.actionUrl}">Open work stream in FOASIS</a></p>`

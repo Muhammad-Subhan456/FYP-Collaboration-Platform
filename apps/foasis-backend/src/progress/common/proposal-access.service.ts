@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  forwardRef,
 } from '@nestjs/common';
 
 import { ProposalsService } from '../../proposals/proposals.service';
@@ -9,6 +11,7 @@ import { ProposalsService } from '../../proposals/proposals.service';
 @Injectable()
 export class ProposalAccessService {
   constructor(
+    @Inject(forwardRef(() => ProposalsService))
     private readonly proposalsService: ProposalsService,
   ) {}
 

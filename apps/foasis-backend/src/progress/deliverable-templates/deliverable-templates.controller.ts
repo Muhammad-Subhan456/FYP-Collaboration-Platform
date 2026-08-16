@@ -65,10 +65,15 @@ export class DeliverableTemplatesController {
   @Roles('COORDINATOR')
   @Patch(':id')
   updateTemplate(
+    @Req() req: WorkspaceRequest,
     @Param('id') id: string,
     @Body() dto: UpdateDeliverableTemplateDto,
   ) {
-    return this.templatesService.updateTemplate(id, dto);
+    return this.templatesService.updateTemplate(
+      id,
+      req.user.userId,
+      dto,
+    );
   }
 
   @Roles('COORDINATOR')

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  Department,
   InvitationStatus,
   UserRole,
 } from '@prisma/client';
@@ -45,10 +46,24 @@ function getSafeSkipReason(error: unknown): string {
   return 'Skipped';
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_DEPARTMENTS = new Set<string>(Object.values(Department));
+
+export type StudentAcademicFields = {
+  registrationNumber: string;
+  batch: string;
+  department: Department;
+  degreeProgram: string;
+};
+
 export type InviteUserInput = {
   email: string;
   fullName?: string;
   role: UserRole;
+  registrationNumber?: string;
+  batch?: string;
+  department?: Department | string;
+  degreeProgram?: string;
 };
 
 export type CsvImportRowResult = {
@@ -73,6 +88,72 @@ const INVITABLE_ROLES: UserRole[] = [
   UserRole.COORDINATOR,
   UserRole.EVALUATOR,
 ];
+
+type CsvFormat = 'student' | 'faculty';
+
+type ParsedCsvRow = {
+  email: string;
+  fullName?: string;
+  role: string;
+  registrationNumber?: string;
+  batch?: string;
+  department?: string;
+  degreeProgram?: string;
+};
+
+function normalizeHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function isRollHeader(normalized: string): boolean {
+  return (
+    normalized === 'rollno' ||
+    normalized === 'registrationnumber' ||
+    normalized === 'registrationno' ||
+    normalized === 'regno'
+  );
+}
+
+function isDegreeHeader(normalized: string): boolean {
+  return (
+    normalized === 'degree' ||
+    normalized === 'degreeprogram' ||
+    normalized === 'degreeprogramme'
+  );
+}
+
+function detectCsvFormat(headerCells: string[]): CsvFormat {
+  const normalized = headerCells.map(normalizeHeader);
+  if (normalized.some(isRollHeader)) {
+    return 'student';
+  }
+  return 'faculty';
+}
+
+function buildHeaderIndex(headerCells: string[]): Map<string, number> {
+  const index = new Map<string, number>();
+  headerCells.forEach((cell, i) => {
+    const key = normalizeHeader(cell);
+    if (key) {
+      index.set(key, i);
+    }
+  });
+  return index;
+}
+
+function cellAt(
+  parts: string[],
+  headerIndex: Map<string, number>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const idx = headerIndex.get(key);
+    if (idx !== undefined && parts[idx] !== undefined) {
+      return parts[idx].trim();
+    }
+  }
+  return '';
+}
 
 @Injectable()
 export class InvitationsService {
@@ -99,6 +180,45 @@ export class InvitationsService {
     return INVITABLE_ROLES.includes(role as UserRole);
   }
 
+  private normalizeDepartment(
+    value: string | Department | undefined,
+  ): Department | undefined {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const upper = String(value).trim().toUpperCase();
+    if (!VALID_DEPARTMENTS.has(upper)) {
+      return undefined;
+    }
+    return upper as Department;
+  }
+
+  private extractAcademicFields(
+    input: InviteUserInput,
+  ): StudentAcademicFields | null {
+    const registrationNumber = input.registrationNumber?.trim();
+    const batch = input.batch?.trim();
+    const department = this.normalizeDepartment(input.department);
+    const degreeProgram = input.degreeProgram?.trim();
+
+    if (!registrationNumber && !batch && !department && !degreeProgram) {
+      return null;
+    }
+
+    if (!registrationNumber || !batch || !department || !degreeProgram) {
+      throw new BadRequestException(
+        'Student invitations with academic fields require roll number, batch, department, and degree',
+      );
+    }
+
+    return {
+      registrationNumber,
+      batch,
+      department,
+      degreeProgram,
+    };
+  }
+
   private async expireStaleInvitations(
     workspaceId: string,
     email: string,
@@ -116,6 +236,72 @@ export class InvitationsService {
     });
   }
 
+  private async assertStudentAcademicUnique(params: {
+    workspaceId: string;
+    email: string;
+    registrationNumber: string;
+  }) {
+    const { workspaceId, email, registrationNumber } = params;
+
+    const pendingRoll = await this.prisma.workspaceInvitation.findFirst({
+      where: {
+        workspaceId,
+        registrationNumber,
+        role: UserRole.STUDENT,
+        status: InvitationStatus.PENDING,
+        expiresAt: { gt: new Date() },
+        NOT: { email },
+      },
+      select: { id: true },
+    });
+
+    if (pendingRoll) {
+      throw new BadRequestException(
+        'A pending invitation already uses this registration number',
+      );
+    }
+
+    const studentMembers = await this.prisma.workspaceMembership.findMany({
+      where: {
+        workspaceId,
+        role: UserRole.STUDENT,
+        isActive: true,
+      },
+      select: { userId: true },
+    });
+
+    if (studentMembers.length === 0) {
+      return;
+    }
+
+    const existingRoll = await this.prisma.userProfile.findFirst({
+      where: {
+        profileType: 'STUDENT',
+        registrationNumber,
+        authUserId: { in: studentMembers.map((m) => m.userId) },
+      },
+      select: { authUserId: true },
+    });
+
+    if (!existingRoll) {
+      return;
+    }
+
+    const owner = await this.prisma.user.findUnique({
+      where: { id: existingRoll.authUserId },
+      select: { email: true },
+    });
+
+    if (
+      owner?.email &&
+      this.normalizeEmail(owner.email) !== this.normalizeEmail(email)
+    ) {
+      throw new BadRequestException(
+        'Registration number already belongs to a student in this workspace',
+      );
+    }
+  }
+
   async createInvitation(
     workspaceId: string,
     invitedById: string,
@@ -130,6 +316,21 @@ export class InvitationsService {
 
     if (!this.isInvitableRole(role)) {
       throw new BadRequestException('Invalid invitation role');
+    }
+
+    if (!EMAIL_RE.test(email)) {
+      throw new BadRequestException('Invalid email address');
+    }
+
+    const academic =
+      role === UserRole.STUDENT ? this.extractAcademicFields(input) : null;
+
+    if (academic) {
+      await this.assertStudentAcademicUnique({
+        workspaceId,
+        email,
+        registrationNumber: academic.registrationNumber,
+      });
     }
 
     const workspace = await this.prisma.workspace.findUnique({
@@ -156,6 +357,8 @@ export class InvitationsService {
         userId: existingUser.id,
         email,
         role,
+        invitedById,
+        academic,
       });
     }
 
@@ -198,6 +401,10 @@ export class InvitationsService {
           email,
           fullName: input.fullName?.trim() || null,
           role,
+          registrationNumber: academic?.registrationNumber ?? null,
+          batch: academic?.batch ?? null,
+          department: academic?.department ?? null,
+          degreeProgram: academic?.degreeProgram ?? null,
           tokenHash: hashToken(rawToken),
           invitedById,
           expiresAt,
@@ -241,6 +448,8 @@ export class InvitationsService {
 
   /**
    * Directly grant workspace membership to a registered user and notify them.
+   * For STUDENT invites with academic fields, records an ACCEPTED invitation
+   * for onboarding prefill and applies institutionManaged profile rules.
    */
   private async assignRoleToExistingUser(params: {
     workspaceId: string;
@@ -248,8 +457,18 @@ export class InvitationsService {
     userId: string;
     email: string;
     role: UserRole;
+    invitedById: string;
+    academic: StudentAcademicFields | null;
   }) {
-    const { workspaceId, workspaceName, userId, email, role } = params;
+    const {
+      workspaceId,
+      workspaceName,
+      userId,
+      email,
+      role,
+      invitedById,
+      academic,
+    } = params;
 
     const membership =
       await this.prisma.workspaceMembership.findUnique({
@@ -319,6 +538,44 @@ export class InvitationsService {
         data: { status: InvitationStatus.REVOKED },
       });
 
+      if (role === UserRole.STUDENT && academic) {
+        await tx.workspaceInvitation.create({
+          data: {
+            workspaceId,
+            email,
+            role: UserRole.STUDENT,
+            registrationNumber: academic.registrationNumber,
+            batch: academic.batch,
+            department: academic.department,
+            degreeProgram: academic.degreeProgram,
+            tokenHash: hashToken(generateSecureToken()),
+            invitedById,
+            status: InvitationStatus.ACCEPTED,
+            acceptedAt: new Date(),
+            expiresAt: new Date(),
+          },
+        });
+
+        const profile = await tx.userProfile.findUnique({
+          where: { authUserId: userId },
+        });
+
+        if (profile?.institutionManaged) {
+          await tx.userProfile.update({
+            where: { authUserId: userId },
+            data: {
+              registrationNumber: academic.registrationNumber,
+              batch: academic.batch,
+              department: academic.department,
+              degreeProgram: academic.degreeProgram,
+              institutionManaged: true,
+            },
+          });
+        }
+        // No profile / non-managed profile: do not create or overwrite;
+        // institution-prefill covers onboarding for profile-less students.
+      }
+
       return membershipRow;
     });
 
@@ -350,6 +607,49 @@ export class InvitationsService {
     };
   }
 
+  private parseCsvLine(line: string): string[] {
+    return line.split(',').map((part) => part.trim());
+  }
+
+  private parseStudentCsvRow(
+    parts: string[],
+    headerIndex: Map<string, number>,
+  ): ParsedCsvRow {
+    const email = cellAt(parts, headerIndex, ['email']);
+    const registrationNumber = cellAt(parts, headerIndex, [
+      'rollno',
+      'registrationnumber',
+      'registrationno',
+      'regno',
+    ]);
+    const batch = cellAt(parts, headerIndex, ['batch']);
+    const department = cellAt(parts, headerIndex, ['department']);
+    const degreeProgram = cellAt(parts, headerIndex, [
+      'degree',
+      'degreeprogram',
+      'degreeprogramme',
+    ]);
+    const role = cellAt(parts, headerIndex, ['role']);
+
+    return {
+      email,
+      registrationNumber,
+      batch,
+      department,
+      degreeProgram,
+      role,
+    };
+  }
+
+  private parseFacultyCsvRow(parts: string[]): ParsedCsvRow {
+    if (parts.length >= 3) {
+      const [email, fullName, roleRaw] = parts;
+      return { email, fullName, role: roleRaw };
+    }
+    const [email, roleRaw] = parts;
+    return { email, role: roleRaw ?? '' };
+  }
+
   async importFromCsv(
     workspaceId: string,
     invitedById: string,
@@ -365,73 +665,191 @@ export class InvitationsService {
     let skipped = 0;
     let invalid = 0;
 
-    const startIndex =
-      lines[0]?.toLowerCase().includes('email') ? 1 : 0;
+    if (lines.length === 0) {
+      return { total: 0, invited: 0, skipped: 0, invalid: 0, rows: [] };
+    }
+
+    const firstCells = this.parseCsvLine(lines[0]);
+    const hasHeader = firstCells.some(
+      (cell) => normalizeHeader(cell) === 'email',
+    );
+    const format: CsvFormat = hasHeader
+      ? detectCsvFormat(firstCells)
+      : 'faculty';
+    const headerIndex = hasHeader
+      ? buildHeaderIndex(firstCells)
+      : new Map<string, number>();
+    const startIndex = hasHeader ? 1 : 0;
+
+    const seenEmails = new Set<string>();
+    const seenRolls = new Set<string>();
 
     for (let index = startIndex; index < lines.length; index++) {
       const line = lines[index];
       const rowNumber = index + 1;
-      const parts = line.split(',').map((part) => part.trim());
+      const parts = this.parseCsvLine(line);
 
-      if (parts.length < 2) {
+      const parsed: ParsedCsvRow =
+        format === 'student'
+          ? this.parseStudentCsvRow(parts, headerIndex)
+          : this.parseFacultyCsvRow(parts);
+
+      const emailRaw = parsed.email ?? '';
+      const roleRaw = (parsed.role ?? '').toUpperCase();
+
+      if (format === 'faculty' && parts.length < 2) {
         invalid++;
         rows.push({
           row: rowNumber,
-          email: parts[0] ?? '',
-          role: parts[1] ?? '',
+          email: emailRaw,
+          role: roleRaw,
           status: 'invalid',
           reason: 'Expected email,fullName,role or email,role',
         });
         continue;
       }
 
-      let email: string;
-      let fullName: string | undefined;
-      let roleRaw: string;
-
-      if (parts.length >= 3) {
-        [email, fullName, roleRaw] = parts;
-      } else {
-        [email, roleRaw] = parts;
-      }
-
-      const role = roleRaw.toUpperCase();
-
-      if (!email.includes('@')) {
+      if (!EMAIL_RE.test(emailRaw.trim())) {
         invalid++;
         rows.push({
           row: rowNumber,
-          email,
-          role,
+          email: emailRaw,
+          role: roleRaw,
           status: 'invalid',
           reason: 'Invalid email address',
         });
         continue;
       }
 
-      if (!this.isInvitableRole(role)) {
+      const email = this.normalizeEmail(emailRaw);
+
+      if (seenEmails.has(email)) {
         invalid++;
         rows.push({
           row: rowNumber,
           email,
-          role,
+          role: roleRaw,
+          status: 'invalid',
+          reason: 'Duplicate email in CSV',
+        });
+        continue;
+      }
+
+      if (!this.isInvitableRole(roleRaw)) {
+        invalid++;
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
           status: 'invalid',
           reason: 'Unsupported role',
         });
         continue;
       }
 
+      if (format === 'student') {
+        if (roleRaw !== UserRole.STUDENT) {
+          invalid++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'invalid',
+            reason: 'Student CSV rows must use role STUDENT',
+          });
+          continue;
+        }
+
+        const roll = parsed.registrationNumber?.trim() ?? '';
+        const batch = parsed.batch?.trim() ?? '';
+        const departmentRaw = parsed.department?.trim() ?? '';
+        const degree = parsed.degreeProgram?.trim() ?? '';
+        const department = this.normalizeDepartment(departmentRaw);
+
+        if (!roll || !batch || !departmentRaw || !degree) {
+          invalid++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'invalid',
+            reason:
+              'Student rows require roll no, batch, department, and degree',
+          });
+          continue;
+        }
+
+        if (!department) {
+          invalid++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'invalid',
+            reason: 'Invalid department (use CS, SE, IT, AI, or DS)',
+          });
+          continue;
+        }
+
+        const rollKey = roll.toLowerCase();
+        if (seenRolls.has(rollKey)) {
+          invalid++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'invalid',
+            reason: 'Duplicate registration number in CSV',
+          });
+          continue;
+        }
+
+        seenEmails.add(email);
+        seenRolls.add(rollKey);
+
+        try {
+          await this.createInvitation(workspaceId, invitedById, {
+            email,
+            role: UserRole.STUDENT,
+            registrationNumber: roll,
+            batch,
+            department,
+            degreeProgram: degree,
+          });
+          invited++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'invited',
+          });
+        } catch (error: unknown) {
+          skipped++;
+          rows.push({
+            row: rowNumber,
+            email,
+            role: roleRaw,
+            status: 'skipped',
+            reason: getSafeSkipReason(error),
+          });
+        }
+        continue;
+      }
+
+      // Faculty / legacy format
+      seenEmails.add(email);
+
       try {
         await this.createInvitation(workspaceId, invitedById, {
           email,
-          fullName,
-          role,
+          fullName: parsed.fullName,
+          role: roleRaw,
         });
         invited++;
         rows.push({
           row: rowNumber,
           email,
-          role,
+          role: roleRaw,
           status: 'invited',
         });
       } catch (error: unknown) {
@@ -439,7 +857,7 @@ export class InvitationsService {
         rows.push({
           row: rowNumber,
           email,
-          role,
+          role: roleRaw,
           status: 'skipped',
           reason: getSafeSkipReason(error),
         });
@@ -473,6 +891,10 @@ export class InvitationsService {
         email: true,
         fullName: true,
         role: true,
+        registrationNumber: true,
+        batch: true,
+        department: true,
+        degreeProgram: true,
         status: true,
         expiresAt: true,
         acceptedAt: true,
@@ -511,6 +933,10 @@ export class InvitationsService {
       email: invitation.email,
       fullName: invitation.fullName ?? undefined,
       role: invitation.role,
+      registrationNumber: invitation.registrationNumber ?? undefined,
+      batch: invitation.batch ?? undefined,
+      department: invitation.department ?? undefined,
+      degreeProgram: invitation.degreeProgram ?? undefined,
     });
   }
 
@@ -523,6 +949,10 @@ export class InvitationsService {
       role: invitation.role,
       workspaceName: invitation.workspace.name,
       expiresAt: invitation.expiresAt,
+      registrationNumber: invitation.registrationNumber,
+      batch: invitation.batch,
+      department: invitation.department,
+      degreeProgram: invitation.degreeProgram,
     };
   }
 
@@ -537,6 +967,9 @@ export class InvitationsService {
     const resolvedName =
       fullName.trim() || invitation.fullName || email;
 
+    // Do not create a UserProfile here — institution fields stay on the
+    // ACCEPTED invitation and are applied during student onboarding via
+    // GET /profiles/me/institution-prefill.
     const user = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({
         where: { email },
@@ -638,6 +1071,10 @@ export class InvitationsService {
       email: user.email,
       workspaceId: invitation.workspaceId,
       role: invitation.role,
+      registrationNumber: invitation.registrationNumber,
+      batch: invitation.batch,
+      department: invitation.department,
+      degreeProgram: invitation.degreeProgram,
     };
   }
 

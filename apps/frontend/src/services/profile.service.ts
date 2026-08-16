@@ -55,6 +55,17 @@ export const profileService = {
     return res.data;
   },
 
+  getInstitutionPrefill: async () => {
+    const res = await api.get<{
+      registrationNumber: string;
+      batch: string;
+      department: Department;
+      degreeProgram: string;
+      workspaceId: string;
+    } | null>("/profiles/me/institution-prefill");
+    return res.data;
+  },
+
   getProfileById: async (authUserId: string) => {
     const res = await api.get<UserProfile | null>(`/profiles/${authUserId}`);
     return res.data;

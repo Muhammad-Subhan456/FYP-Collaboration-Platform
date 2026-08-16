@@ -57,6 +57,8 @@ export const queryKeys = {
     ) => ["student", "me", page, readFilter, workspaceId ?? null] as const,
     profile: (userId?: string, workspaceId?: string | null) =>
       ["student", "profile", userId, workspaceId ?? null] as const,
+    workspaceSettings: (workspaceId?: string | null) =>
+      ["student", "workspace-settings", workspaceId ?? null] as const,
   },
 
   supervisor: {
@@ -142,6 +144,8 @@ export const queryKeys = {
       ["coordinator", "results", userId, workspaceId ?? null] as const,
     announcements: (userId?: string, workspaceId?: string | null) =>
       ["coordinator", "announcements", userId, workspaceId ?? null] as const,
+    settings: (userId?: string, workspaceId?: string | null) =>
+      ["coordinator", "settings", userId, workspaceId ?? null] as const,
     notificationsList: (
       page: number,
       readFilter = "all",

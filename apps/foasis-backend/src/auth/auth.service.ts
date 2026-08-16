@@ -19,6 +19,7 @@ import type {
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { DEFAULT_WORKSPACE_ID } from '../workspace/workspace.constants';
 import { WorkspaceContextService } from '../workspace/workspace-context.service';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { AUTH_TOKEN_TYPES } from './auth.constants';
 import { AppUrlsService } from '../common/app-urls.service';
 import { EmailService } from '../email/email.service';
@@ -39,6 +40,7 @@ export class AuthService {
   private readonly notificationDispatch: NotificationDispatchService,
   private readonly domainEventService: DomainEventService,
   private readonly workspaceContext: WorkspaceContextService,
+  private readonly workspaceSettings: WorkspaceSettingsService,
   private readonly config: ConfigService,
   private readonly emailService: EmailService,
   private readonly appUrls: AppUrlsService,
@@ -525,6 +527,7 @@ async listSupervisorsForBrowsing(workspaceId: string) {
   }
 
   const supervisorIds = supervisors.map((s) => s.id);
+  const settings = await this.workspaceSettings.getSettings(workspaceId);
 
   const [profiles, supervisedCounts] = await Promise.all([
     this.prisma.userProfile.findMany({
@@ -533,9 +536,9 @@ async listSupervisorsForBrowsing(workspaceId: string) {
     this.prisma.proposal.groupBy({
       by: ['assignedSupervisorId'],
       where: {
+        workspaceId,
         assignedSupervisorId: { in: supervisorIds },
         status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
-        team: { workspaceId },
       },
       _count: { _all: true },
     }),
@@ -568,8 +571,7 @@ async listSupervisorsForBrowsing(workspaceId: string) {
       biography: profile?.biography ?? null,
       officeHours: profile?.officeHours ?? null,
       supervisedTeamCount,
-      // Capacity limit removed — supervisors remain available regardless of team count.
-      isAvailable: true,
+      isAvailable: supervisedTeamCount < settings.supervisorMaxTeams,
     };
   });
 }

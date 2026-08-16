@@ -17,6 +17,7 @@ import {
   getWorkspaceIdFromContext,
   runWithWorkspaceContext,
 } from '../workspace/workspace-als';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ProfilesService } from '../users/profiles.service';
 import { ProposalsService } from '../proposals/proposals.service';
@@ -46,7 +47,15 @@ export class TeamsService {
     @Inject(forwardRef(() => ProposalsService))
     private readonly proposalsService: ProposalsService,
     private readonly domainEventService: DomainEventService,
+    private readonly workspaceSettings: WorkspaceSettingsService,
   ) {}
+
+  private effectiveMaxMembers(
+    teamMaxMembers: number,
+    workspaceTeamMaxMembers: number,
+  ) {
+    return Math.min(teamMaxMembers, workspaceTeamMaxMembers);
+  }
 
   /** Prefer explicit workspaceId; fall back to ALS so HTTP requests stay tenant-scoped. */
   private resolveWorkspaceId(workspaceId?: string): string | undefined {
@@ -141,6 +150,17 @@ export class TeamsService {
     createTeamDto: CreateTeamDto,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ) {
+    const settings = await this.workspaceSettings.getSettings(workspaceId);
+
+    if (
+      !Number.isFinite(createTeamDto.maxMembers) ||
+      createTeamDto.maxMembers < 1 ||
+      createTeamDto.maxMembers > settings.teamMaxMembers
+    ) {
+      throw new BadRequestException(
+        `Team size must be between 1 and ${settings.teamMaxMembers} members`,
+      );
+    }
 
     const existingMembership =
       await this.prisma.teamMember.findFirst({
@@ -278,6 +298,12 @@ async requestToJoin(
 
   await this.assertTeamNotLocked(teamId);
 
+  const settings = await this.workspaceSettings.getSettings(team.workspaceId);
+  const effectiveMax = this.effectiveMaxMembers(
+    team.maxMembers,
+    settings.teamMaxMembers,
+  );
+
   const currentMembers =
     await this.prisma.teamMember.count({
       where: {
@@ -285,7 +311,7 @@ async requestToJoin(
       },
     });
 
-  if (currentMembers >= team.maxMembers) {
+  if (currentMembers >= effectiveMax) {
     throw new BadRequestException(
       'Team is already full',
     );
@@ -328,7 +354,7 @@ async requestToJoin(
 }
 
 private async notifyJoinRequestReceived(
-  team: { id: string; name: string; leaderId: string },
+  team: { id: string; name: string; leaderId: string; workspaceId: string },
   request: JoinRequest,
   authUserId: string,
 ) {
@@ -349,9 +375,34 @@ private async notifyJoinRequestReceived(
     );
   }
 
+  let requesterProfile: Record<string, unknown> | null = null;
+  try {
+    const profiles = await this.profilesService.findManyByAuthUserIds(
+      [authUserId],
+      team.workspaceId,
+    );
+    const profile = profiles[authUserId];
+    if (profile) {
+      requesterProfile = {
+        ...profile,
+        createdAt:
+          profile.createdAt instanceof Date
+            ? profile.createdAt.toISOString()
+            : profile.createdAt,
+        updatedAt:
+          profile.updatedAt instanceof Date
+            ? profile.updatedAt.toISOString()
+            : profile.updatedAt,
+      };
+    }
+  } catch {
+    // non-blocking — clients can fetch profiles as a fallback
+  }
+
   const receivedPayload: TeamJoinRequestReceivedPayload = {
     teamId: team.id,
     joinRequest: serializeJoinRequest(request),
+    requesterProfile,
   };
 
   this.publishTeamEvent(
@@ -470,58 +521,124 @@ async approveRequest(
 
   await this.assertTeamNotLocked(team.id);
 
-  const freshRequest = await this.prisma.joinRequest.findUnique({
-    where: { id: requestId },
-  });
-
-  if (!freshRequest || freshRequest.status !== 'PENDING') {
-    throw new BadRequestException(
-      'This join request is no longer pending',
-    );
-  }
-
-  const existingMember = await this.prisma.teamMember.findFirst({
-    where: {
-      authUserId: freshRequest.authUserId,
-      team: { workspaceId: team.workspaceId },
-    },
-  });
-
-  if (existingMember) {
-    await this.rejectPendingJoinRequestsForUser(
-      freshRequest.authUserId,
-      leaderId,
-      team.workspaceId,
-    );
-
-    throw new BadRequestException(
-      'This student already belongs to another team',
-    );
-  }
-
-  const currentMembers = await this.prisma.teamMember.count({
-    where: { teamId: team.id },
-  });
-
-  if (currentMembers >= team.maxMembers) {
-    throw new BadRequestException('Team is already full');
-  }
+  const settings = await this.workspaceSettings.getSettings(team.workspaceId);
+  const effectiveMax = this.effectiveMaxMembers(
+    team.maxMembers,
+    settings.teamMaxMembers,
+  );
 
   let member;
+  let approvedRequest: JoinRequest;
+  let cancelledRequests: JoinRequest[] = [];
+
   try {
-    member = await this.prisma.teamMember.create({
-      data: {
-        teamId: team.id,
-        authUserId: freshRequest.authUserId,
-      },
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const freshRequest = await tx.joinRequest.findUnique({
+        where: { id: requestId },
+      });
+
+      if (!freshRequest || freshRequest.status !== 'PENDING') {
+        throw new BadRequestException(
+          'This join request is no longer pending',
+        );
+      }
+
+      const existingMember = await tx.teamMember.findFirst({
+        where: {
+          authUserId: freshRequest.authUserId,
+          team: { workspaceId: team.workspaceId },
+        },
+      });
+
+      if (existingMember) {
+        throw new BadRequestException(
+          'This student already belongs to another team',
+        );
+      }
+
+      const currentMembers = await tx.teamMember.count({
+        where: { teamId: team.id },
+      });
+
+      if (currentMembers >= effectiveMax) {
+        throw new BadRequestException('Team is already full');
+      }
+
+      const createdMember = await tx.teamMember.create({
+        data: {
+          teamId: team.id,
+          authUserId: freshRequest.authUserId,
+        },
+      });
+
+      const approveResult = await tx.joinRequest.updateMany({
+        where: {
+          id: requestId,
+          status: 'PENDING',
+        },
+        data: { status: 'APPROVED' },
+      });
+
+      if (approveResult.count === 0) {
+        throw new BadRequestException(
+          'This join request is no longer pending',
+        );
+      }
+
+      const approved = await tx.joinRequest.findUniqueOrThrow({
+        where: { id: requestId },
+      });
+
+      const cancelled = await tx.joinRequest.findMany({
+        where: {
+          authUserId: freshRequest.authUserId,
+          status: 'PENDING',
+          id: { not: requestId },
+          team: { workspaceId: team.workspaceId },
+        },
+      });
+
+      if (cancelled.length > 0) {
+        await tx.joinRequest.updateMany({
+          where: {
+            authUserId: freshRequest.authUserId,
+            status: 'PENDING',
+            id: { not: requestId },
+            team: { workspaceId: team.workspaceId },
+          },
+          data: { status: 'REJECTED' },
+        });
+      }
+
+      const memberCount = await tx.teamMember.count({
+        where: { teamId: team.id },
+      });
+
+      if (memberCount >= effectiveMax) {
+        await tx.team.update({
+          where: { id: team.id },
+          data: { isOpen: false },
+        });
+      }
+
+      return {
+        member: createdMember,
+        approvedRequest: approved,
+        cancelledRequests: cancelled,
+        joinedAuthUserId: freshRequest.authUserId,
+      };
     });
+
+    member = txResult.member;
+    approvedRequest = txResult.approvedRequest;
+    cancelledRequests = txResult.cancelledRequests;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
       await this.rejectPendingJoinRequestsForUser(
-        freshRequest.authUserId,
+        request.authUserId,
         leaderId,
         team.workspaceId,
       );
@@ -531,62 +648,18 @@ async approveRequest(
       );
     }
 
+    if (
+      error instanceof BadRequestException &&
+      error.message === 'This student already belongs to another team'
+    ) {
+      await this.rejectPendingJoinRequestsForUser(
+        request.authUserId,
+        leaderId,
+        team.workspaceId,
+      );
+    }
+
     throw error;
-  }
-
-  const approveResult = await this.prisma.joinRequest.updateMany({
-    where: {
-      id: requestId,
-      status: 'PENDING',
-    },
-    data: { status: 'APPROVED' },
-  });
-
-  if (approveResult.count === 0) {
-    await this.prisma.teamMember
-      .delete({ where: { id: member.id } })
-      .catch(() => undefined);
-
-    throw new BadRequestException(
-      'This join request is no longer pending',
-    );
-  }
-
-  const approvedRequest =
-    await this.prisma.joinRequest.findUniqueOrThrow({
-      where: { id: requestId },
-    });
-
-  const cancelledRequests = await this.prisma.joinRequest.findMany({
-    where: {
-      authUserId: freshRequest.authUserId,
-      status: 'PENDING',
-      id: { not: requestId },
-      team: { workspaceId: team.workspaceId },
-    },
-  });
-
-  if (cancelledRequests.length > 0) {
-    await this.prisma.joinRequest.updateMany({
-      where: {
-        authUserId: freshRequest.authUserId,
-        status: 'PENDING',
-        id: { not: requestId },
-        team: { workspaceId: team.workspaceId },
-      },
-      data: { status: 'REJECTED' },
-    });
-  }
-
-  const memberCount = await this.prisma.teamMember.count({
-    where: { teamId: team.id },
-  });
-
-  if (memberCount >= team.maxMembers) {
-    await this.prisma.team.update({
-      where: { id: team.id },
-      data: { isOpen: false },
-    });
   }
 
   try {
@@ -1318,11 +1391,19 @@ async leaveTeam(authUserId: string, workspaceId?: string) {
     where: { id: membership.id },
   });
 
+  const settings = await this.workspaceSettings.getSettings(
+    membership.team.workspaceId,
+  );
+  const effectiveMax = this.effectiveMaxMembers(
+    membership.team.maxMembers,
+    settings.teamMaxMembers,
+  );
+
   const memberCount = await this.prisma.teamMember.count({
     where: { teamId: membership.teamId },
   });
 
-  if (memberCount < membership.team.maxMembers) {
+  if (memberCount < effectiveMax) {
     await this.prisma.team.update({
       where: { id: membership.teamId },
       data: { isOpen: true },
@@ -1344,6 +1425,141 @@ async leaveTeam(authUserId: string, workspaceId?: string) {
   }
 
   return { message: 'You have left the team' };
+}
+
+/**
+ * Team leader removes (kicks) a member. Does not delete the team or proposal.
+ * Blocked when workflow is locked after supervisor acceptance.
+ */
+async removeMember(
+  leaderId: string,
+  memberId: string,
+  workspaceId?: string,
+) {
+  const team = await this.prisma.team.findFirst({
+    where: this.leaderTeamWhere(leaderId, workspaceId),
+  });
+
+  if (!team) {
+    throw new ForbiddenException(
+      'Only team leaders can remove members',
+    );
+  }
+
+  await this.assertTeamNotLocked(team.id);
+
+  const member = await this.prisma.teamMember.findUnique({
+    where: { id: memberId },
+  });
+
+  if (!member || member.teamId !== team.id) {
+    throw new BadRequestException('Member not found in your team');
+  }
+
+  if (member.authUserId === leaderId || member.authUserId === team.leaderId) {
+    throw new BadRequestException(
+      'Team leaders cannot remove themselves',
+    );
+  }
+
+  const leftPayload: TeamMemberLeftPayload = {
+    teamId: team.id,
+    memberId: member.id,
+    authUserId: member.authUserId,
+  };
+
+  // Actor is the leader so the removed member still receives the realtime event
+  // (handlers skip only when actor is the leaving user on voluntary leave).
+  this.publishTeamEvent(
+    DomainEvents.TEAM_MEMBER_LEFT,
+    leaderId,
+    { type: 'team', id: team.id },
+    leftPayload,
+    member.id,
+  );
+
+  await this.prisma.teamMember.delete({
+    where: { id: member.id },
+  });
+
+  const settings = await this.workspaceSettings.getSettings(team.workspaceId);
+  const effectiveMax = this.effectiveMaxMembers(
+    team.maxMembers,
+    settings.teamMaxMembers,
+  );
+
+  const memberCount = await this.prisma.teamMember.count({
+    where: { teamId: team.id },
+  });
+
+  let isOpen = team.isOpen;
+  if (memberCount < effectiveMax && !team.isOpen) {
+    const updated = await this.prisma.team.update({
+      where: { id: team.id },
+      data: { isOpen: true },
+    });
+    isOpen = updated.isOpen;
+
+    const updatePayload = {
+      workspaceId: team.workspaceId,
+      teamId: team.id,
+      isProfileComplete: isTeamProfileComplete(updated),
+      team: {
+        id: updated.id,
+        name: updated.name,
+        domain: updated.domain,
+        domains: updated.domains,
+        otherDomain: updated.otherDomain,
+        nature: updated.nature,
+        sdgs: updated.sdgs,
+        sdgJustification: updated.sdgJustification,
+        previousObjectives: updated.previousObjectives,
+        projectTitle: updated.projectTitle,
+        projectAbstract: updated.projectAbstract,
+        proposalPdfUrl: updated.proposalPdfUrl,
+        maxMembers: updated.maxMembers,
+        isOpen: updated.isOpen,
+      },
+    };
+
+    this.publishTeamEvent(
+      DomainEvents.TEAM_UPDATED,
+      leaderId,
+      { type: 'team', id: team.id },
+      updatePayload,
+      team.id,
+    );
+    this.publishTeamEvent(
+      DomainEvents.TEAM_UPDATED,
+      leaderId,
+      { type: 'workspace', id: team.workspaceId },
+      updatePayload,
+      team.id,
+    );
+  }
+
+  try {
+    await this.notificationDispatch.send({
+      authUserId: member.authUserId,
+      title: 'Removed from Team',
+      message: `You were removed from team "${team.name}" by the team leader.`,
+      type: 'TEAM_MEMBER_REMOVED',
+      entityType: 'TEAM',
+      entityId: team.id,
+      route: '/student/team',
+    });
+  } catch {
+    // non-blocking
+  }
+
+  return {
+    message: 'Member removed successfully',
+    teamId: team.id,
+    memberId: member.id,
+    authUserId: member.authUserId,
+    isOpen,
+    memberCount,
+  };
 }
 
 private publishTeamEvent(

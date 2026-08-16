@@ -1,6 +1,8 @@
 import {
   ForbiddenException,
+  Inject,
   Injectable,
+  forwardRef,
 } from '@nestjs/common';
 
 import { AuthContextService } from '../../common/auth-context.service';
@@ -21,7 +23,9 @@ export type NotificationContext = Omit<
 @Injectable()
 export class TeamAccessService {
   constructor(
+    @Inject(forwardRef(() => TeamsService))
     private readonly teamsService: TeamsService,
+    @Inject(forwardRef(() => ProposalsService))
     private readonly proposalsService: ProposalsService,
     private readonly notificationDispatch: NotificationDispatchService,
     private readonly authContext: AuthContextService,

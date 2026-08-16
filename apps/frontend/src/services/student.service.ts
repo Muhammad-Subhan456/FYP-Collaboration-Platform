@@ -88,9 +88,21 @@ export interface StudentProposalPageData {
   profiles: Record<string, UserProfile>;
 }
 
+export type StudentWorkspaceSettings = {
+  teamMaxMembers: number;
+  supervisorRequestExpiryHours: number;
+};
+
 export const studentService = {
   getDashboard: async () => {
     const res = await api.get<StudentDashboardOverview>("/student/dashboard");
+    return res.data;
+  },
+
+  getWorkspaceSettings: async () => {
+    const res = await api.get<StudentWorkspaceSettings>(
+      "/student/workspace-settings",
+    );
     return res.data;
   },
 

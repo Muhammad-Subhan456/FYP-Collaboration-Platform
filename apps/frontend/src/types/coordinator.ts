@@ -113,6 +113,8 @@ export interface CoordinatorUserDetail {
   profile: UserProfile | null;
   team: CoordinatorUserTeamContext | null;
   issues: CoordinatorUserIssue[];
+  /** Active supervised teams (APPROVED / SUPERVISOR_ASSIGNED). */
+  supervisedTeamCount?: number | null;
 }
 
 export interface ServiceHealth {

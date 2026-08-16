@@ -50,6 +50,7 @@ const TYPE_FALLBACK_ROUTES: Record<string, string> = {
   TEAM_ROLE_UPDATED: "/student/team",
   TEAM_ROLE_REMOVED: "/student/team",
   TEAM_MEMBER_LEFT: "/student/team",
+  TEAM_MEMBER_REMOVED: "/student/team",
   TEAM_DELETED: "/student/team",
   // Work stream
   DELIVERABLE_CREATED: "/student/work-stream",
@@ -109,6 +110,7 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   TEAM_ROLE_UPDATED: Users,
   TEAM_ROLE_REMOVED: Users,
   TEAM_MEMBER_LEFT: Users,
+  TEAM_MEMBER_REMOVED: Users,
   TEAM_DELETED: Users,
   DELIVERABLE_CREATED: FileText,
   DELIVERABLE_DEADLINE_EXTENDED: Calendar,

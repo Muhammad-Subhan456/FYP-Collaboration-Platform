@@ -39,7 +39,7 @@ export default function StudentCalendarPage() {
       showStatus
       scheduleDescription="Deadlines that apply to your team, ordered by due date."
       emptyTitle="No deliverables yet"
-      emptyDescription="When your supervisor publishes deliverables, they will appear here with the due date that applies to you."
+      emptyDescription="When the coordinator publishes deliverables, they will appear here with the due date that applies to you."
     />
   );
 }

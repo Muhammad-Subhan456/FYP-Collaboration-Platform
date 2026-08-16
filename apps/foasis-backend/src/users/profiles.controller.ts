@@ -79,6 +79,12 @@ export class ProfilesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('me/institution-prefill')
+  getInstitutionPrefill(@Req() req: any) {
+    return this.profilesService.getInstitutionPrefill(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('batch')
   getBatchProfiles(
     @Req() req: { workspaceId?: string },

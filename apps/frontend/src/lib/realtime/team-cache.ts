@@ -1,9 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/react-query";
+import { profileService } from "@/services/profile.service";
 import type { StudentTeamOverview } from "@/services/team.service";
 import type { SupervisorTeamsPageData } from "@/services/supervisor-page.service";
 import type { JoinRequest, JoinRequestStatus, TeamMember } from "@/types/student";
+import type { UserProfile } from "@/types/profile";
 
 import type {
   RealtimeJoinRequestWire,
@@ -61,6 +63,49 @@ function upsertMember(items: TeamMember[], incoming: TeamMember): TeamMember[] {
   const next = [...items];
   next[index] = { ...next[index], ...incoming };
   return next;
+}
+
+async function mergeMissingTeamProfiles(
+  queryClient: QueryClient,
+  userId: string,
+  workspaceId: string | null,
+  authUserIds: string[],
+) {
+  const uniqueIds = [...new Set(authUserIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return;
+  }
+
+  const queryKey = queryKeys.student.team(userId, workspaceId);
+  const existing = queryClient.getQueryData<StudentTeamOverview>(queryKey);
+  if (!existing?.team?.id) {
+    return;
+  }
+
+  const missing = uniqueIds.filter(
+    (id) => !existing.profiles?.[id]?.fullName?.trim(),
+  );
+  if (missing.length === 0) {
+    return;
+  }
+
+  try {
+    const fetched = await profileService.getBatchProfiles(missing);
+    queryClient.setQueryData<StudentTeamOverview>(queryKey, (current) => {
+      if (!current?.team?.id) {
+        return current;
+      }
+      return {
+        ...current,
+        profiles: {
+          ...current.profiles,
+          ...(fetched as Record<string, UserProfile>),
+        },
+      };
+    });
+  } catch (error) {
+    log("failed to fetch join-request profiles", error);
+  }
 }
 
 function patchStudentTeam(
@@ -140,10 +185,36 @@ export function applyJoinRequestReceived(
   }
 
   const joinRequest = toJoinRequest(payload.joinRequest);
-  patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
-    ...data,
-    joinRequests: upsertJoinRequest(data.joinRequests, joinRequest),
-  }), { syncDashboardMembers: false });
+  patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => {
+    const nextProfiles = { ...data.profiles };
+    const incoming = payload.requesterProfile;
+    if (
+      incoming &&
+      typeof incoming === "object" &&
+      joinRequest.authUserId
+    ) {
+      const existing = nextProfiles[joinRequest.authUserId];
+      nextProfiles[joinRequest.authUserId] = {
+        ...(existing as UserProfile | undefined),
+        ...(incoming as UserProfile),
+        authUserId: joinRequest.authUserId,
+        fullName:
+          (incoming as UserProfile).fullName?.trim() ||
+          existing?.fullName ||
+          "Unknown User",
+      } as UserProfile;
+    }
+
+    return {
+      ...data,
+      profiles: nextProfiles,
+      joinRequests: upsertJoinRequest(data.joinRequests, joinRequest),
+    };
+  }, { syncDashboardMembers: false });
+
+  void mergeMissingTeamProfiles(queryClient, userId, workspaceId, [
+    joinRequest.authUserId,
+  ]);
 }
 
 export function applyJoinRequestResolved(
@@ -198,6 +269,9 @@ export function applyMemberJoined(
         (item) => item.authUserId !== member.authUserId,
       ),
     }));
+    void mergeMissingTeamProfiles(queryClient, userId, workspaceId, [
+      member.authUserId,
+    ]);
     return;
   }
 
@@ -224,10 +298,33 @@ export function applyMemberLeft(
   payload: RealtimeTeamMemberLeftPayload,
 ) {
   if (role === "STUDENT") {
-    patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => ({
-      ...data,
-      members: data.members.filter((item) => item.id !== payload.memberId),
-    }));
+    // Removed / leaving student must refresh membership (browse teams, capacity).
+    if (payload.authUserId === userId) {
+      refreshStudentTeamMembership(queryClient, userId, role, workspaceId);
+      return;
+    }
+
+    patchStudentTeam(queryClient, userId, workspaceId, payload.teamId, (data) => {
+      const members = data.members.filter(
+        (item) => item.id !== payload.memberId,
+      );
+      return {
+        ...data,
+        members,
+        team: data.team
+          ? {
+              ...data.team,
+              isOpen:
+                members.length < data.team.maxMembers
+                  ? true
+                  : data.team.isOpen,
+            }
+          : data.team,
+      };
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["teams", "browse"],
+    });
     return;
   }
 

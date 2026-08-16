@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import { profileService } from "@/services/profile.service";
+import { proposalService } from "@/services/proposal.service";
 import type { AuthUserRecord, UserProfile } from "@/types/profile";
 import type { Proposal, Team, TeamMember } from "@/types/student";
 import type {
@@ -207,6 +208,7 @@ export const coordinatorService = {
 
     let team: CoordinatorUserTeamContext | null = null;
     let issues: CoordinatorUserIssue[] = [];
+    let supervisedTeamCount: number | null = null;
 
     if (user.role === "STUDENT") {
       try {
@@ -227,6 +229,15 @@ export const coordinatorService = {
       }
     }
 
-    return { user, profile, team, issues };
+    if (user.role === "SUPERVISOR") {
+      try {
+        const overview = await proposalService.getSupervisorOverview(user.id);
+        supervisedTeamCount = overview.activeCount;
+      } catch {
+        supervisedTeamCount = null;
+      }
+    }
+
+    return { user, profile, team, issues, supervisedTeamCount };
   },
 };

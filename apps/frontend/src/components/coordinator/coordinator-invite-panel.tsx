@@ -50,20 +50,164 @@ type CsvPreviewRow = {
   reason?: string;
 };
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_DEPARTMENTS = new Set(["CS", "SE", "IT", "AI", "DS"]);
+
+function normalizeHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function isRollHeader(normalized: string): boolean {
+  return (
+    normalized === "rollno" ||
+    normalized === "registrationnumber" ||
+    normalized === "registrationno" ||
+    normalized === "regno"
+  );
+}
+
+function cellAt(
+  parts: string[],
+  headerIndex: Map<string, number>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const idx = headerIndex.get(key);
+    if (idx !== undefined && parts[idx] !== undefined) {
+      return parts[idx].trim();
+    }
+  }
+  return "";
+}
+
 function parseCsvPreview(content: string): CsvPreviewRow[] {
   const lines = content
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const startIndex =
-    lines[0]?.toLowerCase().includes("email") ? 1 : 0;
+  if (lines.length === 0) return [];
+
+  const firstCells = lines[0].split(",").map((part) => part.trim());
+  const hasHeader = firstCells.some(
+    (cell) => normalizeHeader(cell) === "email",
+  );
+  const isStudentFormat =
+    hasHeader && firstCells.map(normalizeHeader).some(isRollHeader);
+
+  const headerIndex = new Map<string, number>();
+  if (hasHeader) {
+    firstCells.forEach((cell, i) => {
+      const key = normalizeHeader(cell);
+      if (key) headerIndex.set(key, i);
+    });
+  }
+
+  const startIndex = hasHeader ? 1 : 0;
   const rows: CsvPreviewRow[] = [];
+  const seenEmails = new Set<string>();
+  const seenRolls = new Set<string>();
 
   for (let index = startIndex; index < lines.length; index++) {
     const line = lines[index];
     const rowNumber = index + 1;
     const parts = line.split(",").map((part) => part.trim());
+
+    if (isStudentFormat) {
+      const emailRaw = cellAt(parts, headerIndex, ["email"]);
+      const roleRaw = cellAt(parts, headerIndex, ["role"]).toUpperCase();
+      const roll = cellAt(parts, headerIndex, [
+        "rollno",
+        "registrationnumber",
+        "registrationno",
+        "regno",
+      ]);
+      const batch = cellAt(parts, headerIndex, ["batch"]);
+      const department = cellAt(parts, headerIndex, ["department"]).toUpperCase();
+      const degree = cellAt(parts, headerIndex, [
+        "degree",
+        "degreeprogram",
+        "degreeprogramme",
+      ]);
+      const email = emailRaw.trim().toLowerCase();
+
+      if (!EMAIL_RE.test(emailRaw.trim())) {
+        rows.push({
+          row: rowNumber,
+          email: emailRaw,
+          role: roleRaw,
+          valid: false,
+          reason: "Invalid email address",
+        });
+        continue;
+      }
+
+      if (seenEmails.has(email)) {
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
+          valid: false,
+          reason: "Duplicate email in CSV",
+        });
+        continue;
+      }
+
+      if (roleRaw !== "STUDENT") {
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
+          valid: false,
+          reason: "Student CSV rows must use role STUDENT",
+        });
+        continue;
+      }
+
+      if (!roll || !batch || !department || !degree) {
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
+          valid: false,
+          reason: "Student rows require roll no, batch, department, and degree",
+        });
+        continue;
+      }
+
+      if (!VALID_DEPARTMENTS.has(department)) {
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
+          valid: false,
+          reason: "Invalid department (use CS, SE, IT, AI, or DS)",
+        });
+        continue;
+      }
+
+      const rollKey = roll.toLowerCase();
+      if (seenRolls.has(rollKey)) {
+        rows.push({
+          row: rowNumber,
+          email,
+          role: roleRaw,
+          valid: false,
+          reason: "Duplicate registration number in CSV",
+        });
+        continue;
+      }
+
+      seenEmails.add(email);
+      seenRolls.add(rollKey);
+      rows.push({
+        row: rowNumber,
+        email,
+        role: roleRaw,
+        valid: true,
+      });
+      continue;
+    }
 
     if (parts.length < 2) {
       rows.push({
@@ -87,8 +231,9 @@ function parseCsvPreview(content: string): CsvPreviewRow[] {
     }
 
     const role = roleRaw.toUpperCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!email.includes("@")) {
+    if (!EMAIL_RE.test(email.trim())) {
       rows.push({
         row: rowNumber,
         email,
@@ -100,10 +245,22 @@ function parseCsvPreview(content: string): CsvPreviewRow[] {
       continue;
     }
 
+    if (seenEmails.has(normalizedEmail)) {
+      rows.push({
+        row: rowNumber,
+        email: normalizedEmail,
+        fullName,
+        role,
+        valid: false,
+        reason: "Duplicate email in CSV",
+      });
+      continue;
+    }
+
     if (!INVITE_ROLES.includes(role as UserRole)) {
       rows.push({
         row: rowNumber,
-        email,
+        email: normalizedEmail,
         fullName,
         role,
         valid: false,
@@ -112,9 +269,10 @@ function parseCsvPreview(content: string): CsvPreviewRow[] {
       continue;
     }
 
+    seenEmails.add(normalizedEmail);
     rows.push({
       row: rowNumber,
-      email,
+      email: normalizedEmail,
       fullName,
       role,
       valid: true,
@@ -353,11 +511,18 @@ export function CoordinatorInvitePanel() {
             <DialogTitle>Import users from CSV</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Format: <code>email,fullName,role</code> or{" "}
-              <code>email,role</code>. Supported roles:{" "}
-              {INVITE_ROLES.join(", ")}.
-            </p>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                <strong className="font-medium text-foreground">Students:</strong>{" "}
+                <code>Email, Roll No, Batch, Department, Degree, Role</code>
+                {" "}(department: CS, SE, IT, AI, or DS; role must be STUDENT).
+              </p>
+              <p>
+                <strong className="font-medium text-foreground">Faculty:</strong>{" "}
+                <code>email,fullName,role</code> or <code>email,role</code>.
+                Roles: {INVITE_ROLES.join(", ")}.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="csv-file">CSV file</Label>
               <Input

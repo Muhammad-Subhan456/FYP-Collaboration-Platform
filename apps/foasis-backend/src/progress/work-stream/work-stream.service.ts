@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import {
   WorkStreamEntityType,
@@ -34,6 +36,7 @@ export class WorkStreamService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly teamAccessService: TeamAccessService,
+    @Inject(forwardRef(() => ProposalsService))
     private readonly proposalsService: ProposalsService,
     private readonly profilesService: ProfilesService,
     private readonly domainEventService: DomainEventService,

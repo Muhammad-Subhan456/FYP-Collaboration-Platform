@@ -59,13 +59,22 @@ export interface ProposalInsights {
 }
 
 export interface CoordinatorTeamsPageData {
-  teams: Team[];
+  teams: Array<
+    Team & {
+      assignedSupervisorId?: string | null;
+    }
+  >;
   membersByTeamId: Record<string, TeamMember[]>;
   profiles: Record<string, UserProfile>;
 }
 
 export interface CoordinatorProposalsPageData {
-  proposals: Proposal[];
+  proposals: Array<
+    Proposal & {
+      teamName?: string | null;
+      lastReminderSentAt?: string | null;
+    }
+  >;
   profiles: Record<string, UserProfile>;
 }
 
@@ -100,6 +109,12 @@ export interface CoordinatorResultsPageData {
   }>;
 }
 
+export type WorkspaceSettings = {
+  teamMaxMembers: number;
+  supervisorMaxTeams: number;
+  supervisorRequestExpiryHours: number;
+};
+
 export const coordinatorPageService = {
   getDashboard: async () => {
     const res = await api.get<CoordinatorDashboardOverview>(
@@ -111,6 +126,19 @@ export const coordinatorPageService = {
   getAnalytics: async () => {
     const res = await api.get<CoordinatorAnalyticsData>(
       "/coordinator/analytics",
+    );
+    return res.data;
+  },
+
+  getSettings: async () => {
+    const res = await api.get<WorkspaceSettings>("/coordinator/settings");
+    return res.data;
+  },
+
+  updateSettings: async (payload: WorkspaceSettings) => {
+    const res = await api.patch<WorkspaceSettings>(
+      "/coordinator/settings",
+      payload,
     );
     return res.data;
   },
@@ -131,6 +159,18 @@ export const coordinatorPageService = {
     const res = await api.get<CoordinatorProposalsPageData>(
       "/coordinator/proposals",
     );
+    return res.data;
+  },
+
+  sendProposalSupervisorReminder: async (payload: {
+    proposalId: string;
+    deadline: string;
+  }) => {
+    const res = await api.post<{
+      success: boolean;
+      lastReminderSentAt: string;
+      recipientCount: number;
+    }>("/coordinator/proposals/remind", payload);
     return res.data;
   },
 

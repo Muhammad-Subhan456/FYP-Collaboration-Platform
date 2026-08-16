@@ -9,7 +9,8 @@ import { ProposalAccessService } from './proposal-access.service';
 
 @Module({
   imports: [
-    TeamsModule,
+    // Cycle: Teams → Proposals → Deliverables → WorkStream → ProgressCommon → Teams
+    forwardRef(() => TeamsModule),
     NotificationsModule,
     forwardRef(() => ProposalsModule),
   ],

@@ -17,6 +17,7 @@ export {
   useCoordinatorProfileQuery,
   useCoordinatorProposalsQuery,
   useCoordinatorResultsQuery,
+  useCoordinatorSettingsQuery,
   useCoordinatorTeamsQuery,
   useCoordinatorUserDetailQuery,
   useCoordinatorUsersQuery,

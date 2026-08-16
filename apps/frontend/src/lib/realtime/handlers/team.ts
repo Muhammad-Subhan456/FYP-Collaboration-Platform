@@ -75,7 +75,14 @@ export function handleTeamEvent(
       break;
     }
     case RealtimeEvents.TEAM_MEMBER_LEFT: {
-      if (envelope.actorId === userId) {
+      const leftPayload =
+        envelope.payload as Parameters<typeof applyMemberLeft>[4];
+      // Voluntary leave: the leaver's mutation refreshes membership — skip.
+      // Kick: actor is the leader; removed student and peers must still apply.
+      if (
+        envelope.actorId === userId &&
+        leftPayload.authUserId === userId
+      ) {
         break;
       }
       applyMemberLeft(
@@ -83,7 +90,7 @@ export function handleTeamEvent(
         userId,
         role,
         workspaceId,
-        envelope.payload as Parameters<typeof applyMemberLeft>[4],
+        leftPayload,
       );
       if (role === "COORDINATOR") {
         void queryClient.invalidateQueries({

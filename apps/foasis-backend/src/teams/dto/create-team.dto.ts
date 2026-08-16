@@ -2,7 +2,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Max,
   MaxLength,
   Min,
   MinLength,
@@ -32,7 +31,6 @@ export class CreateTeamDto {
   projectAbstract?: string;
 
   @IsInt({ message: 'Team size must be a whole number' })
-  @Min(1, { message: 'Team size must be between 1 and 4 members' })
-  @Max(4, { message: 'Team size must be between 1 and 4 members' })
+  @Min(1, { message: 'Team size must be at least 1 member' })
   maxMembers!: number;
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 
 import { ProposalsModule } from '../../proposals/proposals.module';
 import { UsersModule } from '../../users/users.module';
@@ -8,7 +8,12 @@ import { WorkStreamController } from './work-stream.controller';
 import { WorkStreamService } from './work-stream.service';
 
 @Module({
-  imports: [ProgressCommonModule, ProposalsModule, UsersModule],
+  imports: [
+    ProgressCommonModule,
+    // Cycle: ProposalsModule → DeliverablesModule → WorkStreamModule → ProposalsModule
+    forwardRef(() => ProposalsModule),
+    UsersModule,
+  ],
   controllers: [WorkStreamController],
   providers: [WorkStreamService],
   exports: [WorkStreamService],

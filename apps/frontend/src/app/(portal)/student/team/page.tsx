@@ -3,12 +3,13 @@
 import {
   useBrowseTeamsQuery,
   useStudentTeamQuery,
+  useStudentWorkspaceSettingsQuery,
   isStudentQueryPending,
 } from "@/queries/student";
 import {
   useStudentTeamMutations,
 } from "@/mutations/student";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +22,7 @@ import {
   Pencil,
   Search,
   Trash2,
+  UserMinus,
   UserPlus,
   Users,
   X,
@@ -59,25 +61,35 @@ import { formatProjectNature, sdgLabel } from "@/constants/proposal";
 import type { UserProfile } from "@/types/profile";
 import type { Team } from "@/types/student";
 
-const createTeamSchema = z.object({
-  name: z.string().min(2, "Team name is required"),
-  domain: z.string().min(2, "Domain is required"),
-  projectTitle: z.string().optional(),
-  projectAbstract: z.string().optional(),
-  maxMembers: z
-    .number({ message: "Team size is required" })
-    .int("Team size must be a whole number")
-    .min(1, "Team size must be between 1 and 4 members")
-    .max(4, "Team size must be between 1 and 4 members"),
-});
-
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 function resolveFileUrl(url: string) {
   return url.startsWith("http") ? url : `${apiBase}${url}`;
 }
 
-type CreateTeamForm = z.infer<typeof createTeamSchema>;
+function buildCreateTeamSchema(getTeamMaxMembers: () => number) {
+  return z.object({
+    name: z.string().min(2, "Team name is required"),
+    domain: z.string().min(2, "Domain is required"),
+    projectTitle: z.string().optional(),
+    projectAbstract: z.string().optional(),
+    maxMembers: z
+      .number({ message: "Team size is required" })
+      .int("Team size must be a whole number")
+      .min(1, "Team size must be at least 1 member")
+      .superRefine((value, ctx) => {
+        const max = getTeamMaxMembers();
+        if (value > max) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Team size must be between 1 and ${max} members`,
+          });
+        }
+      }),
+  });
+}
+
+type CreateTeamForm = z.infer<ReturnType<typeof buildCreateTeamSchema>>;
 
 export default function StudentTeamPage() {
   const { user } = useAuth();
@@ -99,6 +111,15 @@ export default function StudentTeamPage() {
   const [isEditingTeam, setIsEditingTeam] = useState(false);
 
   const overviewQuery = useStudentTeamQuery();
+  const settingsQuery = useStudentWorkspaceSettingsQuery();
+  const teamMaxMembers = settingsQuery.data?.teamMaxMembers ?? 4;
+  const teamMaxMembersRef = useRef(teamMaxMembers);
+  teamMaxMembersRef.current = teamMaxMembers;
+
+  const createTeamSchema = useMemo(
+    () => buildCreateTeamSchema(() => teamMaxMembersRef.current),
+    [],
+  );
 
   // Keep optimistic join chips aligned with server pending list (clears on reject/cancel).
   useEffect(() => {
@@ -121,6 +142,7 @@ export default function StudentTeamPage() {
     approveMutation,
     rejectMutation,
     roleMutation,
+    removeMemberMutation,
     deleteTeamMutation,
     leaveTeamMutation,
   } = useStudentTeamMutations();
@@ -132,8 +154,12 @@ export default function StudentTeamPage() {
     reset,
   } = useForm<CreateTeamForm>({
     resolver: zodResolver(createTeamSchema),
-    defaultValues: { maxMembers: 4 },
+    defaultValues: { maxMembers: teamMaxMembers },
   });
+
+  useEffect(() => {
+    reset({ maxMembers: teamMaxMembers });
+  }, [teamMaxMembers, reset]);
 
   const handleSaveProposal = (payload: ProposalUpdatePayload) => {
     updateTeamMutation.mutate(payload, {
@@ -453,20 +479,47 @@ export default function StudentTeamPage() {
                             </Button>
                           </>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingMemberId(m.id);
-                              setRoleDrafts((prev) => ({
-                                ...prev,
-                                [m.id]: m.teamRole ?? "",
-                              }));
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                            {m.teamRole ? "Edit Role" : "Assign Role"}
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingMemberId(m.id);
+                                setRoleDrafts((prev) => ({
+                                  ...prev,
+                                  [m.id]: m.teamRole ?? "",
+                                }));
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              {m.teamRole ? "Edit Role" : "Assign Role"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={removeMemberMutation.isPending}
+                              onClick={() => {
+                                const name = getDisplayName(
+                                  profiles,
+                                  m.authUserId,
+                                );
+                                if (
+                                  window.confirm(
+                                    `Remove ${name} from the team? They will be able to join another team.`,
+                                  )
+                                ) {
+                                  removeMemberMutation.mutate(m.id);
+                                }
+                              }}
+                            >
+                              {removeMemberMutation.isPending ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <UserMinus className="h-4 w-4" />
+                              )}
+                              Remove
+                            </Button>
+                          </>
                         )
                       )}
                     </div>
@@ -504,6 +557,11 @@ export default function StudentTeamPage() {
                                 <p className="text-sm text-muted-foreground">
                                   {profile.department}
                                   {profile.batch ? ` · Batch ${profile.batch}` : ""}
+                                </p>
+                              )}
+                              {profile?.registrationNumber && (
+                                <p className="text-xs text-muted-foreground">
+                                  Reg. No. {profile.registrationNumber}
                                 </p>
                               )}
                               {profile?.skills?.length ? (
@@ -769,12 +827,14 @@ export default function StudentTeamPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="maxMembers">Max Members (1–4)</Label>
+                <Label htmlFor="maxMembers">
+                  Max Members (1–{teamMaxMembers})
+                </Label>
                 <Input
                   id="maxMembers"
                   type="number"
                   min={1}
-                  max={4}
+                  max={teamMaxMembers}
                   {...register("maxMembers", { valueAsNumber: true })}
                 />
                 {errors.maxMembers && (

@@ -1,7 +1,13 @@
-export const SUPERVISOR_MAX_ACCEPTED_TEAMS = Number.POSITIVE_INFINITY;
+import { WORKSPACE_SETTINGS_DEFAULTS } from '../workspace/workspace-settings.defaults';
 
-/** Capacity enforcement is disabled — supervisors may manage unlimited teams. */
-export const SUPERVISOR_CAPACITY_ENFORCED = false;
+/**
+ * Fallback constants — prefer WorkspaceSettingsService values at runtime.
+ * Capacity is always enforced against workspace.supervisorMaxTeams.
+ */
+export const SUPERVISOR_MAX_ACCEPTED_TEAMS =
+  WORKSPACE_SETTINGS_DEFAULTS.supervisorMaxTeams;
+
+export const SUPERVISOR_CAPACITY_ENFORCED = true;
 
 export type TeamAvailability = 'AVAILABLE' | 'UNAVAILABLE';
 

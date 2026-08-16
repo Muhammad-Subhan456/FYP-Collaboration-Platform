@@ -127,6 +127,11 @@ export const teamService = {
     return res.data;
   },
 
+  removeMember: async (memberId: string) => {
+    const res = await api.post(`/teams/my-team/members/${memberId}/remove`);
+    return res.data;
+  },
+
   leaveTeam: async () => {
     const res = await api.post("/teams/my-team/leave");
     return res.data;

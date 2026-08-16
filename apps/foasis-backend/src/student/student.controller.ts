@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { NotificationsQueryDto } from '../notifications/dto/notifications-query.dto';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 
 import { StudentPagesService } from './student-pages.service';
 
@@ -24,7 +25,20 @@ type StudentRequest = {
 export class StudentController {
   constructor(
     private readonly studentPagesService: StudentPagesService,
+    private readonly workspaceSettingsService: WorkspaceSettingsService,
   ) {}
+
+  @Get('workspace-settings')
+  @Roles('STUDENT', 'SUPERVISOR', 'COORDINATOR')
+  async getWorkspaceSettings(@Req() req: StudentRequest) {
+    const settings = await this.workspaceSettingsService.getSettings(
+      req.workspaceId,
+    );
+    return {
+      teamMaxMembers: settings.teamMaxMembers,
+      supervisorRequestExpiryHours: settings.supervisorRequestExpiryHours,
+    };
+  }
 
   @Get('dashboard')
   getDashboard(@Req() req: StudentRequest) {

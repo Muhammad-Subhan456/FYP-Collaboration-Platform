@@ -52,6 +52,17 @@ export function useCoordinatorAnnouncementsQuery() {
   );
 }
 
+export function useCoordinatorSettingsQuery() {
+  const { user } = useAuth();
+
+  return useQuery({
+    ...coordinatorPageQueryOptions,
+    queryKey: queryKeys.coordinator.settings(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getSettings,
+    enabled: !!user?.userId,
+  });
+}
+
 export function useCoordinatorProfileQuery() {
   const { user } = useAuth();
 

@@ -19,6 +19,7 @@ import {
 import { generateProjectCode } from './proposal-constants';
 import { NotificationDispatchService } from '../notifications/notification-dispatch.service';
 import { ActivityLogsService } from '../progress/activity-logs/activity-logs.service';
+import { DeliverablesService } from '../progress/deliverables/deliverables.service';
 import { AuthContextService } from '../common/auth-context.service';
 import { AppUrlsService } from '../common/app-urls.service';
 import { NotificationPayload } from '../common/helpers/notification-payload';
@@ -44,13 +45,13 @@ import {
 import {
   InvitationBrowseTarget,
   SUPERVISOR_CAPACITY_ENFORCED,
-  SUPERVISOR_MAX_ACCEPTED_TEAMS,
   TeamAvailability,
 } from './supervisor-capacity.constants';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
+import { getWorkspaceIdFromContext } from '../workspace/workspace-als';
 
 @Injectable()
 export class ProposalsService {
-  private static readonly REQUEST_TTL_MS = 5 * 60 * 1000;
   private readonly logger = new Logger(ProposalsService.name);
 
   constructor(
@@ -63,12 +64,31 @@ export class ProposalsService {
     private readonly domainEventService: DomainEventService,
     private readonly emailService: EmailService,
     private readonly appUrls: AppUrlsService,
+    private readonly workspaceSettings: WorkspaceSettingsService,
+    @Inject(forwardRef(() => DeliverablesService))
+    private readonly deliverablesService: DeliverablesService,
   ) {}
 
-  async getAcceptedTeamCount(supervisorId: string) {
+  private resolveWorkspaceId(workspaceId?: string | null) {
+    return workspaceId || getWorkspaceIdFromContext() || '';
+  }
+
+  async getSupervisorMaxTeams(workspaceId?: string | null) {
+    const settings = await this.workspaceSettings.getSettings(
+      this.resolveWorkspaceId(workspaceId),
+    );
+    return settings.supervisorMaxTeams;
+  }
+
+  async getAcceptedTeamCount(
+    supervisorId: string,
+    workspaceId?: string | null,
+  ) {
+    const scopedWorkspaceId = this.resolveWorkspaceId(workspaceId);
     return this.prisma.proposal.count({
       where: {
         assignedSupervisorId: supervisorId,
+        ...(scopedWorkspaceId ? { workspaceId: scopedWorkspaceId } : {}),
         status: {
           in: ['SUPERVISOR_ASSIGNED', 'APPROVED'],
         },
@@ -76,22 +96,34 @@ export class ProposalsService {
     });
   }
 
-  async isSupervisorAtCapacity(supervisorId: string) {
+  async isSupervisorAtCapacity(
+    supervisorId: string,
+    workspaceId?: string | null,
+  ) {
     if (!SUPERVISOR_CAPACITY_ENFORCED) {
       return false;
     }
-    const count = await this.getAcceptedTeamCount(supervisorId);
-    return count >= SUPERVISOR_MAX_ACCEPTED_TEAMS;
+    const [count, maxTeams] = await Promise.all([
+      this.getAcceptedTeamCount(supervisorId, workspaceId),
+      this.getSupervisorMaxTeams(workspaceId),
+    ]);
+    return count >= maxTeams;
   }
 
-  async enforceSupervisorCapacity(supervisorId: string) {
+  async enforceSupervisorCapacity(
+    supervisorId: string,
+    workspaceId?: string | null,
+  ) {
     if (!SUPERVISOR_CAPACITY_ENFORCED) {
       return { enforced: false, rejectedRequests: 0, rejectedInvitations: 0 };
     }
 
-    const count = await this.getAcceptedTeamCount(supervisorId);
+    const [count, maxTeams] = await Promise.all([
+      this.getAcceptedTeamCount(supervisorId, workspaceId),
+      this.getSupervisorMaxTeams(workspaceId),
+    ]);
 
-    if (count < SUPERVISOR_MAX_ACCEPTED_TEAMS) {
+    if (count < maxTeams) {
       return { enforced: false, rejectedRequests: 0, rejectedInvitations: 0 };
     }
 
@@ -810,7 +842,10 @@ async submitProposalToSupervisor(
   });
 
   const expiresAt = new Date(
-    Date.now() + ProposalsService.REQUEST_TTL_MS,
+    Date.now() +
+      (await this.workspaceSettings.getSupervisorRequestTtlMs(
+        proposal.workspaceId,
+      )),
   );
 
   const result = await this.prisma.$transaction(async (tx) => {
@@ -854,7 +889,7 @@ async submitProposalToSupervisor(
   await this.notificationDispatch.send({
     authUserId: supervisorId,
     title: 'New Proposal Received',
-    message: `A team submitted proposal "${proposal.title}" for your review. Respond within 5 minutes.`,
+    message: `A team submitted proposal "${proposal.title}" for your review. Respond before the request expires.`,
     type: 'PROPOSAL_RECEIVED',
     entityType: 'PROPOSAL',
     entityId: proposal.id,
@@ -1903,14 +1938,18 @@ async approveProposal(
 
   const updated = await this.prisma.$transaction(async (tx) => {
     if (SUPERVISOR_CAPACITY_ENFORCED) {
+      const maxTeams = await this.getSupervisorMaxTeams(
+        proposal.workspaceId,
+      );
       const acceptedCount = await tx.proposal.count({
         where: {
           assignedSupervisorId: supervisorId,
+          workspaceId: proposal.workspaceId,
           status: { in: ['SUPERVISOR_ASSIGNED', 'APPROVED'] },
         },
       });
 
-      if (acceptedCount >= SUPERVISOR_MAX_ACCEPTED_TEAMS) {
+      if (acceptedCount >= maxTeams) {
         throw new BadRequestException(
           'You have reached the maximum accepted team capacity',
         );
@@ -2032,6 +2071,20 @@ async approveProposal(
       }`,
     );
   });
+
+  void this.deliverablesService
+    .ensurePublishedTemplatesForTeam(
+      proposal.workspaceId,
+      proposal.teamId,
+      supervisorId,
+    )
+    .catch((error) => {
+      this.logger.warn(
+        `Failed to materialize published templates for team ${proposal.teamId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
 
   return updated;
 }

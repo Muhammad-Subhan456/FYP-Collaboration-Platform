@@ -216,6 +216,20 @@ export class TeamsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('STUDENT')
+  @Post('my-team/members/:memberId/remove')
+  removeMember(
+    @Req() req: { user: { userId: string }; workspaceId: string },
+    @Param('memberId') memberId: string,
+  ) {
+    return this.teamsService.removeMember(
+      req.user.userId,
+      memberId,
+      req.workspaceId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('COORDINATOR')
   @Get('member/:authUserId/team')
   getTeamForMember(

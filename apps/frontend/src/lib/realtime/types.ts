@@ -319,6 +319,7 @@ export interface RealtimeTeamMemberWire {
 export interface RealtimeTeamJoinRequestReceivedPayload {
   teamId: string;
   joinRequest: RealtimeJoinRequestWire;
+  requesterProfile?: Record<string, unknown> | null;
 }
 
 export interface RealtimeTeamJoinRequestResolvedPayload {

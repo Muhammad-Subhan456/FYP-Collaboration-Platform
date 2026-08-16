@@ -10,6 +10,7 @@ export {
   useStudentProposalQuery,
   useStudentResultsQuery,
   useStudentTeamQuery,
+  useStudentWorkspaceSettingsQuery,
   useStudentWorkStreamQuery,
 } from "./use-pages";
 

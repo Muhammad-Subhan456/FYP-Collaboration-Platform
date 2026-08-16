@@ -19,6 +19,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { getDisplayName } from "@/hooks/use-profiles";
@@ -28,6 +35,8 @@ import {
 } from "@/queries/coordinator";
 import type { TeamMember } from "@/types/student";
 import type { UserProfile } from "@/types/profile";
+
+type SupervisorFilter = "ALL" | "WITH" | "WITHOUT";
 
 function memberLabel(
   profiles: Record<string, UserProfile>,
@@ -92,6 +101,8 @@ function TeamMembers({
 
 export default function CoordinatorTeamsPage() {
   const [search, setSearch] = useState("");
+  const [supervisorFilter, setSupervisorFilter] =
+    useState<SupervisorFilter>("ALL");
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [viewProfile, setViewProfile] = useState<UserProfile | null>(null);
 
@@ -116,12 +127,17 @@ export default function CoordinatorTeamsPage() {
 
   const teams = allTeams.filter((team) => {
     const q = search.toLowerCase();
-    return (
+    const matchesSearch =
       team.name.toLowerCase().includes(q) ||
       team.domain.toLowerCase().includes(q) ||
       (team.projectTitle?.toLowerCase().includes(q) ?? false) ||
-      (team.projectAbstract?.toLowerCase().includes(q) ?? false)
-    );
+      (team.projectAbstract?.toLowerCase().includes(q) ?? false);
+    const hasSupervisor = Boolean(team.assignedSupervisorId);
+    const matchesSupervisor =
+      supervisorFilter === "ALL" ||
+      (supervisorFilter === "WITH" && hasSupervisor) ||
+      (supervisorFilter === "WITHOUT" && !hasSupervisor);
+    return matchesSearch && matchesSupervisor;
   });
 
   return (
@@ -144,14 +160,29 @@ export default function CoordinatorTeamsPage() {
             className="pl-9"
           />
         </div>
+        <Select
+          value={supervisorFilter}
+          onValueChange={(value) =>
+            setSupervisorFilter(value as SupervisorFilter)
+          }
+        >
+          <SelectTrigger className="w-full sm:w-56">
+            <SelectValue placeholder="Supervisor filter" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Teams</SelectItem>
+            <SelectItem value="WITH">Teams With Supervisor</SelectItem>
+            <SelectItem value="WITHOUT">Teams Without Supervisor</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {teams.length === 0 ? (
         <EmptyState
           title="No teams found"
           description={
-            search
-              ? "Try a different search term."
+            search || supervisorFilter !== "ALL"
+              ? "Try adjusting your search or filters."
               : "Teams will appear here once students create them."
           }
         />
@@ -160,6 +191,7 @@ export default function CoordinatorTeamsPage() {
           {teams.map((team) => {
             const expanded = expandedTeamId === team.id;
             const members = membersByTeamId[team.id] ?? [];
+            const supervisorId = team.assignedSupervisorId ?? null;
             return (
               <Card key={team.id}>
                 <CardHeader>
@@ -173,6 +205,18 @@ export default function CoordinatorTeamsPage() {
                         {team.domain} · Leader:{" "}
                         {memberLabel(profiles, team.leaderId)}
                       </CardDescription>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Supervisor:{" "}
+                        {supervisorId ? (
+                          <span className="font-medium text-foreground">
+                            {getDisplayName(profiles, supervisorId)}
+                          </span>
+                        ) : (
+                          <span className="font-medium text-amber-700 dark:text-amber-500">
+                            No Supervisor Assigned
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <StatusBadge status={team.isOpen ? "ACTIVE" : "INACTIVE"} />
