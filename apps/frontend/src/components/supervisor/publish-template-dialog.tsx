@@ -69,7 +69,7 @@ export function PublishTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeOnOutsideClick={false}>
         <DialogHeader>
           <DialogTitle>Publish template</DialogTitle>
         </DialogHeader>

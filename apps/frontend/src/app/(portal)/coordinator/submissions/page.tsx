@@ -79,6 +79,54 @@ function EvaluatorsSummary({
   );
 }
 
+function submissionAttachments(submission: CoordinatorFinalizedSubmission) {
+  if (submission.attachments?.length) {
+    return submission.attachments;
+  }
+  if (submission.fileUrl) {
+    return [
+      {
+        id: `${submission.id}-primary`,
+        fileUrl: submission.fileUrl,
+        fileName: "Submission file",
+      },
+    ];
+  }
+  return [];
+}
+
+function SubmissionAttachmentsLinks({
+  submission,
+}: {
+  submission: CoordinatorFinalizedSubmission;
+}) {
+  const attachments = submissionAttachments(submission);
+  if (attachments.length === 0) {
+    return <span className="text-sm text-muted-foreground">No files</span>;
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {attachments.map((attachment) => (
+        <Button key={attachment.id} asChild size="sm" variant="outline">
+          <a
+            href={attachment.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={attachment.fileName}
+          >
+            {attachments.length === 1
+              ? "View file"
+              : attachment.fileName.length > 24
+                ? `${attachment.fileName.slice(0, 21)}…`
+                : attachment.fileName}
+          </a>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 function FinalizedSubmissionListItem({
   submission,
 }: {
@@ -119,15 +167,7 @@ function FinalizedSubmissionListItem({
           <EvaluatorsSummary submission={submission} />
         </div>
       </div>
-      <Button asChild size="sm" variant="outline">
-        <a
-          href={submission.fileUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View file
-        </a>
-      </Button>
+      <SubmissionAttachmentsLinks submission={submission} />
     </div>
   );
 }
@@ -216,15 +256,7 @@ function FinalizedSubmissionsTable({
               <EvaluatorsSummary submission={submission} />
             </TableCell>
             <TableCell className="text-right">
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={submission.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View
-                </a>
-              </Button>
+              <SubmissionAttachmentsLinks submission={submission} />
             </TableCell>
           </TableRow>
         ))}

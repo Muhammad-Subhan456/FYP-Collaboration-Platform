@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { getDashboardPath } from "@/lib/auth";
+import { bootstrapAuthUser, getDashboardPath } from "@/lib/auth";
 import { useAuth } from "@/providers/auth-provider";
 import type { UserRole } from "@/types";
 
@@ -22,7 +22,13 @@ export function OnboardingGuard({
       return;
     }
 
+    // Token exists but AuthProvider has not hydrated user yet — wait.
+    // Redirecting to /auth/login here races invitation accept and middleware
+    // then bounces authenticated users to the role dashboard, skipping onboarding.
     if (!user) {
+      if (bootstrapAuthUser()) {
+        return;
+      }
       router.replace("/auth/login");
       return;
     }
@@ -37,7 +43,9 @@ export function OnboardingGuard({
     }
   }, [user, profile, isLoading, role, router]);
 
-  if (isLoading || profile || !user || user.role !== role) {
+  const waitingForHydration = !isLoading && !user && !!bootstrapAuthUser();
+
+  if (isLoading || waitingForHydration || profile || !user || user.role !== role) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

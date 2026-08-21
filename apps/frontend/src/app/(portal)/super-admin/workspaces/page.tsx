@@ -282,7 +282,7 @@ export default function SuperAdminWorkspacesPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>

@@ -339,6 +339,7 @@ export default function SupervisorWorkStreamPage() {
     >
       <DialogContent
         className="flex max-h-[90vh] flex-col overflow-hidden"
+        closeOnOutsideClick={false}
         onPointerDownOutside={(event) => {
           if (
             (event.target as HTMLElement).closest("[data-team-multi-select]")
@@ -801,7 +802,7 @@ export default function SupervisorWorkStreamPage() {
           open={!!reviewTarget}
           onOpenChange={(open) => !open && setReviewTarget(null)}
         >
-          <DialogContent>
+          <DialogContent closeOnOutsideClick={false}>
             <DialogHeader>
               <DialogTitle>Review submission</DialogTitle>
             </DialogHeader>

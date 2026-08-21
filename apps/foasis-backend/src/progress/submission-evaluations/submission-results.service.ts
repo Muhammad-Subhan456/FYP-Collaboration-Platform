@@ -8,7 +8,7 @@ import {
   averageStudentDeliverableScores,
   averageTemplateScoreForStudent,
 } from './submission-scoring.util';
-import { resolveGrade } from '../gpa/grading-policy';
+import { isOneMarkBelowNextGrade, resolveGrade } from '../gpa/grading-policy';
 
 @Injectable()
 export class SubmissionResultsService {
@@ -70,8 +70,7 @@ export class SubmissionResultsService {
     const promotionEligible =
       result.isComplete &&
       !result.promotionApplied &&
-      resolveGrade(Math.min(100, base + 1)).gradePoints >
-        resolveGrade(base).gradePoints;
+      isOneMarkBelowNextGrade(base);
 
     return {
       promotionApplied: result.promotionApplied,
@@ -642,7 +641,7 @@ export class SubmissionResultsService {
       ...new Set(evaluations.map((e) => e.deliverable.supervisorId)),
     ];
 
-    const [teams, studentNames, evaluatorNames, supervisorNames] =
+    const [teams, studentNames, studentProfiles, evaluatorNames, supervisorNames] =
       await Promise.all([
         teamIds.length
           ? this.prisma.team.findMany({
@@ -651,6 +650,7 @@ export class SubmissionResultsService {
             })
           : Promise.resolve([]),
         this.loadPersonNames(studentIds),
+        this.profilesService.findManyByAuthUserIds(studentIds),
         this.loadEvaluatorNames(evaluatorIds),
         this.loadPersonNames(supervisorIds),
       ]);
@@ -722,6 +722,8 @@ export class SubmissionResultsService {
     ).map((result) => ({
       ...result,
       studentName: studentNames.get(result.studentId) ?? 'Student',
+      registrationNumber:
+        studentProfiles[result.studentId]?.registrationNumber ?? null,
       gpa: result.isComplete ? result.gpa : null,
       grade: result.isComplete ? resolveGrade(result.weightedMarks).grade : null,
       gpaAvailable: result.isComplete,

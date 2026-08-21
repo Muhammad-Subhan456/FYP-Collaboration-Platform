@@ -344,7 +344,7 @@ export default function CoordinatorDeliverableTemplatesPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>
               {editing ? "Edit deliverable" : "Create deliverable"}

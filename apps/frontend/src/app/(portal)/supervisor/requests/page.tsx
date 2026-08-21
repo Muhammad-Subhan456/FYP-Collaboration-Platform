@@ -197,7 +197,7 @@ export default function SupervisorRequestsPage() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>
               {confirmAction?.type === "accept"

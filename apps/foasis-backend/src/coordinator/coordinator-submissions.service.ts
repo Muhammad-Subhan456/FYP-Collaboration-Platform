@@ -122,6 +122,14 @@ export class CoordinatorSubmissionsService {
               status: true,
             },
           },
+          attachments: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              fileUrl: true,
+              fileName: true,
+            },
+          },
         },
         orderBy,
     });
@@ -182,6 +190,18 @@ export class CoordinatorSubmissionsService {
         version: row.version,
         status: row.status,
         fileUrl: row.fileUrl,
+        attachments:
+          row.attachments.length > 0
+            ? row.attachments
+            : row.fileUrl
+              ? [
+                  {
+                    id: `${row.id}-primary`,
+                    fileUrl: row.fileUrl,
+                    fileName: 'Submission file',
+                  },
+                ]
+              : [],
         finalizedAt: row.finalizedAt,
         submittedAt: row.submittedAt,
         deliverable: {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Megaphone, Paperclip, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,6 +10,7 @@ import {
   formatAudienceRoles,
   type AnnouncementAudienceRole,
 } from "@/components/coordinator/announcement-audience-picker";
+import { AnnouncementAudienceUserPicker } from "@/components/coordinator/announcement-audience-user-picker";
 import { AttachmentList } from "@/components/work-stream/attachment-list";
 import { DashboardSkeleton } from "@/components/common/loading-skeletons";
 import { EmptyState, ErrorState } from "@/components/common/state-blocks";
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { formatDateTime } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
+import { queryKeys } from "@/lib/react-query";
 import { gaTrace } from "@/lib/realtime/ga-trace";
 import { datetimeLocalToIso } from "@/lib/validation/announcement";
 import { useCoordinatorCreateAnnouncementMutation } from "@/mutations/coordinator";
@@ -48,6 +51,7 @@ import {
   useCoordinatorAnnouncementsQuery,
 } from "@/queries/coordinator";
 import { useAuth } from "@/providers/auth-provider";
+import { coordinatorPageService } from "@/services/coordinator-page.service";
 import { uploadService } from "@/services/progress.service";
 import type { WorkStreamAttachment } from "@/types/work-stream";
 
@@ -67,6 +71,7 @@ export default function CoordinatorAnnouncementsPage() {
   const [audienceRoles, setAudienceRoles] = useState<
     AnnouncementAudienceRole[]
   >(["STUDENT", "SUPERVISOR", "EVALUATOR"]);
+  const [audienceUserIds, setAudienceUserIds] = useState<string[]>([]);
   const [publishAt, setPublishAt] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -74,6 +79,12 @@ export default function CoordinatorAnnouncementsPage() {
 
   const pageQuery = useCoordinatorAnnouncementsQuery();
   const { user } = useAuth();
+
+  const workspaceUsersQuery = useQuery({
+    queryKey: queryKeys.coordinator.users(user?.userId, user?.workspaceId),
+    queryFn: coordinatorPageService.getUsers,
+    enabled: !!user?.workspaceId && dialogOpen,
+  });
 
   useEffect(() => {
     const announcements = pageQuery.data ?? [];
@@ -91,6 +102,7 @@ export default function CoordinatorAnnouncementsPage() {
     setMessage("");
     setType("GENERAL");
     setAudienceRoles(["STUDENT", "SUPERVISOR", "EVALUATOR"]);
+    setAudienceUserIds([]);
     setPublishAt("");
     setPendingFiles([]);
   };
@@ -114,6 +126,12 @@ export default function CoordinatorAnnouncementsPage() {
   }
 
   const announcements = pageQuery.data ?? [];
+  const audienceUsers = (workspaceUsersQuery.data ?? []).filter(
+    (member) =>
+      member.role === "STUDENT" ||
+      member.role === "SUPERVISOR" ||
+      member.role === "EVALUATOR",
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +156,7 @@ export default function CoordinatorAnnouncementsPage() {
         message: message.trim(),
         type,
         audienceRoles,
+        audienceUserIds,
         publishAt: publishAt ? datetimeLocalToIso(publishAt) : undefined,
         attachments,
       });
@@ -189,6 +208,9 @@ export default function CoordinatorAnnouncementsPage() {
                   {item.audienceRoles?.length
                     ? ` · ${formatAudienceRoles(item.audienceRoles)}`
                     : null}
+                  {item.audienceUserIds?.length
+                    ? ` · ${item.audienceUserIds.length} individual${item.audienceUserIds.length === 1 ? "" : "s"}`
+                    : null}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -207,7 +229,7 @@ export default function CoordinatorAnnouncementsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" closeOnOutsideClick={false}>
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>New workspace announcement</DialogTitle>
@@ -243,6 +265,12 @@ export default function CoordinatorAnnouncementsPage() {
               <AnnouncementAudiencePicker
                 value={audienceRoles}
                 onChange={setAudienceRoles}
+              />
+              <AnnouncementAudienceUserPicker
+                users={audienceUsers}
+                selectedIds={audienceUserIds}
+                onChange={setAudienceUserIds}
+                isLoading={workspaceUsersQuery.isLoading}
               />
               <div className="space-y-2">
                 <Label htmlFor="publishAt">Display date &amp; time (optional)</Label>

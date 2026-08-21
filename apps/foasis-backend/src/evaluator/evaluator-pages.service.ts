@@ -42,6 +42,7 @@ export class EvaluatorPagesService {
               .getAnnouncements(workspaceId, 'EVALUATOR', {
                 page: 1,
                 limit: 3,
+                viewerUserId: evaluatorId,
               })
               .then((result) =>
                 Array.isArray(result) ? result : result.data,

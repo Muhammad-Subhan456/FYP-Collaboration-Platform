@@ -27,6 +27,7 @@ export interface GlobalAnnouncement {
   message: string;
   type?: string;
   audienceRoles: string[];
+  audienceUserIds?: string[];
   publishAt?: string | null;
   publishedAt?: string | null;
   status?: "DRAFT" | "SCHEDULED" | "PUBLISHED";
@@ -41,6 +42,7 @@ export interface CreateGlobalAnnouncementInput {
   message: string;
   type?: string;
   audienceRoles?: string[];
+  audienceUserIds?: string[];
   publishAt?: string;
   attachments?: Array<{ fileUrl: string; fileName: string }>;
 }

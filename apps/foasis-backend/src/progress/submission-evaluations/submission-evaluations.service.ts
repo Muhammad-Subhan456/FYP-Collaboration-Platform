@@ -32,7 +32,9 @@ import { GpaCalculationService } from '../gpa/gpa-calculation.service';
 import { ReminderTypes } from '../reminders/reminder.types';
 
 import { AssignEvaluatorDto, AssignEvaluatorsDto, SaveEvaluationDraftDto } from './dto/assign-evaluator.dto';
+import { AssignSupervisorEvaluatorDto } from './dto/assign-supervisor-evaluator.dto';
 import { resolveEvaluationAggregateStatus } from './submission-scoring.util';
+import { MembershipBootstrapService } from '../../workspace/membership-bootstrap.service';
 
 const evaluationInclude = {
   submission: {
@@ -93,6 +95,7 @@ export class SubmissionEvaluationsService {
     private readonly domainEventService: DomainEventService,
     private readonly emailService: EmailService,
     private readonly appUrls: AppUrlsService,
+    private readonly membershipBootstrap: MembershipBootstrapService,
   ) {}
 
   private async emailEvaluatorAssignment(input: {
@@ -110,7 +113,7 @@ export class SubmissionEvaluationsService {
       }),
       this.prisma.team.findUnique({
         where: { id: input.teamId },
-        select: { name: true },
+        select: { name: true, projectTitle: true },
       }),
       input.phaseId
         ? this.prisma.phase.findUnique({
@@ -131,7 +134,7 @@ export class SubmissionEvaluationsService {
       buildEvaluationAssignmentEmail({
         to: evaluator.email,
         deliverableTitle: input.deliverableTitle,
-        teamName: team?.name ?? null,
+        teamName: team?.name || team?.projectTitle || null,
         phaseName: phase?.name ?? null,
         evaluationLabel: `Submission version ${input.submissionVersion}`,
         actionUrl: this.appUrls.portalUrl(
@@ -231,6 +234,14 @@ export class SubmissionEvaluationsService {
             status: true,
           },
         },
+        attachments: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            fileUrl: true,
+            fileName: true,
+          },
+        },
       },
       orderBy: { finalizedAt: 'desc' },
     });
@@ -296,6 +307,18 @@ export class SubmissionEvaluationsService {
         submissionStatus: submission.status,
         finalizedAt: submission.finalizedAt,
         fileUrl: submission.fileUrl,
+        attachments:
+          submission.attachments.length > 0
+            ? submission.attachments
+            : submission.fileUrl
+              ? [
+                  {
+                    id: `${submission.id}-primary`,
+                    fileUrl: submission.fileUrl,
+                    fileName: 'Submission file',
+                  },
+                ]
+              : [],
         evaluationStatus,
         evaluations,
         assignedEvaluatorCount: evaluations.length,
@@ -488,6 +511,63 @@ export class SubmissionEvaluationsService {
     }
 
     return created;
+  }
+
+  /**
+   * Assign the team's current supervisor as an evaluator for a finalized submission.
+   * Ensures EVALUATOR membership exists for supervisors who only hold SUPERVISOR role.
+   */
+  async assignSupervisorAsEvaluator(
+    workspaceId: string,
+    coordinatorId: string,
+    dto: AssignSupervisorEvaluatorDto,
+  ) {
+    const submission = await this.prisma.submission.findFirst({
+      where: {
+        id: dto.submissionId,
+        workspaceId,
+        status: SubmissionStatus.FINALIZED,
+      },
+      select: {
+        id: true,
+        teamId: true,
+        deliverable: {
+          select: {
+            supervisorId: true,
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Finalized submission not found');
+    }
+
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { teamId: submission.teamId },
+      select: { assignedSupervisorId: true },
+    });
+
+    const supervisorId =
+      proposal?.assignedSupervisorId ||
+      submission.deliverable.supervisorId ||
+      null;
+
+    if (!supervisorId) {
+      throw new BadRequestException(
+        'This team does not have an assigned supervisor',
+      );
+    }
+
+    await this.membershipBootstrap.ensureEvaluatorMembership(
+      workspaceId,
+      supervisorId,
+    );
+
+    return this.assignEvaluator(workspaceId, coordinatorId, {
+      submissionId: submission.id,
+      evaluatorId: supervisorId,
+    });
   }
 
   async remindPendingEvaluators(

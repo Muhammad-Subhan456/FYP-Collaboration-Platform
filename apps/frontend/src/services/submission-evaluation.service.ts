@@ -47,6 +47,14 @@ export const submissionEvaluationService = {
     return res.data;
   },
 
+  assignSupervisorAsEvaluator: async (payload: { submissionId: string }) => {
+    const res = await api.post(
+      "/submission-evaluations/assign-supervisor",
+      payload,
+    );
+    return res.data;
+  },
+
   remindEvaluators: async (payload: {
     submissionId: string;
     evaluatorIds?: string[];

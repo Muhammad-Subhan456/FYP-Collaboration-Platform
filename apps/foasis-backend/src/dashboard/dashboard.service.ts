@@ -265,6 +265,7 @@ export class DashboardService {
         .getAnnouncements(workspaceId, 'STUDENT', {
           page: 1,
           limit: OVERVIEW_LIST_LIMIT,
+          viewerUserId: authUserId,
         })
         .then((result) =>
           Array.isArray(result) ? result : result.data,
@@ -402,6 +403,7 @@ export class DashboardService {
         .getAnnouncements(workspaceId, 'SUPERVISOR', {
           page: 1,
           limit: OVERVIEW_LIST_LIMIT,
+          viewerUserId: supervisorId,
         })
         .then((result) =>
           Array.isArray(result) ? result : result.data,

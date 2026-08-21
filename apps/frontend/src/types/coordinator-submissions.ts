@@ -18,6 +18,11 @@ export interface CoordinatorFinalizedSubmission {
   version: number;
   status: string;
   fileUrl: string;
+  attachments: Array<{
+    id: string;
+    fileUrl: string;
+    fileName: string;
+  }>;
   finalizedAt: string | null;
   submittedAt: string;
   deliverable: {

@@ -45,7 +45,6 @@ const emptyForm = {
   creditHours: 3,
   description: "",
   status: "ACTIVE" as PhaseStatus,
-  sortOrder: 0,
 };
 
 export default function CoordinatorPhasesPage() {
@@ -70,7 +69,6 @@ export default function CoordinatorPhasesPage() {
         creditHours: Number(form.creditHours),
         description: form.description.trim() || undefined,
         status: form.status,
-        sortOrder: Number(form.sortOrder),
       };
 
       if (editing) {
@@ -160,7 +158,6 @@ export default function CoordinatorPhasesPage() {
       creditHours: phase.creditHours,
       description: phase.description ?? "",
       status: phase.status,
-      sortOrder: phase.sortOrder,
     });
     setDialogOpen(true);
   };
@@ -245,7 +242,7 @@ export default function CoordinatorPhasesPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit phase" : "Create phase"}</DialogTitle>
           </DialogHeader>
@@ -276,39 +273,25 @@ export default function CoordinatorPhasesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Sort order</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.sortOrder}
-                  onChange={(event) =>
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      sortOrder: Number(event.target.value),
+                      status: value as PhaseStatus,
                     }))
                   }
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    status: value as PhaseStatus,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="INACTIVE">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label>Description</Label>

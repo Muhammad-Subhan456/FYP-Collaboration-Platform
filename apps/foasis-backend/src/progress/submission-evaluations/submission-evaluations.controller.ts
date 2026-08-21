@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
 import { AssignEvaluatorDto, AssignEvaluatorsDto, SaveEvaluationDraftDto } from './dto/assign-evaluator.dto';
+import { AssignSupervisorEvaluatorDto } from './dto/assign-supervisor-evaluator.dto';
 import { ListEligibleSubmissionsQueryDto } from './dto/list-submissions-query.dto';
 import { RemindEvaluatorsDto } from './dto/remind-evaluators.dto';
 import { SubmissionEvaluationsService } from './submission-evaluations.service';
@@ -78,6 +79,19 @@ export class SubmissionEvaluationsController {
     @Body() dto: AssignEvaluatorsDto,
   ) {
     return this.submissionEvaluationsService.assignEvaluators(
+      req.workspaceId,
+      req.user.userId,
+      dto,
+    );
+  }
+
+  @Post('assign-supervisor')
+  @Roles('COORDINATOR')
+  assignSupervisorAsEvaluator(
+    @Req() req: AuthedRequest,
+    @Body() dto: AssignSupervisorEvaluatorDto,
+  ) {
+    return this.submissionEvaluationsService.assignSupervisorAsEvaluator(
       req.workspaceId,
       req.user.userId,
       dto,

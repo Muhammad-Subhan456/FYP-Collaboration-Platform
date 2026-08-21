@@ -15,6 +15,10 @@ import type { Notification } from "@/types/student";
 import type { Supervisor } from "@/types/student";
 
 export interface CoordinatorAnalyticsData {
+  workspace?: {
+    id: string;
+    name: string;
+  };
   summary: {
     totalTeams: number;
     activePhases: number;

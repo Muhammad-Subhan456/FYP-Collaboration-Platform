@@ -16,9 +16,12 @@ export type AnnouncementAudienceRole =
 
 export function normalizeAudienceRoles(
   roles?: string[] | null,
+  options?: { defaultToAllWhenEmpty?: boolean },
 ): AnnouncementAudienceRole[] {
+  const defaultToAllWhenEmpty = options?.defaultToAllWhenEmpty ?? true;
+
   if (!roles?.length) {
-    return [...ALL_ANNOUNCEMENT_AUDIENCE_ROLES];
+    return defaultToAllWhenEmpty ? [...ALL_ANNOUNCEMENT_AUDIENCE_ROLES] : [];
   }
 
   const allowed = new Set<string>(ALL_ANNOUNCEMENT_AUDIENCE_ROLES);
@@ -32,23 +35,52 @@ export function normalizeAudienceRoles(
     ),
   ];
 
-  return normalized.length > 0
-    ? normalized
-    : [...ALL_ANNOUNCEMENT_AUDIENCE_ROLES];
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return defaultToAllWhenEmpty ? [...ALL_ANNOUNCEMENT_AUDIENCE_ROLES] : [];
 }
 
+export function isAnnouncementVisibleToAudience(input: {
+  audienceRoles: string[];
+  audienceUserIds?: string[] | null;
+  viewerRole: string;
+  viewerUserId?: string | null;
+}): boolean {
+  if (input.viewerRole === UserRole.COORDINATOR) {
+    return true;
+  }
+
+  if (
+    input.viewerUserId &&
+    (input.audienceUserIds ?? []).includes(input.viewerUserId)
+  ) {
+    return true;
+  }
+
+  if (!input.audienceRoles.length) {
+    return false;
+  }
+
+  const normalizedAudience = normalizeAudienceRoles(input.audienceRoles, {
+    defaultToAllWhenEmpty: false,
+  });
+  return normalizedAudience.includes(
+    input.viewerRole as AnnouncementAudienceRole,
+  );
+}
+
+/** @deprecated Prefer isAnnouncementVisibleToAudience for user-targeted announcements. */
 export function isAnnouncementVisibleToRole(
   audienceRoles: string[],
   viewerRole: string,
 ): boolean {
-  if (viewerRole === UserRole.COORDINATOR) {
-    return true;
-  }
-
-  const normalizedAudience = normalizeAudienceRoles(audienceRoles);
-  return normalizedAudience.includes(
-    viewerRole as AnnouncementAudienceRole,
-  );
+  return isAnnouncementVisibleToAudience({
+    audienceRoles,
+    audienceUserIds: [],
+    viewerRole,
+  });
 }
 
 export function announcementRouteForRole(role: string): string {

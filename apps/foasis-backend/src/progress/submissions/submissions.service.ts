@@ -93,7 +93,7 @@ export class SubmissionsService {
       }),
       this.prisma.team.findUnique({
         where: { id: input.teamId },
-        select: { name: true },
+        select: { name: true, projectTitle: true },
       }),
       input.phaseId
         ? this.prisma.phase.findUnique({
@@ -114,7 +114,7 @@ export class SubmissionsService {
       buildSubmissionReceivedEmail({
         to: supervisor.email,
         deliverableTitle: input.deliverableTitle,
-        teamName: team?.name ?? 'Team',
+        teamName: team?.name || team?.projectTitle || 'Team',
         phaseName: phase?.name ?? null,
         submittedAt: input.submittedAt,
         actionUrl: this.appUrls.portalUrl(

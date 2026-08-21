@@ -78,7 +78,7 @@ const TYPE_FALLBACK_ROUTES: Record<string, string> = {
   TEAM_ISSUE_COMPLETED: "/student/milestones",
   TEAM_ISSUE_COMMENTED: "/student/milestones",
   WORKSTREAM_COMMENTED: "/student/work-stream",
-  GLOBAL_ANNOUNCEMENT: "/student/work-stream?tab=announcements",
+  GLOBAL_ANNOUNCEMENT: "/student/announcements",
   ROLE_UPDATED: "/student/dashboard",
   ACCOUNT_STATUS_UPDATED: "/student/dashboard",
   DEADLINE_REMINDER: "/student/work-stream",
@@ -170,13 +170,13 @@ function roleAwareFallback(
   if (type === "GLOBAL_ANNOUNCEMENT") {
     switch (role) {
       case "SUPERVISOR":
-        return "/supervisor/work-stream?tab=announcements";
+        return "/supervisor/announcements";
       case "COORDINATOR":
         return "/coordinator/announcements";
       case "EVALUATOR":
         return "/evaluator/dashboard";
       default:
-        return "/student/work-stream?tab=announcements";
+        return "/student/announcements";
     }
   }
 
@@ -294,16 +294,6 @@ export function resolveNotificationHref(
 
   if (route === "/supervisor/submissions") {
     route = "/supervisor/work-stream";
-  }
-
-  if (
-    route === "/student/announcements" ||
-    route === "/supervisor/announcements"
-  ) {
-    route =
-      route === "/supervisor/announcements"
-        ? "/supervisor/work-stream?tab=announcements"
-        : "/student/work-stream?tab=announcements";
   }
 
   return appendEntityQuery(

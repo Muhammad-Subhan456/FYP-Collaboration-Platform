@@ -295,6 +295,10 @@ export function CoordinatorInvitePanel() {
   const [csvPreview, setCsvPreview] = useState<CsvPreviewRow[]>([]);
   const [importSummary, setImportSummary] =
     useState<CsvImportSummary | null>(null);
+  const [recipientsViewAll, setRecipientsViewAll] = useState<{
+    title: string;
+    lines: string[];
+  } | null>(null);
 
   const invitationsQuery = useQuery({
     queryKey: queryKeys.coordinator.invitations(user?.workspaceId),
@@ -363,6 +367,7 @@ export function CoordinatorInvitePanel() {
     setSelectedFile(null);
     setCsvPreview([]);
     setImportSummary(null);
+    setRecipientsViewAll(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -446,7 +451,7 @@ export function CoordinatorInvitePanel() {
       </div>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Invite user</DialogTitle>
           </DialogHeader>
@@ -506,7 +511,7 @@ export function CoordinatorInvitePanel() {
           if (!open) resetImportDialog();
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Import users from CSV</DialogTitle>
           </DialogHeader>
@@ -545,44 +550,51 @@ export function CoordinatorInvitePanel() {
             ) : null}
 
             {csvPreview.length > 0 && !importSummary ? (
-              <div className="max-h-64 overflow-auto rounded-lg border p-3 text-sm">
-                <p className="mb-2 font-medium">
-                  Preview: {validPreviewCount} valid · {invalidPreviewCount}{" "}
-                  invalid
-                </p>
-                <ul className="space-y-1">
-                  {csvPreview.map((row) => (
-                    <li
-                      key={row.row}
-                      className={
-                        row.valid ? undefined : "text-destructive"
-                      }
-                    >
-                      Row {row.row}: {row.email}
-                      {row.fullName ? ` (${row.fullName})` : ""} — {row.role}
-                      {row.reason ? ` — ${row.reason}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <RecipientListPreview
+                heading={`Preview: ${validPreviewCount} valid · ${invalidPreviewCount} invalid`}
+                items={csvPreview.map((row) => ({
+                  key: String(row.row),
+                  text: `Row ${row.row}: ${row.email}${
+                    row.fullName ? ` (${row.fullName})` : ""
+                  } — ${row.role}${row.reason ? ` — ${row.reason}` : ""}`,
+                  destructive: !row.valid,
+                }))}
+                onViewAll={() =>
+                  setRecipientsViewAll({
+                    title: `All recipients (${csvPreview.length})`,
+                    lines: csvPreview.map(
+                      (row) =>
+                        `Row ${row.row}: ${row.email}${
+                          row.fullName ? ` (${row.fullName})` : ""
+                        } — ${row.role}${row.reason ? ` — ${row.reason}` : ""}`,
+                    ),
+                  })
+                }
+              />
             ) : null}
 
             {importSummary ? (
-              <div className="max-h-64 overflow-auto rounded-lg border p-3 text-sm">
-                <p className="font-medium">Import summary</p>
-                <p className="mt-1">
-                  Imported: {importSummary.invited} · Skipped:{" "}
-                  {importSummary.skipped} · Invalid: {importSummary.invalid}
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {importSummary.rows.map((row) => (
-                    <li key={row.row}>
-                      Row {row.row}: {row.email} ({row.role}) — {row.status}
-                      {row.reason ? ` — ${row.reason}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <RecipientListPreview
+                heading="Import summary"
+                subheading={`Imported: ${importSummary.invited} · Skipped: ${importSummary.skipped} · Invalid: ${importSummary.invalid}`}
+                items={importSummary.rows.map((row) => ({
+                  key: String(row.row),
+                  text: `Row ${row.row}: ${row.email} (${row.role}) — ${row.status}${
+                    row.reason ? ` — ${row.reason}` : ""
+                  }`,
+                }))}
+                onViewAll={() =>
+                  setRecipientsViewAll({
+                    title: `All import results (${importSummary.rows.length})`,
+                    lines: importSummary.rows.map(
+                      (row) =>
+                        `Row ${row.row}: ${row.email} (${row.role}) — ${row.status}${
+                          row.reason ? ` — ${row.reason}` : ""
+                        }`,
+                    ),
+                  })
+                }
+              />
             ) : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -615,6 +627,79 @@ export function CoordinatorInvitePanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!recipientsViewAll}
+        onOpenChange={(open) => {
+          if (!open) setRecipientsViewAll(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl" closeOnOutsideClick={false}>
+          <DialogHeader>
+            <DialogTitle>
+              {recipientsViewAll?.title ?? "All recipients"}
+            </DialogTitle>
+          </DialogHeader>
+          <ul className="max-h-[60vh] space-y-1 overflow-auto rounded-lg border p-3 text-sm">
+            {(recipientsViewAll?.lines ?? []).map((line, index) => (
+              <li key={`${index}-${line}`}>{line}</li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecipientsViewAll(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+const RECIPIENT_PREVIEW_LIMIT = 5;
+
+function RecipientListPreview({
+  heading,
+  subheading,
+  items,
+  onViewAll,
+}: {
+  heading: string;
+  subheading?: string;
+  items: Array<{ key: string; text: string; destructive?: boolean }>;
+  onViewAll: () => void;
+}) {
+  const visible = items.slice(0, RECIPIENT_PREVIEW_LIMIT);
+  const hasMore = items.length > RECIPIENT_PREVIEW_LIMIT;
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border p-3 text-sm">
+      <p className="mb-1 font-medium">{heading}</p>
+      {subheading ? <p className="mb-2 text-muted-foreground">{subheading}</p> : null}
+      <ul className="space-y-1">
+        {visible.map((item) => (
+          <li
+            key={item.key}
+            className={item.destructive ? "text-destructive" : undefined}
+          >
+            {item.text}
+          </li>
+        ))}
+      </ul>
+      {hasMore ? (
+        <Button
+          type="button"
+          variant="link"
+          className="mt-2 h-auto px-0"
+          onClick={onViewAll}
+        >
+          View All ({items.length})
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -43,6 +43,10 @@ const GRADE_BANDS: GradeBand[] = [
 
 const FAIL_GRADE: GradeResult = { grade: 'F', gradePoints: 0.0 };
 
+function roundMarks(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 export function resolveGrade(percentage: number): GradeResult {
   if (!Number.isFinite(percentage)) {
     return { ...FAIL_GRADE };
@@ -63,4 +67,17 @@ export function calculateGradePoints(percentage: number): number {
 
 export function resolveGradeLetter(percentage: number): string {
   return resolveGrade(percentage).grade;
+}
+
+/**
+ * True when rounded marks sit exactly one point below a grade band minimum
+ * (e.g. 49→50, 74→75, 84→85), so a single +1 promotion changes the letter grade.
+ */
+export function isOneMarkBelowNextGrade(percentage: number): boolean {
+  if (!Number.isFinite(percentage)) {
+    return false;
+  }
+
+  const base = roundMarks(percentage);
+  return GRADE_BANDS.some((band) => roundMarks(band.min - 1) === base);
 }

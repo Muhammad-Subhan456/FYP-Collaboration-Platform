@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -57,9 +58,35 @@ export class GlobalAnnouncementsService {
     dto: CreateGlobalAnnouncementDto,
     workspaceId: string,
   ) {
-    const audienceRoles = normalizeAudienceRoles(
-      dto.audienceRoles,
+    const audienceUserIds =
+      await this.audienceService.validateAudienceUserIds(
+        workspaceId,
+        dto.audienceUserIds ?? [],
+      );
+
+    const hasExplicitRoles = (dto.audienceRoles?.length ?? 0) > 0;
+    const audienceRoles = normalizeAudienceRoles(dto.audienceRoles, {
+      defaultToAllWhenEmpty: !hasExplicitRoles && audienceUserIds.length === 0,
+    });
+
+    if (audienceRoles.length === 0 && audienceUserIds.length === 0) {
+      throw new BadRequestException(
+        'Select at least one audience role or individual recipient',
+      );
+    }
+
+    const recipients = await this.audienceService.resolveRecipients(
+      workspaceId,
+      audienceRoles,
+      audienceUserIds,
     );
+
+    if (recipients.length === 0) {
+      throw new BadRequestException(
+        'No valid recipients for this announcement',
+      );
+    }
+
     const displayPublishAt = parseDisplayPublishAt(dto.publishAt);
 
     const announcement =
@@ -71,6 +98,7 @@ export class GlobalAnnouncementsService {
           message: dto.message,
           type: dto.type ?? AnnouncementType.GENERAL,
           audienceRoles,
+          audienceUserIds,
           publishAt: displayPublishAt ?? null,
           status: GlobalAnnouncementStatus.PUBLISHED,
           publishedAt: new Date(),
@@ -127,6 +155,7 @@ export class GlobalAnnouncementsService {
       coordinatorView?: boolean;
       page?: number;
       limit?: number;
+      viewerUserId?: string;
     },
   ) {
     const isCoordinatorView =
@@ -144,8 +173,9 @@ export class GlobalAnnouncementsService {
 
     const audienceWhere = isCoordinatorView
       ? {}
-      : this.audienceService.audienceWhereForRole(
+      : this.audienceService.audienceWhereForViewer(
           viewerRole ?? 'STUDENT',
+          options?.viewerUserId,
         );
 
     const findArgs = {

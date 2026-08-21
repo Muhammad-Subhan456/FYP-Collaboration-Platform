@@ -72,7 +72,8 @@ export function AnnouncementAudiencePicker({
       </div>
       {value.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No audience selected — all recipient roles will be used.
+          No roles selected. Add specific individuals below, or leave both empty
+          to reach all students, supervisors, and evaluators.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">

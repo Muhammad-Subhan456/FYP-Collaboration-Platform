@@ -212,7 +212,7 @@ export function IssueDetailPanel({
       </div>
 
       <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Complete issue</DialogTitle>
           </DialogHeader>
@@ -270,7 +270,7 @@ export function IssueDetailPanel({
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Edit issue</DialogTitle>
           </DialogHeader>

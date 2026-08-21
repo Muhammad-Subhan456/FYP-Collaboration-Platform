@@ -316,7 +316,7 @@ export default function CoordinatorProposalsPage() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Send supervisor selection reminder</DialogTitle>
             <DialogDescription>

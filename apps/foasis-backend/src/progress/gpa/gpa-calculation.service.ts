@@ -11,7 +11,7 @@ import { DomainEventService } from '../../domain-events/domain-event.service';
 import type { GpaRecalculatedPayload } from '../../domain-events/domain-event.types';
 
 import { averageTemplateScoreForStudent } from '../submission-evaluations/submission-scoring.util';
-import { calculateGradePoints, resolveGrade } from './grading-policy';
+import { calculateGradePoints, isOneMarkBelowNextGrade, resolveGrade } from './grading-policy';
 
 /**
  * Official university absolute grading scale on phase percentage (0–100).
@@ -323,14 +323,14 @@ export class GpaCalculationService {
       100,
       Math.round((base + 1) * 100) / 100,
     );
-    const before = resolveGrade(base);
-    const after = resolveGrade(promotedPercentage);
 
-    if (after.gradePoints <= before.gradePoints) {
+    if (!isOneMarkBelowNextGrade(base)) {
       throw new BadRequestException(
         'This student is not one mark below the next grade boundary',
       );
     }
+
+    const after = resolveGrade(promotedPercentage);
 
     const updated = await this.prisma.studentPhaseResult.update({
       where: { phaseId_studentId: { phaseId, studentId } },

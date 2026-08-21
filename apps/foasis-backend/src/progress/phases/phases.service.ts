@@ -97,6 +97,16 @@ export class PhasesService {
       );
     }
 
+    let sortOrder = dto.sortOrder;
+    if (sortOrder === undefined || sortOrder === null) {
+      const maxOrder = await this.prisma.phase.aggregate({
+        where: { workspaceId },
+        _max: { sortOrder: true },
+      });
+      sortOrder =
+        maxOrder._max.sortOrder == null ? 0 : maxOrder._max.sortOrder + 1;
+    }
+
     return this.prisma.phase.create({
       data: {
         workspaceId,
@@ -104,7 +114,7 @@ export class PhasesService {
         creditHours: dto.creditHours,
         description: dto.description?.trim() || null,
         status: dto.status ?? PhaseStatus.ACTIVE,
-        sortOrder: dto.sortOrder ?? 0,
+        sortOrder,
       },
     }).then((phase) => {
       this.emitPhaseEvent(DomainEvents.PHASE_CREATED, workspaceId, phase);

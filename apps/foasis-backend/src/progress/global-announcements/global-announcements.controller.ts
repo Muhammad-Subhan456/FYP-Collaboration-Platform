@@ -47,7 +47,7 @@ export class GlobalAnnouncementsController {
     @Req()
     req: {
       workspaceId: string;
-      user: { role: string };
+      user: { role: string; userId: string };
     },
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -66,6 +66,7 @@ export class GlobalAnnouncementsController {
       req.user.role,
       {
         coordinatorView: req.user.role === 'COORDINATOR',
+        viewerUserId: req.user.userId,
         ...(pageNum != null || limitNum != null
           ? {
               page: Number.isFinite(pageNum) ? pageNum : 1,

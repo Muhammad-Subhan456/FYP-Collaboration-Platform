@@ -194,6 +194,10 @@ export function StudentOnboardingWizard() {
 
   const onSubmit = async (data: FormData) => {
     if (!user) return;
+    // Never auto-finish from earlier steps (e.g. Enter with prefilled fields).
+    if (step !== STEPS.length - 1) {
+      return;
+    }
     setSubmitting(true);
     try {
       let profilePicture: string | undefined;
@@ -282,6 +286,15 @@ export function StudentOnboardingWizard() {
       <CardContent>
         <form
           onSubmit={handleSubmit(onSubmit, onInvalid)}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              step < STEPS.length - 1 &&
+              (event.target as HTMLElement).tagName !== "TEXTAREA"
+            ) {
+              event.preventDefault();
+            }
+          }}
           className="space-y-4"
         >
           {step === 0 && (

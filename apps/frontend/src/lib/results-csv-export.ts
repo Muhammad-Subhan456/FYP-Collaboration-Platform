@@ -1,12 +1,16 @@
 import { downloadCsv, rowsToCsv } from "@/lib/csv";
-import { formatDate, formatGpa, formatGrade, formatPercent } from "@/lib/format";
+import { formatGpa, formatGrade, formatPercent } from "@/lib/format";
 import type {
   CoordinatorDeliverableResult,
   CoordinatorPhaseResult,
+  DeliverableBreakdownItem,
   StudentPhaseResult,
 } from "@/types/submission-evaluation";
 
-type PhaseGpaExportRow = StudentPhaseResult & { studentName: string };
+type PhaseGpaExportRow = StudentPhaseResult & {
+  studentName: string;
+  registrationNumber?: string | null;
+};
 
 type SupervisorDeliverableExportRow = {
   submissionId: string;
@@ -21,23 +25,67 @@ type SupervisorDeliverableExportRow = {
   averagedScore: CoordinatorDeliverableResult["averagedScore"];
 };
 
-function formatGradeImprovement(result: StudentPhaseResult): string {
-  if (result.promotionApplied) {
-    const details: string[] = ["Promoted +1"];
-    if (result.promotedByName) {
-      details.push(`by ${result.promotedByName}`);
-    }
-    if (result.promotedAt) {
-      details.push(formatDate(result.promotedAt));
-    }
-    return details.join(" ");
-  }
+export type PhaseGpaDeliverableColumn = {
+  templateId: string;
+  title: string;
+  totalMarks: number;
+};
 
-  if (result.promotionEligible) {
-    return "Eligible for promotion";
+export function buildPhaseGpaDeliverableColumns(
+  rows: Array<{ breakdown: DeliverableBreakdownItem[] | null }>,
+): PhaseGpaDeliverableColumn[] {
+  const columns = new Map<string, PhaseGpaDeliverableColumn>();
+  for (const row of rows) {
+    for (const item of row.breakdown ?? []) {
+      if (!columns.has(item.templateId)) {
+        columns.set(item.templateId, {
+          templateId: item.templateId,
+          title: item.deliverableTitle,
+          totalMarks: item.totalMarks,
+        });
+      }
+    }
   }
+  return [...columns.values()];
+}
 
-  return "—";
+export function getBreakdownMarks(
+  breakdown: DeliverableBreakdownItem[] | null | undefined,
+  templateId: string,
+): number | null {
+  const item = (breakdown ?? []).find(
+    (entry) => entry.templateId === templateId,
+  );
+  if (!item) {
+    return null;
+  }
+  if (item.evaluationStatus === "PENDING") {
+    return null;
+  }
+  return item.studentMarks;
+}
+
+export function sumPhaseDeliverableTotals(
+  columns: PhaseGpaDeliverableColumn[],
+): number {
+  return columns.reduce((sum, column) => sum + column.totalMarks, 0);
+}
+
+export function sumObtainedDeliverableMarks(
+  breakdown: DeliverableBreakdownItem[] | null | undefined,
+  columns: PhaseGpaDeliverableColumn[],
+): number | null {
+  let total = 0;
+  let hasAny = false;
+  for (const column of columns) {
+    const marks = getBreakdownMarks(breakdown, column.templateId);
+    if (marks == null) {
+      continue;
+    }
+    hasAny = true;
+    total += marks;
+  }
+  return hasAny ? total : null;
 }
 
 function formatEvaluatorMarks(
@@ -82,25 +130,36 @@ function formatEvaluatorsList(row: CoordinatorDeliverableResult): string {
 }
 
 function phaseGpaRows(rows: PhaseGpaExportRow[]): string[][] {
+  const columns = buildPhaseGpaDeliverableColumns(rows);
+  const totalMax = sumPhaseDeliverableTotals(columns);
+
   const header = [
+    "Name",
+    "Roll Number",
     "Phase",
-    "Student",
-    "Phase marks",
+    ...columns.map((column) => `${column.title} (${column.totalMarks})`),
+    `Total (${totalMax})`,
+    "Percentage",
     "Grade",
-    "GPA",
-    "Status",
-    "Grade improvement",
+    "Phase GPA",
   ];
 
-  const body = rows.map((result) => [
-    result.phase.name,
-    result.studentName,
-    formatPercent(result.weightedMarks),
-    formatGrade(result.grade),
-    formatGpa(result.gpa),
-    result.isComplete ? "Complete" : "In progress",
-    formatGradeImprovement(result),
-  ]);
+  const body = rows.map((result) => {
+    const obtained = sumObtainedDeliverableMarks(result.breakdown, columns);
+    return [
+      result.studentName,
+      result.registrationNumber?.trim() || "—",
+      result.phase.name,
+      ...columns.map((column) => {
+        const marks = getBreakdownMarks(result.breakdown, column.templateId);
+        return marks == null ? "—" : String(marks);
+      }),
+      obtained == null ? "—" : String(obtained),
+      formatPercent(result.weightedMarks),
+      formatGrade(result.grade),
+      formatGpa(result.gpa),
+    ];
+  });
 
   return [header, ...body];
 }
@@ -183,7 +242,7 @@ export function exportSupervisorDeliverableResultsCsv(
 
 export function exportCoordinatorDeliverableResultsCsv(
   rows: CoordinatorDeliverableResult[],
-  filename = "deliverable-results.csv",
+  filename = "coordinator-deliverable-results.csv",
 ) {
   downloadCsv(filename, rowsToCsv(coordinatorDeliverableRows(rows)));
 }

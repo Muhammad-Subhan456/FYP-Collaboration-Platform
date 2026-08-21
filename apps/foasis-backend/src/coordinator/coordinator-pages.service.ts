@@ -67,6 +67,7 @@ export class CoordinatorPagesService {
       activeDeliverables,
       publishedPhaseResults,
       proposalContent,
+      workspace,
     ] = await Promise.all([
       this.authService.getUserStats(workspaceId),
       this.teamsService.getTeamCountForCoordinator(workspaceId),
@@ -104,6 +105,10 @@ export class CoordinatorPagesService {
         where: { workspaceId },
         select: { domains: true, otherDomain: true, sdgs: true },
       }),
+      this.prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { id: true, name: true },
+      }),
     ]);
 
     const toMap = <T extends string>(
@@ -125,6 +130,10 @@ export class CoordinatorPagesService {
     const proposalInsights = this.buildProposalInsights(proposalContent);
 
     return {
+      workspace: {
+        id: workspaceId,
+        name: workspace?.name ?? 'Workspace',
+      },
       summary: {
         totalTeams,
         activePhases: phasesByStatus.ACTIVE ?? 0,

@@ -68,6 +68,10 @@ export default function CoordinatorEvaluationsPage() {
   const [assignedEvaluatorIds, setAssignedEvaluatorIds] = useState<string[]>(
     [],
   );
+  const [assignTargetSupervisor, setAssignTargetSupervisor] = useState<{
+    id: string;
+    fullName: string;
+  } | null>(null);
 
   const phaseId = toApiFilterValue(filters.phaseId);
   const templateId = toApiFilterValue(filters.templateId);
@@ -124,8 +128,31 @@ export default function CoordinatorEvaluationsPage() {
       setSelectedSubmissionId(null);
       setSelectedEvaluatorIds([]);
       setAssignedEvaluatorIds([]);
+      setAssignTargetSupervisor(null);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.coordinator.submissionEvaluations(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.coordinator.evaluators(),
+      });
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const assignSupervisorMutation = useMutation({
+    mutationFn: submissionEvaluationService.assignSupervisorAsEvaluator,
+    onSuccess: () => {
+      toast.success("Supervisor assigned as evaluator");
+      setAssignDialogOpen(false);
+      setSelectedSubmissionId(null);
+      setSelectedEvaluatorIds([]);
+      setAssignedEvaluatorIds([]);
+      setAssignTargetSupervisor(null);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.coordinator.submissionEvaluations(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.coordinator.evaluators(),
       });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -194,13 +221,17 @@ export default function CoordinatorEvaluationsPage() {
 
   const rows = eligibleQuery.data ?? [];
 
-  const openAssignDialog = (
-    submissionId: string,
-    currentEvaluatorIds: string[],
-  ) => {
-    setSelectedSubmissionId(submissionId);
-    setAssignedEvaluatorIds(currentEvaluatorIds);
+  const openAssignDialog = (row: EligibleSubmissionRow) => {
+    setSelectedSubmissionId(row.submissionId);
+    setAssignedEvaluatorIds(
+      row.evaluations.map((assignment) => assignment.evaluatorId),
+    );
     setSelectedEvaluatorIds([]);
+    setAssignTargetSupervisor(
+      row.supervisor?.id
+        ? { id: row.supervisor.id, fullName: row.supervisor.fullName }
+        : null,
+    );
     setAssignDialogOpen(true);
   };
 
@@ -347,25 +378,41 @@ export default function CoordinatorEvaluationsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <a
-                            href={row.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {(row.attachments?.length
+                          ? row.attachments
+                          : row.fileUrl
+                            ? [
+                                {
+                                  id: `${row.submissionId}-primary`,
+                                  fileUrl: row.fileUrl,
+                                  fileName: "Submission file",
+                                },
+                              ]
+                            : []
+                        ).map((attachment) => (
+                          <Button
+                            key={attachment.id}
+                            asChild
+                            size="sm"
+                            variant="outline"
                           >
-                            View file
-                          </a>
-                        </Button>
+                            <a
+                              href={attachment.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={attachment.fileName}
+                            >
+                              {row.attachments && row.attachments.length > 1
+                                ? attachment.fileName.length > 18
+                                  ? `${attachment.fileName.slice(0, 15)}…`
+                                  : attachment.fileName
+                                : "View file"}
+                            </a>
+                          </Button>
+                        ))}
                         <Button
                           size="sm"
-                          onClick={() =>
-                            openAssignDialog(
-                              row.submissionId,
-                              row.evaluations.map(
-                                (assignment) => assignment.evaluatorId,
-                              ),
-                            )
-                          }
+                          onClick={() => openAssignDialog(row)}
                         >
                           <UserPlus className="mr-2 h-4 w-4" />
                           Add evaluator
@@ -403,23 +450,72 @@ export default function CoordinatorEvaluationsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent>
+      <Dialog
+        open={assignDialogOpen}
+        onOpenChange={(open) => {
+          setAssignDialogOpen(open);
+          if (!open) {
+            setAssignTargetSupervisor(null);
+          }
+        }}
+      >
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Assign evaluators</DialogTitle>
             <DialogDescription>
-              Select one or more evaluators. Each marks separately; final marks
-              are combined. Already assigned evaluators aren&apos;t listed.
+              Select one or more evaluators, or assign the team&apos;s
+              supervisor. Each marks separately; final marks are combined.
+              Already assigned evaluators aren&apos;t listed.
             </DialogDescription>
           </DialogHeader>
-          <EvaluatorMultiSelect
-            evaluators={availableEvaluators}
-            selectedIds={selectedEvaluatorIds}
-            onChange={setSelectedEvaluatorIds}
-            excludedIds={assignedEvaluatorIds}
-            label="Evaluators"
-            placeholder="Select one or more evaluators"
-          />
+          <div className="space-y-3">
+            <div className="rounded-lg border p-3">
+              <p className="mb-2 text-sm font-medium">Team supervisor</p>
+              {assignTargetSupervisor ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    {assignTargetSupervisor.fullName}
+                    {assignedEvaluatorIds.includes(assignTargetSupervisor.id)
+                      ? " (already assigned)"
+                      : ""}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      !selectedSubmissionId ||
+                      assignedEvaluatorIds.includes(assignTargetSupervisor.id) ||
+                      assignSupervisorMutation.isPending ||
+                      assignMutation.isPending
+                    }
+                    onClick={() => {
+                      if (!selectedSubmissionId) return;
+                      assignSupervisorMutation.mutate({
+                        submissionId: selectedSubmissionId,
+                      });
+                    }}
+                  >
+                    {assignSupervisorMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Assign the Supervisor
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No supervisor assigned to this team — option unavailable.
+                </p>
+              )}
+            </div>
+            <EvaluatorMultiSelect
+              evaluators={availableEvaluators}
+              selectedIds={selectedEvaluatorIds}
+              onChange={setSelectedEvaluatorIds}
+              excludedIds={assignedEvaluatorIds}
+              label="Evaluators"
+              placeholder="Select one or more evaluators"
+            />
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -431,7 +527,8 @@ export default function CoordinatorEvaluationsPage() {
               disabled={
                 !selectedSubmissionId ||
                 selectedEvaluatorIds.length === 0 ||
-                assignMutation.isPending
+                assignMutation.isPending ||
+                assignSupervisorMutation.isPending
               }
               onClick={() => {
                 if (!selectedSubmissionId || selectedEvaluatorIds.length === 0) {

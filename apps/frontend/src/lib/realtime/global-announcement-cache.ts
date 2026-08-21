@@ -17,6 +17,7 @@ export interface RealtimeGlobalAnnouncementPayload {
     title: string;
     message: string;
     audienceRoles: string[];
+    audienceUserIds?: string[];
     attachmentCount: number;
     publishedAt: string;
   };
@@ -135,6 +136,7 @@ export function handleGlobalAnnouncementPublished(
   const audienceRoles = incoming.audienceRoles.map((item) =>
     item.toUpperCase(),
   );
+  const audienceUserIds = incoming.audienceUserIds ?? [];
 
   gaTrace("9-event-received", {
     eventName: "global_announcement.published",
@@ -142,18 +144,22 @@ export function handleGlobalAnnouncementPublished(
     title: incoming.title,
     role: normalizedRole,
     audienceRoles,
+    audienceUserIds,
     userId,
     workspaceId,
   });
 
+  const isTargetedUser = audienceUserIds.includes(userId);
   if (
     normalizedRole !== "COORDINATOR" &&
-    !audienceRoles.includes(normalizedRole)
+    !audienceRoles.includes(normalizedRole) &&
+    !isTargetedUser
   ) {
     gaTrace("9-audience-filtered-out", {
       announcementId: incoming.id,
       role: normalizedRole,
       audienceRoles,
+      audienceUserIds,
     });
     return;
   }
@@ -164,6 +170,7 @@ export function handleGlobalAnnouncementPublished(
     title: incoming.title,
     message: incoming.message,
     audienceRoles: incoming.audienceRoles,
+    audienceUserIds,
     publishedAt: incoming.publishedAt,
     status: "PUBLISHED",
     attachments: [],
@@ -217,4 +224,8 @@ export function handleGlobalAnnouncementPublished(
         caches: snapshotListCaches(queryClient),
       });
     });
+
+  if (isDashboardRole(normalizedRole)) {
+    void invalidateDashboard(queryClient, normalizedRole);
+  }
 }

@@ -246,7 +246,7 @@ export default function StudentMilestonesPage() {
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent closeOnOutsideClick={false}>
           <DialogHeader>
             <DialogTitle>Create issue</DialogTitle>
           </DialogHeader>

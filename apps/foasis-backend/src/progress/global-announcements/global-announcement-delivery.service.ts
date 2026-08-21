@@ -21,6 +21,7 @@ type AnnouncementWithAttachments = {
   title: string;
   message: string;
   audienceRoles: string[];
+  audienceUserIds?: string[];
   attachments: Array<{
     id: string;
     fileUrl: string;
@@ -54,13 +55,14 @@ export class GlobalAnnouncementDeliveryService {
     announcement: AnnouncementWithAttachments,
   ) {
     this.logger.log(
-      `Delivering announcement ${announcement.id} "${announcement.title}" to roles [${announcement.audienceRoles.join(', ')}]`,
+      `Delivering announcement ${announcement.id} "${announcement.title}" to roles [${announcement.audienceRoles.join(', ')}] users [${(announcement.audienceUserIds ?? []).length}]`,
     );
 
     const recipients =
       await this.audienceService.resolveRecipients(
         announcement.workspaceId,
         announcement.audienceRoles,
+        announcement.audienceUserIds ?? [],
       );
 
     if (recipients.length === 0) {
@@ -147,6 +149,7 @@ export class GlobalAnnouncementDeliveryService {
           title: announcement.title,
           message: announcement.message,
           audienceRoles: announcement.audienceRoles,
+          audienceUserIds: announcement.audienceUserIds ?? [],
           attachmentCount: announcement.attachments.length,
           publishedAt: new Date().toISOString(),
         },

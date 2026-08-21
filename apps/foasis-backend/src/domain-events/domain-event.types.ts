@@ -110,6 +110,7 @@ export interface GlobalAnnouncementWire {
   title: string;
   message: string;
   audienceRoles: string[];
+  audienceUserIds?: string[];
   attachmentCount: number;
   publishedAt: string;
 }

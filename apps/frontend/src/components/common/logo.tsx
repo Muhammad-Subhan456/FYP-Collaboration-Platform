@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 
+import { getOnboardingPath } from "@/constants/navigation";
 import { getDashboardPath } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -13,10 +14,12 @@ interface LogoProps {
 }
 
 export function Logo({ className, showText = true }: LogoProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated } = useAuth();
   const href =
     isAuthenticated && user?.role
-      ? getDashboardPath(user.role)
+      ? user.role !== "SUPER_ADMIN" && !profile
+        ? getOnboardingPath(user.role)
+        : getDashboardPath(user.role)
       : "/";
 
   return (

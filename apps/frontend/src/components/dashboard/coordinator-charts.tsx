@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -13,12 +14,16 @@ import {
 } from "recharts";
 import {
   Award,
+  Download,
   FileCheck,
   FileStack,
   Layers,
+  Loader2,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -26,6 +31,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { downloadAnalyticsReportPdf } from "@/lib/analytics-report-pdf";
+import { getErrorMessage } from "@/lib/axios";
 import type { CoordinatorAnalyticsData } from "@/services/coordinator-page.service";
 import { ProposalInsightsCharts } from "@/components/dashboard/proposal-insights-charts";
 
@@ -107,6 +114,7 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 export function CoordinatorCharts({ data }: { data: CoordinatorAnalyticsData }) {
+  const [downloading, setDownloading] = useState(false);
   const summary = data.summary ?? {
     totalTeams: 0,
     activePhases: 0,
@@ -149,13 +157,40 @@ export function CoordinatorCharts({ data }: { data: CoordinatorAnalyticsData }) 
     { name: "Locked / published", count: templates.locked ?? 0 },
   ];
 
+  const handleDownloadReport = () => {
+    setDownloading(true);
+    try {
+      downloadAnalyticsReportPdf(data, { applied: [] });
+      toast.success("Analytics report downloaded");
+    } catch (error) {
+      toast.error(getErrorMessage(error) || "Failed to generate report");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Program Analytics</h2>
-        <p className="text-sm text-muted-foreground">
-          Live FOASIS workflow metrics for this workspace
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Program Analytics</h2>
+          <p className="text-sm text-muted-foreground">
+            Live FOASIS workflow metrics for this workspace
+            {data.workspace?.name ? ` · ${data.workspace.name}` : ""}
+          </p>
+        </div>
+        <Button
+          onClick={handleDownloadReport}
+          disabled={downloading}
+          className="shrink-0"
+        >
+          {downloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Download Report
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

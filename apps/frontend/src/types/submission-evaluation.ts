@@ -29,6 +29,11 @@ export interface EligibleSubmissionRow {
   submissionStatus: string;
   finalizedAt: string | null;
   fileUrl: string;
+  attachments?: Array<{
+    id: string;
+    fileUrl: string;
+    fileName: string;
+  }>;
   evaluationStatus: SubmissionEvaluationStatus;
   evaluations: EligibleEvaluatorAssignment[];
   assignedEvaluatorCount: number;
@@ -123,6 +128,8 @@ export interface StudentPhaseResult {
   id: string;
   phaseId: string;
   studentId: string;
+  studentName?: string;
+  registrationNumber?: string | null;
   weightedMarks: number;
   basePercentage?: number;
   gpa: number | null;

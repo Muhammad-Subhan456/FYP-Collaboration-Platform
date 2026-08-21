@@ -30,8 +30,12 @@ import { formatGpa, formatGrade, formatPercent } from "@/lib/format";
 import { getErrorMessage } from "@/lib/axios";
 import { queryKeys } from "@/lib/react-query";
 import {
+  buildPhaseGpaDeliverableColumns,
   exportCoordinatorDeliverableResultsCsv,
   exportPhaseGpaSummaryCsv,
+  getBreakdownMarks,
+  sumObtainedDeliverableMarks,
+  sumPhaseDeliverableTotals,
 } from "@/lib/results-csv-export";
 import { useAuth } from "@/providers/auth-provider";
 import { submissionResultsService } from "@/services/submission-results.service";
@@ -127,6 +131,14 @@ export default function CoordinatorResultsPage() {
     () => resultsQuery.data?.phaseResults ?? [],
     [resultsQuery.data],
   );
+  const phaseDeliverableColumns = useMemo(
+    () => buildPhaseGpaDeliverableColumns(phaseResults),
+    [phaseResults],
+  );
+  const phaseTotalMax = useMemo(
+    () => sumPhaseDeliverableTotals(phaseDeliverableColumns),
+    [phaseDeliverableColumns],
+  );
 
   if (resultsQuery.isLoading || filterOptions.isLoading) {
     return <DashboardSkeleton />;
@@ -206,57 +218,84 @@ export default function CoordinatorResultsPage() {
               description="No phase results for the selected filters."
             />
           ) : (
-            <Table minWidth={720}>
+            <Table minWidth={Math.max(900, 520 + phaseDeliverableColumns.length * 110)}>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Roll Number</TableHead>
                   <TableHead>Phase</TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Phase marks</TableHead>
+                  {phaseDeliverableColumns.map((column) => (
+                    <TableHead key={column.templateId} className="tabular-nums">
+                      {column.title} ({column.totalMarks})
+                    </TableHead>
+                  ))}
+                  <TableHead className="tabular-nums">
+                    Total ({phaseTotalMax})
+                  </TableHead>
+                  <TableHead>Percentage</TableHead>
                   <TableHead>Grade</TableHead>
-                  <TableHead>GPA</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Phase GPA</TableHead>
                   <TableHead>Grade improvement</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {phaseResults.map((result) => (
-                  <TableRow key={result.id}>
-                    <TableCell className="max-w-[10rem] truncate font-medium">
-                      {result.phase.name}
-                    </TableCell>
-                    <TableCell className="max-w-[12rem] truncate">
-                      {result.studentName}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatPercent(result.weightedMarks)}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatGrade(result.grade)}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatGpa(result.gpa)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        status={
-                          result.isComplete ? "COMPLETE" : "IN_PROGRESS"
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <GradePromotionCell
-                        result={result}
-                        isPending={promoteMutation.isPending}
-                        onPromote={() =>
-                          promoteMutation.mutate({
-                            phaseId: result.phaseId,
-                            studentId: result.studentId,
-                          })
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {phaseResults.map((result) => {
+                  const obtained = sumObtainedDeliverableMarks(
+                    result.breakdown,
+                    phaseDeliverableColumns,
+                  );
+                  return (
+                    <TableRow key={result.id}>
+                      <TableCell className="max-w-[12rem] truncate font-medium">
+                        {result.studentName}
+                      </TableCell>
+                      <TableCell className="max-w-[10rem] truncate tabular-nums">
+                        {result.registrationNumber?.trim() || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[10rem] truncate">
+                        {result.phase.name}
+                      </TableCell>
+                      {phaseDeliverableColumns.map((column) => {
+                        const marks = getBreakdownMarks(
+                          result.breakdown,
+                          column.templateId,
+                        );
+                        return (
+                          <TableCell
+                            key={column.templateId}
+                            className="tabular-nums"
+                          >
+                            {marks == null ? "—" : marks}
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="tabular-nums font-medium">
+                        {obtained == null ? "—" : obtained}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatPercent(result.weightedMarks)}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {formatGrade(result.grade)}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatGpa(result.gpa)}
+                      </TableCell>
+                      <TableCell>
+                        <GradePromotionCell
+                          result={result}
+                          isPending={promoteMutation.isPending}
+                          onPromote={() =>
+                            promoteMutation.mutate({
+                              phaseId: result.phaseId,
+                              studentId: result.studentId,
+                            })
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

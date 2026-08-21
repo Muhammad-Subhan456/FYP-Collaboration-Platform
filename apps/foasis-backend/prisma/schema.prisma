@@ -745,6 +745,8 @@ model GlobalAnnouncement {
   message       String
   type          AnnouncementType         @default(GENERAL)
   audienceRoles String[]
+  /// Explicit workspace user IDs (unioned with audienceRoles on delivery).
+  audienceUserIds String[] @default([])
   publishAt     DateTime?
   publishedAt   DateTime?
   status        GlobalAnnouncementStatus @default(PUBLISHED)

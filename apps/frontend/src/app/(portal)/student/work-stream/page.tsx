@@ -390,7 +390,7 @@ export default function StudentWorkStreamPage() {
         </Card>
 
         <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-          <DialogContent>
+          <DialogContent closeOnOutsideClick={false}>
             <DialogHeader>
               <DialogTitle>Submit {selectedDeliverable.title}</DialogTitle>
               <DialogDescription>
