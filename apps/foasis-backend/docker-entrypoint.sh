@@ -1,16 +1,16 @@
 #!/bin/sh
 set -e
 
-echo "Running Prisma migrations..."
+echo "Waiting for PostgreSQL and applying Prisma migrations (migrate deploy)..."
 
 TRIES=0
-MAX_TRIES=12
+MAX_TRIES=24
 
 until npx prisma migrate deploy; do
   TRIES=$((TRIES + 1))
   if [ "$TRIES" -ge "$MAX_TRIES" ]; then
-    echo "Prisma migrate failed after ${MAX_TRIES} attempts."
-    echo "Check DATABASE_URL, Supabase project status (not paused), and Docker outbound network."
+    echo "Prisma migrate deploy failed after ${MAX_TRIES} attempts."
+    echo "Check DATABASE_URL (use the Docker service hostname, not localhost) and that postgres is healthy."
     exit 1
   fi
   echo "Database not reachable (attempt ${TRIES}/${MAX_TRIES}). Retrying in 5s..."

@@ -22,6 +22,7 @@ export function upsertAuthorProfile(
   return {
     ...profiles,
     [authUserId]: {
+      ...existing,
       id: existing?.id ?? authUserId,
       authUserId,
       profileType: existing?.profileType ?? "STUDENT",
@@ -32,8 +33,6 @@ export function upsertAuthorProfile(
       publications: existing?.publications ?? [],
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: existing?.updatedAt ?? new Date().toISOString(),
-      ...existing,
-      fullName,
     },
   };
 }

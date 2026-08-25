@@ -1,11 +1,15 @@
-# FOASIS — Docker Compose (frontend + backend; Supabase PostgreSQL external)
+# FOASIS — local Docker Compose (frontend + backend; database stays external)
 #
-# Prerequisites:
-#   1. Copy apps/foasis-backend/.env.example → apps/foasis-backend/.env
-#   2. Set DATABASE_URL (Supabase Session pooler), JWT_SECRET, etc.
+# Production (Nginx + Postgres on a VM):
+#   docker compose -f docker-compose.prod.yml --env-file .env up --build -d
+#   See docker.prod.env.example and docs/DOCKER.md
+#
+# Local (this file):
+#   1. Copy docker.env.example → apps/foasis-backend/.env
+#   2. Set DATABASE_URL, JWT_SECRET, email, etc.
 #   3. docker compose up --build
 #
-# URLs:
+# URLs (local):
 #   Frontend  http://localhost:3007
 #   Backend   http://localhost:3000
 #   Health    http://localhost:3000/health
@@ -27,9 +31,9 @@ services:
       PORT: "3000"
       UPLOAD_DIR: /app/uploads
       PUBLIC_URL: http://localhost:3000
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+    # Reach Postgres on the Windows/macOS host (custom dns below would break Docker's built-in name).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - foasis_uploads:/app/uploads
     healthcheck:

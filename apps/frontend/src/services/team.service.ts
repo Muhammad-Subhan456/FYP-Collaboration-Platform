@@ -27,6 +27,7 @@ export interface StudentTeamOverview {
   isProfileComplete?: boolean;
   canEditProfile?: boolean;
   canDeleteTeam?: boolean;
+  canRemoveMember?: boolean;
   canLeaveTeam?: boolean;
 }
 

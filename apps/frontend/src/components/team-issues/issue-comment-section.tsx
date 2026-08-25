@@ -51,7 +51,9 @@ export function IssueCommentSection({
         profiles={profiles}
         currentUserId={currentUserId}
         previewLimit={3}
-        resolveAuthorName={getDisplayName}
+        resolveAuthorName={(nextProfiles, authUserId, comment) =>
+          getDisplayName(nextProfiles, authUserId, comment?.authorName)
+        }
       />
 
       {!readOnly && onPost && (

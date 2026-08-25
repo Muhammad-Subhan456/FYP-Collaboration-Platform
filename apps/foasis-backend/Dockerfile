@@ -1,4 +1,4 @@
-# FOASIS backend — production image (NestJS + Prisma 6.19.3)
+# FOASIS backend — production image (NestJS + Prisma)
 FROM node:20-bookworm-slim AS deps
 
 WORKDIR /app
@@ -44,7 +44,6 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
   && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN npm ci --omit=dev \
-  && npm install prisma@6.19.3 --no-save \
   && npx prisma generate \
   && npm cache clean --force
 

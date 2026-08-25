@@ -194,12 +194,13 @@ export function applyJoinRequestReceived(
       joinRequest.authUserId
     ) {
       const existing = nextProfiles[joinRequest.authUserId];
+      const incomingProfile = incoming as unknown as UserProfile;
       nextProfiles[joinRequest.authUserId] = {
         ...(existing as UserProfile | undefined),
-        ...(incoming as UserProfile),
+        ...incomingProfile,
         authUserId: joinRequest.authUserId,
         fullName:
-          (incoming as UserProfile).fullName?.trim() ||
+          incomingProfile.fullName?.trim() ||
           existing?.fullName ||
           "Unknown User",
       } as UserProfile;

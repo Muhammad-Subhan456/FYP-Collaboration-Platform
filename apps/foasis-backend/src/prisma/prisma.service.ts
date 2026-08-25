@@ -227,7 +227,16 @@ async function rowVisibleInWorkspace(
 
   // Direct tenant models carry workspaceId on the row.
   if (TENANT_MODELS.has(model) && !relationScopeForModel(model, workspaceId)) {
-    return row.workspaceId === workspaceId;
+    if (typeof row.workspaceId === 'string') {
+      return row.workspaceId === workspaceId;
+    }
+    // Partial `select` often omits workspaceId. Fall back to an ownership
+    // probe by primary key so tenant checks stay correct.
+    if (typeof row.id === 'string') {
+      return assertOwnedForMutation(getClient, model, row.id, workspaceId);
+    }
+    // No workspaceId and no id in the payload — cannot prove tenancy.
+    return false;
   }
 
   // Relation-scoped models: verify via a scoped findFirst by id.
@@ -236,6 +245,33 @@ async function rowVisibleInWorkspace(
   }
 
   return false;
+}
+
+/**
+ * Ensure findUnique selects that use a custom `select` still return enough
+ * fields for workspace post-filtering (workspaceId and/or id).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ensureFindUniqueSelectForTenant(model: string, args: any): any {
+  if (!args?.select || typeof args.select !== 'object') {
+    return args;
+  }
+
+  const isRelationScoped = !!relationScopeForModel(model, 'x');
+  const isDirectTenant = TENANT_MODELS.has(model) && !isRelationScoped;
+
+  if (!isDirectTenant && !isRelationScoped) {
+    return args;
+  }
+
+  const nextSelect = { ...args.select };
+  if (nextSelect.id === undefined) {
+    nextSelect.id = true;
+  }
+  if (isDirectTenant && nextSelect.workspaceId === undefined) {
+    nextSelect.workspaceId = true;
+  }
+  return { ...args, select: nextSelect };
 }
 
 function createWorkspaceIsolationExtension(
@@ -265,7 +301,8 @@ function createWorkspaceIsolationExtension(
             return query(args);
           }
 
-          const result = await query(args);
+          const scopedArgs = ensureFindUniqueSelectForTenant(model, args);
+          const result = await query(scopedArgs);
           if (!result) {
             return null;
           }
@@ -295,7 +332,8 @@ function createWorkspaceIsolationExtension(
             return query(args);
           }
 
-          const result = await query(args);
+          const scopedArgs = ensureFindUniqueSelectForTenant(model, args);
+          const result = await query(scopedArgs);
           const owned = await rowVisibleInWorkspace(
             getClient,
             model,

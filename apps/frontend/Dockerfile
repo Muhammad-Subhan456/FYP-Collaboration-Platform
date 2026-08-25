@@ -1,4 +1,5 @@
 # FOASIS frontend — production image (Next.js standalone)
+# NEXT_PUBLIC_* values are inlined at build time.
 FROM node:20-bookworm-slim AS deps
 
 WORKDIR /app
@@ -9,7 +10,10 @@ RUN npm ci
 FROM deps AS builder
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+  NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL \
+  NEXT_TELEMETRY_DISABLED=1
 
 COPY . .
 RUN npm run build
@@ -20,7 +24,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
   PORT=3007 \
-  HOSTNAME=0.0.0.0
+  HOSTNAME=0.0.0.0 \
+  NEXT_TELEMETRY_DISABLED=1
 
 RUN groupadd --system foasis \
   && useradd --system --gid foasis --create-home foasis

@@ -5,6 +5,7 @@ import type { StudentProposalPageData } from "@/services/student.service";
 import type { CoordinatorProposalsPageData } from "@/services/coordinator-page.service";
 import type { SupervisorInvitationsPageData } from "@/services/supervisor-page.service";
 import type { SupervisorRequestsPageData } from "@/services/supervisor-page.service";
+import type { StudentTeamOverview } from "@/services/team.service";
 import type { Proposal, ProposalStatus } from "@/types/student";
 import type { SupervisorInvitation } from "@/types/supervisor";
 
@@ -32,6 +33,57 @@ function log(...args: unknown[]) {
   if (isDev) {
     console.info("[realtime:proposals]", ...args);
   }
+}
+
+/** Mirrors backend TeamsService.isLockedProposal / isTeamWorkflowLocked. */
+function isProposalWorkflowLocked(proposal: {
+  status?: string | null;
+  assignedSupervisorId?: string | null;
+}): boolean {
+  if (proposal.assignedSupervisorId) {
+    return true;
+  }
+  return (
+    proposal.status === "APPROVED" ||
+    proposal.status === "SUPERVISOR_ASSIGNED"
+  );
+}
+
+/**
+ * Keep student team management flags in sync when supervisor assignment changes,
+ * without waiting for a manual refresh (staleTime + refetchOnMount:false).
+ */
+function syncStudentTeamWorkflowLock(
+  queryClient: QueryClient,
+  userId: string,
+  workspaceId: string | null,
+  teamId: string,
+  locked: boolean,
+) {
+  const queryKey = queryKeys.student.team(userId, workspaceId);
+  const existing = queryClient.getQueryData<StudentTeamOverview>(queryKey);
+
+  if (!existing?.team?.id || existing.team.id !== teamId) {
+    void queryClient.invalidateQueries({ queryKey: ["student", "team"] });
+    return;
+  }
+
+  queryClient.setQueryData<StudentTeamOverview>(queryKey, (current) => {
+    if (!current?.team?.id || current.team.id !== teamId) {
+      return current;
+    }
+    const isLeader = current.isLeader;
+    return {
+      ...current,
+      isWorkflowLocked: locked,
+      canEditProfile: isLeader && !locked,
+      canDeleteTeam: isLeader && !locked,
+      canRemoveMember: isLeader && !locked,
+      canLeaveTeam: !isLeader && !locked,
+    };
+  });
+
+  void queryClient.invalidateQueries({ queryKey: ["student", "team"] });
 }
 
 function toProposal(wire: RealtimeProposalWire): Proposal {
@@ -238,27 +290,27 @@ export function applyProposalSnapshot(
   const proposal = toProposal(payload.proposal);
 
   if (scopeType === "team" && role === "STUDENT") {
-    const isAccepted =
-      proposal.status === "APPROVED" ||
-      proposal.status === "SUPERVISOR_ASSIGNED";
+    const isLocked = isProposalWorkflowLocked(proposal);
 
     patchStudentProposal(queryClient, userId, workspaceId, payload.teamId, (data) => ({
       ...data,
       proposal,
       pendingSupervisorId: proposal.pendingSupervisorId ?? null,
       hasPendingProposal: proposal.status === "PENDING_SUPERVISOR",
-      isWorkflowLocked: isAccepted || data.isWorkflowLocked,
-      interests: isAccepted ? [] : data.interests,
-      invitations: isAccepted ? [] : data.invitations,
-      supervisors: isAccepted ? [] : data.supervisors,
+      // Derive from current proposal state so reject/unassign unlocks again.
+      isWorkflowLocked: isLocked,
+      interests: isLocked ? [] : data.interests,
+      invitations: isLocked ? [] : data.invitations,
+      supervisors: isLocked ? [] : data.supervisors,
     }));
     syncStudentProposalDashboard(queryClient, userId, proposal);
-
-    if (isAccepted) {
-      void queryClient.invalidateQueries({
-        queryKey: ["student", "team"],
-      });
-    }
+    syncStudentTeamWorkflowLock(
+      queryClient,
+      userId,
+      workspaceId,
+      payload.teamId,
+      isLocked,
+    );
     return;
   }
 

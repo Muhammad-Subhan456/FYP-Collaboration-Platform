@@ -191,12 +191,13 @@ export default function StudentTeamPage() {
   const team = overview.team;
   const profiles = overview.profiles;
   const isLeader = overview.isLeader;
+  const isWorkflowLocked = overview.isWorkflowLocked ?? false;
   const canDeleteTeam = overview.canDeleteTeam ?? false;
+  const canRemoveMember =
+    overview.canRemoveMember ?? (isLeader && !isWorkflowLocked);
   const canLeaveTeam = overview.canLeaveTeam ?? false;
   const canEditProfile = overview.canEditProfile ?? false;
   const isProfileComplete = overview.isProfileComplete ?? false;
-
-  const isWorkflowLocked = overview.isWorkflowLocked ?? false;
 
   if (team) {
     const members = overview.members;
@@ -335,8 +336,8 @@ export default function StudentTeamPage() {
             </div>
             {isWorkflowLocked && (
               <p className="text-sm text-amber-600 dark:text-amber-400">
-                Team profile and proposal PDF are locked after supervisor
-                acceptance.
+                Team profile, member changes, and deletion are locked after a
+                supervisor has been assigned.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
@@ -441,7 +442,7 @@ export default function StudentTeamPage() {
                         <Eye className="h-4 w-4" />
                         View Profile
                       </Button>
-                      {isLeader && !isWorkflowLocked && m.authUserId !== team.leaderId && (
+                      {isLeader && canRemoveMember && m.authUserId !== team.leaderId && (
                         isEditing ? (
                           <>
                             <Input

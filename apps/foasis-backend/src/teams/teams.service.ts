@@ -80,22 +80,55 @@ export class TeamsService {
     };
   }
 
-  async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
-    const proposal = await this.prisma.proposal.findUnique({
-      where: { teamId },
-      select: { status: true },
-    });
+  /**
+   * Team management (delete / kick / leave / profile edit) locks once a
+   * supervisor is actually assigned. Prefer assignedSupervisorId as source of
+   * truth; status covers legacy SUPERVISOR_ASSIGNED / APPROVED rows.
+   */
+  isLockedProposal(
+    proposal:
+      | {
+          status?: ProposalStatus | string | null;
+          assignedSupervisorId?: string | null;
+        }
+      | null
+      | undefined,
+  ): boolean {
+    if (!proposal) {
+      return false;
+    }
+
+    if (proposal.assignedSupervisorId) {
+      return true;
+    }
 
     return (
-      proposal?.status === 'SUPERVISOR_ASSIGNED' ||
-      proposal?.status === 'APPROVED'
+      proposal.status === 'SUPERVISOR_ASSIGNED' ||
+      proposal.status === 'APPROVED'
     );
+  }
+
+  async isTeamWorkflowLocked(teamId: string): Promise<boolean> {
+    // Prefer findFirst: tenant middleware scopes it by workspaceId. findUnique
+    // with a partial `select` previously dropped workspaceId and the tenancy
+    // post-filter treated the row as invisible (lock never engaged).
+    const proposal = await this.prisma.proposal.findFirst({
+      where: { teamId },
+      select: {
+        id: true,
+        status: true,
+        assignedSupervisorId: true,
+        workspaceId: true,
+      },
+    });
+
+    return this.isLockedProposal(proposal);
   }
 
   private async assertTeamNotLocked(teamId: string) {
     if (await this.isTeamWorkflowLocked(teamId)) {
-      throw new BadRequestException(
-        'Team workflow is locked after supervisor acceptance',
+      throw new ForbiddenException(
+        'Team management is locked after a supervisor has been assigned',
       );
     }
   }
@@ -1146,6 +1179,7 @@ async getStudentTeamOverview(
 
   const isWorkflowLocked = await this.isTeamWorkflowLocked(team.id);
   const isProfileComplete = isTeamProfileComplete(team);
+  const canManageMembers = isLeader && !isWorkflowLocked;
 
   return {
     team,
@@ -1155,8 +1189,9 @@ async getStudentTeamOverview(
     profiles,
     isWorkflowLocked,
     isProfileComplete,
-    canEditProfile: isLeader && !isWorkflowLocked,
-    canDeleteTeam: isLeader && !isWorkflowLocked,
+    canEditProfile: canManageMembers,
+    canDeleteTeam: canManageMembers,
+    canRemoveMember: canManageMembers,
     canLeaveTeam: !isLeader && !isWorkflowLocked,
   };
 }
@@ -1284,6 +1319,7 @@ async getStudentTeamOverview(
     throw new BadRequestException('You are not leading any team');
   }
 
+  // Authoritative check — supervisor may be assigned concurrently.
   await this.assertTeamNotLocked(team.id);
 
   const memberIds = (
@@ -1293,10 +1329,21 @@ async getStudentTeamOverview(
     })
   ).map((member) => member.authUserId);
 
-  const proposal = await this.prisma.proposal.findUnique({
+  const proposal = await this.prisma.proposal.findFirst({
     where: { teamId: team.id },
-    select: { id: true },
+    select: {
+      id: true,
+      status: true,
+      assignedSupervisorId: true,
+      workspaceId: true,
+    },
   });
+
+  if (this.isLockedProposal(proposal)) {
+    throw new ForbiddenException(
+      'Team management is locked after a supervisor has been assigned',
+    );
+  }
 
   const deletedPayload = {
     workspaceId: team.workspaceId,
@@ -1321,14 +1368,31 @@ async getStudentTeamOverview(
   );
 
   await this.prisma.$transaction(async (tx) => {
-    if (proposal) {
+    // Final race check inside the transaction.
+    const latest = await tx.proposal.findFirst({
+      where: { teamId: team.id },
+      select: {
+        id: true,
+        status: true,
+        assignedSupervisorId: true,
+        workspaceId: true,
+      },
+    });
+
+    if (this.isLockedProposal(latest)) {
+      throw new ForbiddenException(
+        'Team management is locked after a supervisor has been assigned',
+      );
+    }
+
+    if (latest) {
       await tx.supervisorRequest.deleteMany({
-        where: { proposalId: proposal.id },
+        where: { proposalId: latest.id },
       });
       await tx.supervisorInvitation.deleteMany({
-        where: { proposalId: proposal.id },
+        where: { proposalId: latest.id },
       });
-      await tx.proposal.delete({ where: { id: proposal.id } });
+      await tx.proposal.delete({ where: { id: latest.id } });
     }
 
     await tx.joinRequest.deleteMany({ where: { teamId: team.id } });
@@ -1429,7 +1493,7 @@ async leaveTeam(authUserId: string, workspaceId?: string) {
 
 /**
  * Team leader removes (kicks) a member. Does not delete the team or proposal.
- * Blocked when workflow is locked after supervisor acceptance.
+ * Blocked once a supervisor is assigned to the team's proposal.
  */
 async removeMember(
   leaderId: string,
@@ -1462,6 +1526,22 @@ async removeMember(
     );
   }
 
+  // Re-check immediately before mutation (supervisor assign race).
+  const proposal = await this.prisma.proposal.findFirst({
+    where: { teamId: team.id },
+    select: {
+      id: true,
+      status: true,
+      assignedSupervisorId: true,
+      workspaceId: true,
+    },
+  });
+  if (this.isLockedProposal(proposal)) {
+    throw new ForbiddenException(
+      'Team management is locked after a supervisor has been assigned',
+    );
+  }
+
   const leftPayload: TeamMemberLeftPayload = {
     teamId: team.id,
     memberId: member.id,
@@ -1478,10 +1558,26 @@ async removeMember(
     member.id,
   );
 
-  await this.prisma.teamMember.delete({
-    where: { id: member.id },
-  });
+  await this.prisma.$transaction(async (tx) => {
+    const latest = await tx.proposal.findFirst({
+      where: { teamId: team.id },
+      select: {
+        id: true,
+        status: true,
+        assignedSupervisorId: true,
+        workspaceId: true,
+      },
+    });
+    if (this.isLockedProposal(latest)) {
+      throw new ForbiddenException(
+        'Team management is locked after a supervisor has been assigned',
+      );
+    }
 
+    await tx.teamMember.delete({
+      where: { id: member.id },
+    });
+  });
   const settings = await this.workspaceSettings.getSettings(team.workspaceId);
   const effectiveMax = this.effectiveMaxMembers(
     team.maxMembers,
